@@ -8,7 +8,7 @@ const round = (v) => {
 };
 
 export const kickCost = (lvl = S.up.kick) => round(60 * Math.pow(1.32, lvl));
-export const stadiumCost = (lvl = S.up.stadium) => round(90 * Math.pow(1.38, lvl));
+export const stadiumCost = (lvl = S.up.stadium) => round(90 * Math.pow(1.34, lvl));
 
 export const KICK_STEP = 6;     // % сили за рівень
 export const INCOME_STEP = 8;   // % доходу за рівень

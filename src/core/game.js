@@ -158,7 +158,7 @@ export class Game {
     const az = 0.62 + Math.sin(t * 0.17) * 0.28 + o.drag, el = 0.64 + Math.sin(t * 0.23) * 0.025;
     const asp = this.w / this.h;
     const fov = cam.fov * Math.PI / 180;
-    const dV = 18.2 / Math.tan(fov / 2) / 0.78, dH = 21.5 / (Math.tan(fov / 2) * asp) / 0.86;
+    const ex = this.island.extent / 19, dV = 18.2 * ex / Math.tan(fov / 2) / 0.78, dH = 21.5 * ex / (Math.tan(fov / 2) * asp) / 0.86;
     const d = Math.max(dV, dH);
     const ty = 3.0 - 1.0 * clamp((asp - 1.3), 0, 1);
     cam.position.set(Math.sin(az) * Math.cos(el) * d, Math.sin(el) * d + ty, Math.cos(az) * Math.cos(el) * d);

@@ -53,7 +53,7 @@ export class Island {
     this.particles = particles;
     this.t = 0; this.smokeT = 0; this.fwT = 3;
     this.tierGroups = []; this.pops = []; this.flags = [];
-    this.curTier = -1;
+    this.curTier = -1; this.extent = 19; this.extentTarget = 19;
     this.loop = buildLoop();
     this.buildBase();
     this.buildTrack();
@@ -160,6 +160,18 @@ export class Island {
     add((bb) => { stand(bb, 0, -5.3, Math.PI, 13.6, 0, 5, 0.55, 0.85, 0.6); stand(bb, 0, 5.4, 0, 8, 0, 2, 0.5, 0.8, 0.6); });
     // 2: бічні трибуни
     add((bb) => { stand(bb, 7.6, 0, Math.PI / 2, 8.6, 0, 5, 0.55, 0.85, 0.6); stand(bb, -7.6, 0, -Math.PI / 2, 8.6, 0, 5, 0.55, 0.85, 0.6); });
+
+    // 2: тунель гравців і лавки запасних
+    add((bb) => {
+      bb.box(0, 0.62, 5.62, 2.6, 1.0, 0.7, '#14181b'); bb.box(0, 1.2, 5.45, 3.0, 0.22, 1.0, '#c9ced1'); bb.box(-1.4, 0.85, 5.62, 0.22, 1.7, 0.7, '#c9ced1'); bb.box(1.4, 0.85, 5.62, 0.22, 1.7, 0.7, '#c9ced1');
+      bb.box(0, 0.66, 5.2, 1.7, 0.05, 1.0, '#a8182b');
+      for (const sx of [-1, 1]) {
+        const x = sx * 4.4;
+        bb.box(x, 0.45, 5.45, 2.8, 0.14, 0.5, '#3a4247'); bb.box(x, 0.8, 5.65, 2.8, 0.5, 0.1, '#e11d2e');
+        bb.box(x, 1.55, 5.7, 3.0, 0.1, 1.0, '#d4e8f2'); for (const dx of [-1.4, 1.4]) bb.box(x + dx, 0.8, 5.7, 0.08, 1.6, 0.08, '#aeb6bb');
+        for (let i = 0; i < 5; i++) bb.box(x - 1.1 + i * 0.55, 0.62, 5.45, 0.4, 0.4, 0.4, ['#e11d2e', '#12a150', '#f4f4f2'][i % 3]);
+      }
+    });
     // 3: прожектори: конічна щогла з поперечками, площадка з перилами, ряд самосвітних ламп, сяйво й промені
     add((bb) => {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -190,6 +202,13 @@ export class Island {
     });
     // 4: другий ярус на далекій і бічних
     add((bb) => { stand(bb, 0, -5.3, Math.PI, 13.6, 5, 9, 0.55, 0.85, 0.6, true); stand(bb, 7.6, 0, Math.PI / 2, 8.6, 5, 8, 0.55, 0.85, 0.6); stand(bb, -7.6, 0, -Math.PI / 2, 8.6, 5, 8, 0.55, 0.85, 0.6); });
+    // 5: LED-борти навколо поля й кутові екрани
+    add((bb) => {
+      const cols = ['#e11d2e', '#f4f4f2', '#12a150', '#1c2328'];
+      for (let i = 0; i < 12; i++) { bb.box(-6.6 + i * 1.2, 0.85, 5.6, 1.1, 0.42, 0.1, cols[i % 4]); bb.box(-6.6 + i * 1.2, 0.85, -5.6, 1.1, 0.42, 0.1, cols[(i + 2) % 4]); }
+      for (let i = 0; i < 7; i++) { bb.box(7.55, 0.85, -4.2 + i * 1.4, 0.1, 0.42, 1.3, cols[(i + 1) % 4]); bb.box(-7.55, 0.85, -4.2 + i * 1.4, 0.1, 0.42, 1.3, cols[(i + 3) % 4]); }
+      for (const sx of [-1, 1]) { bb.box(sx * 6.4, 3.2, 6.5, 0.3, 4.6, 0.3, '#aeb6bb'); bb.box(sx * 6.4, 5.4, 6.5, 2.8, 1.6, 0.3, '#10161a'); bb.box(sx * 6.4, 5.4, 6.62, 2.5, 1.3, 0.05, '#35e07a'); bb.box(sx * 6.4, 5.4, 6.67, 1.4, 0.3, 0.04, '#ffffff'); }
+    });
     // 5: дах і табло
     add((bb) => {
       bb.box(0, 6.2, -8.2, 14.4, 0.3, 4.6, '#f4f4f2', 0, -0.18, 0); bb.box(0, 6.0, -10.3, 14.4, 0.6, 0.3, '#e11d2e');
@@ -208,6 +227,66 @@ export class Island {
         this.flags.push({ holder, ph: i * 1.3 });
       });
       g.add(pole.mesh());
+    });
+    // 8: розширення території + клубний магазин і кафе
+    const frame = (bb, h0, h1) => {
+      const m = (h0 + h1) / 2, d = h1 - h0;
+      for (const [cx, cz, w, dd] of [[0, -m, 2 * h1, d], [0, m, 2 * h1, d], [m, 0, d, 2 * h0], [-m, 0, d, 2 * h0]]) {
+        bb.box(cx, -0.5, cz, w, 1, dd, '#a8664c');
+        for (let i = 0; i < 3; i++) bb.box(cx, -1.6 - i * 1.5, cz, w - 1.4 - i * 1.2, 1.5, dd - 0.8 - i * 0.6, i % 2 ? '#86493a' : '#9a5841');
+        bb.box(cx, 0.02, cz, w - 0.6, 0.05, dd - 0.6, '#5fa05c');
+      }
+    };
+    add((bb) => {
+      frame(bb, 19, 24);
+      // магазин «ЛОКО»
+      bb.box(-8, 1.5, 21, 6, 3, 4.2, '#d4202c'); bb.box(-8, 3.1, 21, 6.6, 0.3, 4.8, '#f4f4f2'); bb.box(-8, 1.1, 18.85, 4.6, 1.6, 0.1, '#14201f');
+      for (let i = 0; i < 6; i++) bb.box(-10.5 + i * 1.0, 2.55, 18.7, 1.0, 0.6, 0.5, i % 2 ? '#f4f4f2' : '#d4202c');
+      // кафе з парасолями
+      bb.box(4, 1.3, 21, 5, 2.6, 4, '#1f8f3f'); bb.box(4, 2.8, 21, 5.6, 0.3, 4.6, '#f4f4f2');
+      for (const [x, z] of [[1, 17.6], [4, 17.2], [7, 17.6]]) { bb.box(x, 0.45, z, 0.1, 0.9, 0.1, '#c9ced1'); bb.box(x, 0.92, z, 0.8, 0.06, 0.8, '#f4f4f2'); bb.shape(new THREE.ConeGeometry(1.0, 0.5, 8), x, 1.9, z, ['#d4202c', '#f4f4f2', '#1f8f3f'][(x | 0) % 3], 0, 0, 0, 1, 1, 1); bb.box(x, 1.2, z, 0.06, 1.4, 0.06, '#59636a'); }
+      for (const [x, z, s2] of [[-14, 22, 1], [12, 22.5, 1.1], [-2, 22.5, 0.9]]) { bb.box(x, 0.5 * s2, z, 0.5 * s2, s2, 0.5 * s2, '#6b4a2e'); bb.shape(new THREE.ConeGeometry(1, 2.4, 6), x, 2.0 * s2, z, '#2f8a56', 0, 0, 0, 1.3 * s2, 1.1 * s2, 1.3 * s2); }
+    }, (g) => {
+      const sg = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), new THREE.MeshBasicMaterial({ map: signTexture('ЛОКО ШОП', '#d4202c') })); sg.position.set(-8, 3.55, 18.7); g.add(sg);
+      const sc = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.6), new THREE.MeshBasicMaterial({ map: signTexture('КАФЕ «ВПЕРЕД»', '#157a46') })); sc.position.set(4, 3.15, 18.97); g.add(sc);
+    });
+    // 9: тренувальне поле
+    add((bb) => {
+      bb.box(0, 0.08, -21, 11, 0.16, 6.2, '#2b3438');
+      for (let i = 0; i < 6; i++) bb.box(-4.6 + i * 1.85 + 0.9, 0.2, -21, 1.85, 0.06, 5.6, i % 2 ? '#34c84d' : '#2bb544');
+      bb.box(0, 0.24, -21, 0.1, 0.03, 5.6, '#f4fff4'); bb.shape(new THREE.RingGeometry(0.9, 1.0, 20), 0, 0.26, -21, '#f4fff4', -Math.PI / 2);
+      for (const sx of [-1, 1]) { bb.box(sx * 5.3, 0.6, -21.7, 0.12, 0.9, 0.12, '#fff'); bb.box(sx * 5.3, 0.6, -20.3, 0.12, 0.9, 0.12, '#fff'); bb.box(sx * 5.3, 1.05, -21, 0.12, 0.12, 1.6, '#fff'); }
+      for (let i = 0; i < 6; i++) bb.shape(new THREE.ConeGeometry(0.22, 0.36, 6), -2.4 + i * 0.9, 0.38, -22.8, '#ff8a2a');
+      bb.box(0, 0.5, -24.2, 6, 0.9, 0.8, '#e8e4d8'); bb.box(0, 1.1, -24.2, 6.4, 0.2, 1.2, '#d4202c');
+    });
+    // 10: розширення + музей «Зал слави»
+    add((bb) => {
+      frame(bb, 24, 29);
+      bb.box(-26.5, 2.2, 0, 7, 4.4, 9, '#cfe6f0'); bb.box(-26.5, 4.6, 0, 7.6, 0.4, 9.6, '#14201f');
+      for (let i = 0; i < 5; i++) bb.box(-22.95, 2.2, -3.6 + i * 1.8, 0.1, 3.4, 1.4, '#9ec7d8');
+      bb.box(-23.1, 0.5, 0, 0.9, 1, 3.4, '#dfe3e6'); bb.box(-23.1, 1.0, 0, 3.8, 0.2, 3.8, '#e11d2e');
+      bb.shape(new THREE.CylinderGeometry(0.4, 0.7, 1.4, 8), -26.5, 5.5, 0, '#ffc61a');
+      bb.shape(new THREE.CylinderGeometry(0.9, 0.5, 0.5, 8), -26.5, 6.5, 0, '#ffdd55');
+      for (const [x, z, s2] of [[-27, -9, 1], [-27, 9, 1.1], [-23, 11, 0.9], [-23, -11, 1]]) { bb.box(x, 0.5 * s2, z, 0.5 * s2, s2, 0.5 * s2, '#6b4a2e'); bb.shape(new THREE.ConeGeometry(1, 2.4, 6), x, 2.0 * s2, z, '#2f8a56', 0, 0, 0, 1.3 * s2, 1.1 * s2, 1.3 * s2); }
+    }, (g) => {
+      const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.7), new THREE.MeshBasicMaterial({ map: signTexture('ЗАЛ СЛАВИ ЛОКО', '#14201f', '#ffc61a') })); sg.position.set(-22.9, 3.6, 0); sg.rotation.y = Math.PI / 2; g.add(sg);
+    });
+    // 11: готель і офіс клубу
+    add((bb) => {
+      bb.box(26.5, 7.5, 0, 7, 15, 7, '#f1efe8'); bb.box(26.5, 15.3, 0, 7.5, 0.6, 7.5, '#1f8f3f');
+      for (let r = 0; r < 7; r++) for (let c = 0; c < 4; c++) { bb.box(23.3, 2 + r * 1.9, -2.4 + c * 1.6, 0.08, 1.1, 1.0, (r + c) % 5 === 0 ? '#ffe9a6' : '#5d7a93'); bb.box(26.5 + (c - 1.5) * 1.6, 2 + r * 1.9, 3.55, 1.0, 1.1, 0.08, (r * 3 + c) % 4 === 0 ? '#ffe9a6' : '#5d7a93'); }
+      bb.box(23.3, 7.5, 0, 0.12, 15, 0.9, '#d4202c'); bb.box(23.3, 7.5, 0, 0.14, 0.4, 7, '#d4202c');
+      bb.box(26.5, 16.2, 0, 0.3, 1.8, 0.3, '#aeb6bb'); bb.box(26.5, 17.2, 0, 2.6, 0.9, 0.3, '#10161a'); bb.box(26.5, 17.2, 0.16, 2.3, 0.6, 0.05, '#35e07a');
+    });
+    // 12: розширення + паркінг і клубні автобуси
+    add((bb) => {
+      frame(bb, 29, 34);
+      bb.box(0, 0.06, 31.5, 24, 0.12, 6, '#3b4247');
+      for (let i = 0; i < 12; i++) bb.box(-10.4 + i * 1.9, 0.14, 30.2, 0.08, 0.04, 2.6, '#f4f4f2');
+      const cc = ['#d4202c', '#f4f4f2', '#1f8f3f', '#1c2328', '#c9ced1', '#254e9c'];
+      for (let i = 0; i < 9; i++) { const x = -10 + i * 2.1; bb.box(x, 0.45, 30.3, 1.5, 0.6, 0.9, cc[i % 6]); bb.box(x, 0.85, 30.3, 0.9, 0.3, 0.8, '#15202a'); }
+      for (const bx of [4, 9]) { bb.box(bx, 0.95, 33, 4.2, 1.5, 1.4, '#d4202c'); bb.box(bx, 0.8, 33, 4.2, 0.6, 1.42, '#1f8f3f'); bb.box(bx, 1.45, 33, 3.6, 0.5, 1.44, '#15202a'); }
+      for (const x of [-12, 0, 12]) { bb.box(x, 3, 33.8, 0.15, 6, 0.15, '#59636a'); bb.box(x, 6.1, 33.8, 1.2, 0.2, 0.5, '#fff6dc'); }
     });
     // 7: золота арена
     add((bb) => {
@@ -301,6 +380,8 @@ export class Island {
   setTier(tier, animate = false) {
     const from = this.curTier;
     this.curTier = tier;
+    this.extentTarget = tier >= 12 ? 34 : tier >= 10 ? 29 : tier >= 8 ? 24 : 19;
+    if (!animate) this.extent = this.extentTarget;
     let order = 0;
     this.tierGroups.forEach((g, i) => {
       const want = i <= tier;
@@ -327,6 +408,7 @@ export class Island {
 
   update(dt, t) {
     this.t = t;
+    this.extent += (this.extentTarget - this.extent) * Math.min(1, dt * 0.9);
     // потяг
     const spd = 5.2; this.trainS += spd * dt;
     const o = this._o || (this._o = { x: 0, z: 0, yaw: 0 }), sc = this.trainSc;

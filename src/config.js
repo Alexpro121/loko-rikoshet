@@ -135,7 +135,7 @@ export const ACADEMY = {
 };
 
 // Стадіон: ярус за рівнем прокачки
-export const STADIUM_TIERS = [0, 2, 4, 7, 10, 14, 19];
-export const STADIUM_TIER_NAMES = ['Перші трибуни', 'Бічні трибуни', 'Прожектори', 'Другий ярус', 'Дах і табло', 'Прапори', 'Золота арена'];
+export const STADIUM_TIERS = [0, 2, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 26];
+export const STADIUM_TIER_NAMES = ['Перші трибуни', 'Бічні трибуни', 'Тунель і лавки', 'Прожектори', 'Другий ярус', 'LED-борти', 'Дах і табло', 'Прапори', 'Клубний магазин і кафе', 'Тренувальне поле', 'Музей клубу', 'Готель і офіс', 'Паркінг і автобуси', 'Золота арена'];
 
 export const SETTINGS_DEFAULT = { sfx: true, music: true, haptics: true, quality: 'auto', control: 'auto', hand: 'right', joySize: 135, joyAlpha: 70, joyX: -1, joyY: -1, timeOfDay: 'day', weather: 'clear' };
