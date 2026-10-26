@@ -138,4 +138,4 @@ export const ACADEMY = {
 export const STADIUM_TIERS = [0, 2, 4, 7, 10, 14, 19];
 export const STADIUM_TIER_NAMES = ['Перші трибуни', 'Бічні трибуни', 'Прожектори', 'Другий ярус', 'Дах і табло', 'Прапори', 'Золота арена'];
 
-export const SETTINGS_DEFAULT = { sfx: true, music: true, haptics: true, quality: 'auto', control: 'auto', hand: 'right', joySize: 135, joyAlpha: 70, joyX: -1, joyY: -1 };
+export const SETTINGS_DEFAULT = { sfx: true, music: true, haptics: true, quality: 'auto', control: 'auto', hand: 'right', joySize: 135, joyAlpha: 70, joyX: -1, joyY: -1, timeOfDay: 'day', weather: 'clear' };

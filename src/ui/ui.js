@@ -217,6 +217,8 @@ export class UI {
       case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
       default:
         if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); return this.renderPanel(); }
+        if (a.startsWith('tod-')) { S.settings.timeOfDay = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
+        if (a.startsWith('wth-')) { S.settings.weather = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
         if (a.startsWith('cust:')) return this.openCustom(+a.slice(5));
         if (a.startsWith('cu-')) return this.customAct(a, el);
         if (a.startsWith('train:')) return this.train(a);
@@ -570,6 +572,8 @@ export class UI {
     const s = S.settings, row = (a, label, on) => `<button class="tg ${on ? 'on' : ''}" data-act="${a}"><span>${label}</span><i><u></u></i></button>`;
     const cb = (k, t) => `<button class="${s.control === k ? 'on' : ''}" data-act="ctl-${k}">${t}</button>`;
     const hb = (k, t) => `<button class="${s.hand === k ? 'on' : ''}" data-act="hand-${k}">${t}</button>`;
+    const tdb = (k, t) => `<button class="${s.timeOfDay === k ? 'on' : ''}" data-act="tod-${k}">${t}</button>`;
+    const wtb = (k, t) => `<button class="${s.weather === k ? 'on' : ''}" data-act="wth-${k}">${t}</button>`;
     const qb = (k, t) => `<button class="${s.quality === k ? 'on' : ''}" data-act="q-${k}">${t}</button>`;
     this.el.settings.innerHTML = `<div class="card-box wide">
       <header class="sheet-h"><h2>Налаштування</h2><button class="sq btn-red" data-act="close-settings" aria-label="Закрити">${I.close}</button></header>
@@ -577,6 +581,8 @@ export class UI {
         ${row('set-sfx', 'Звуки', s.sfx)}${row('set-music', 'Музика', s.music)}${row('set-haptics', 'Вібрація', s.haptics)}
         <div class="tg q"><span>Графіка</span><div class="seg">${qb('auto', 'АВТО')}${qb('high', 'ВИСОКА')}${qb('low', 'ЕКОНОМНА')}</div></div>
         <div class="tg q"><span>Керування ударом</span><div class="seg">${cb('auto', 'АВТО')}${cb('joy', 'ДЖОЙСТИК')}${cb('drag', 'ВІДТЯГУВАННЯ')}</div></div>
+        <div class="tg q"><span>Час доби</span><div class="seg">${tdb('day', 'ДЕНЬ')}${tdb('dusk', 'ВЕЧІР')}${tdb('night', 'НІЧ')}${tdb('random', 'ВИПАДКОВО')}</div></div>
+        <div class="tg q"><span>Погода</span><div class="seg">${wtb('clear', 'ЯСНО')}${wtb('cloudy', 'ХМАРНО')}${wtb('rain', 'ДОЩ')}${wtb('snow', 'СНІГ')}${wtb('fog', 'ТУМАН')}${wtb('random', 'ВИПАДКОВО')}</div></div>
         <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
         <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><button class="btn alt joy-mv" data-act="joy-move"><b>ПЕРЕМІСТИТИ</b></button><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>
         <button class="tg" data-act="fs"><span>На весь екран</span>${I.full}</button>

@@ -89,8 +89,8 @@ export class Stands {
     const zf = W + WALL + 3.2;
     stand(0, -zf, 1, 0, 0, -1, Math.round((2 * L + 20) / SP), 10, 22, 52);
     for (const sd of [-1, 1]) stand(sd * (L + GOAL_D + 4.5), 0, 0, 1, sd, 0, Math.round((2 * W + 10) / SP), 8, 8, 28);
-    for (const sd of [-1, 1]) {            // прожектори
-      const px = sd * (L + 9), pz = -(W + 9);
+    for (const [sd, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {            // прожектори
+      const px = sd * (L + 9), pz = sz * (W + 9);
       b.box(px, 8, pz, 0.7, 16, 0.7, '#59636a');
       b.box(px, 16.4, pz, 5, 2.4, 0.8, '#30373c');
       for (let i = 0; i < 5; i++) for (let j = 0; j < 2; j++) b.box(px - 1.9 + i * 0.95, 16 + j * 1.0, pz + 0.5, 0.7, 0.7, 0.2, '#fff6dc');

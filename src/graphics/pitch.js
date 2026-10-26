@@ -44,7 +44,8 @@ export function buildPitch() {
     g.setIndex(idx);
     // порядок обходу дає нормаль вниз: змінюємо напрям
     const ix = g.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; }
-    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: grassTexture(L, W, G) }));
+    const grassMat = group.userData.grassMat = new THREE.MeshLambertMaterial({ map: grassTexture(L, W, G) });
+    const m = new THREE.Mesh(g, grassMat);
     m.matrixAutoUpdate = false;
     group.add(m);
   }
@@ -155,5 +156,5 @@ export function buildPitch() {
     ng.add(back, roof, sideA, sideB);
     group.add(ng); nets.push(ng);
   }
-  return { group, nets };
+  return { group, nets, grassMat: group.userData.grassMat };
 }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COL, KIT_LOKO, KIT_GK_LOKO, ACADEMY, FORMATIONS } from '../config.js';
+import { COL, KIT_LOKO, KIT_GK_LOKO, ACADEMY, FORMATIONS, PITCH } from '../config.js';
 import { S } from '../state/save.js';
 import { keeper } from '../state/economy.js';
 import { squadLook, myKit } from '../state/squad.js';
@@ -10,6 +10,8 @@ import { BallView } from '../graphics/ball.js';
 import { Player } from '../graphics/player.js';
 import { shadowTexture } from '../graphics/textures.js';
 import { AimDots } from '../physics/aim.js';
+import { Weather } from '../graphics/weather.js';
+import { buildTunnel } from '../graphics/tunnel.js';
 
 const SKIN = ACADEMY.skins, HAIR = ACADEMY.hairs, HCOL = ACADEMY.hairCols;
 const SCALE = 0.82;
@@ -20,13 +22,21 @@ export class MatchView {
     const scene = (this.scene = new THREE.Scene());
     scene.background = new THREE.Color(COL.sky);
     scene.fog = new THREE.Fog(COL.sky, 150, 340);
-    scene.add(new THREE.HemisphereLight(0xd3e4ff, 0x7b6d5c, 1.05));
-    const sun = new THREE.DirectionalLight(0xfff0d6, 2.0);
+    const hemi = (this.hemi = new THREE.HemisphereLight(0xd3e4ff, 0x7b6d5c, 1.05)); scene.add(hemi);
+    const sun = (this.sun = new THREE.DirectionalLight(0xfff0d6, 2.0));
     sun.position.set(-24, 40, 22); scene.add(sun);
 
     const pitch = (this.pitch = buildPitch());
     scene.add(pitch.group);
     this.stands = new Stands(); scene.add(this.stands.group);
+    this.tunnel = buildTunnel(); scene.add(this.tunnel);
+    this.weather = new Weather(); scene.add(this.weather.group);
+    // сяйво прожекторів уночі й увечері
+    const gc = document.createElement('canvas'); gc.width = gc.height = 128; const gg = gc.getContext('2d'), gr = gg.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,244,214,1)'); gr.addColorStop(0.25, 'rgba(255,236,190,0.55)'); gr.addColorStop(1, 'rgba(255,230,170,0)'); gg.fillStyle = gr; gg.fillRect(0, 0, 128, 128);
+    const gtex = new THREE.CanvasTexture(gc); this.glow = new THREE.Group();
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: gtex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); sp.scale.set(26, 26, 1); sp.position.set(sx * (PITCH.L + 9), 16.6, sz * (PITCH.W + 9)); this.glow.add(sp); }
+    this.glow.visible = false; scene.add(this.glow);
 
     const mk = (kit, gk, i) => new Player({ kit, num: i + 1, skin: SKIN[i % 4], hair: HAIR[i % 5], hairCol: HCOL[i % 6], gk, scale: SCALE });
     this.mine = Array.from({ length: 11 }, (_, i) => mk(i === 0 ? KIT_GK_LOKO : KIT_LOKO, i === 0, i));
@@ -53,7 +63,33 @@ export class MatchView {
   look(kit, gk, who, num, scale = SCALE) { return { kit, num, skin: who.skin, hair: who.hair, hairCol: who.hairCol, beard: who.beard || 0, gk, scale }; }
 
   /** Склади під матч: обличчя, номери й форма з персональних записів гравців (мій склад і суперник). */
+  /** Час доби й погода: небо, туман, світло, прожектори, опади. */
+  setEnv(time, weather) {
+    const T = {
+      day: { sky: '#bfd3da', hs: '#d3e4ff', hg: '#7b6d5c', h: 1.05, sun: '#fff0d6', si: 2.0, pos: [-24, 40, 22], glow: 0, exp: 1.1 },
+      dusk: { sky: '#e9a07a', hs: '#ffc9a0', hg: '#6b4a5a', h: 0.9, sun: '#ffb070', si: 1.7, pos: [-52, 13, 12], glow: 0.55, exp: 1.0 },
+      night: { sky: '#0c1430', hs: '#6a7fc0', hg: '#2c3a54', h: 1.1, sun: '#eaf1ff', si: 1.9, pos: [-14, 48, 12], glow: 1, exp: 1.2 },
+    };
+    const t = T[time] || T.day, g = new THREE.Color();
+    let sky = new THREE.Color(t.sky), si = t.si, h = t.h, near = 150, far = 340, tint = null;
+    const grey = (c, k) => sky.lerp(new THREE.Color(c), k);
+    if (weather === 'cloudy') { grey(time === 'night' ? '#141a2a' : '#9ca6ad', 0.6); si *= 0.55; h *= 1.05; }
+    else if (weather === 'rain') { grey(time === 'night' ? '#10151f' : '#7d8890', 0.75); si *= 0.35; h *= 0.95; near = 110; far = 280; tint = '#cfd9de'; }
+    else if (weather === 'snow') { grey(time === 'night' ? '#2a3550' : '#e3eaee', 0.7); si *= 0.55; h *= 1.2; near = 90; far = 240; tint = '#e9f2ef'; }
+    else if (weather === 'fog') { grey(time === 'night' ? '#1a2133' : '#c1c9cc', 0.85); si *= 0.5; near = 28; far = 135; }
+    this.scene.background = sky; this.scene.fog = new THREE.Fog(sky.getHex(), near, far);
+    this.hemi.color.set(t.hs); this.hemi.groundColor.set(t.hg); this.hemi.intensity = h;
+    this.sun.color.set(t.sun); this.sun.intensity = si; this.sun.position.set(...t.pos);
+    this.glow.visible = t.glow > 0; for (const sp of this.glow.children) sp.material.opacity = t.glow * (weather === 'fog' ? 0.6 : 1);
+    this.weather.set(weather === 'rain' || weather === 'snow' ? weather : 'clear');
+    this.exposure = t.exp;
+    // газон світліє під снігом, а в дощ трохи темніє
+    if (this.pitch.grassMat) this.pitch.grassMat.color.set(weather === 'snow' ? '#e6efe9' : weather === 'rain' ? '#a9b8ac' : '#ffffff');
+  }
+
   setup(spec, myFormation, mySquad, oppSq) {
+    const pick = (v, list) => (v === 'random' ? list[(Math.random() * list.length) | 0] : v);
+    this.setEnv(pick(S.settings.timeOfDay, ['day', 'dusk', 'night']), pick(S.settings.weather, ['clear', 'clear', 'cloudy', 'rain', 'snow', 'fog']));
     const k = keeper();
     this.mine[0].setLook(this.look(KIT_GK_LOKO, true, squadLook(mySquad[0]), 1));
     this.mine.forEach((p, i) => { if (i === 0) return; const e = mySquad[i], L = squadLook(e); p.setLook(this.look(myKit(), false, L, L.num)); });

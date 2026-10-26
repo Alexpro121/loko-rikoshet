@@ -201,7 +201,7 @@ export class Game {
     const sweep = this.intro ? (1 - ie) * -26 : 0;
     const zoomT = cv ? cv.zoom : zoomT0;
     const tx = cv ? cv.tx : Math.max(-maxX, Math.min(maxX, b.gx + sweep)), tz = cv ? cv.tz : Math.max(-maxZ, Math.min(maxZ, b.gz));
-    const kf = snap ? 1 : 1 - Math.exp(-dt * (cv ? 6 : 3.4)), kz = snap ? 1 : 1 - Math.exp(-dt * (cv ? 5 : 4));
+    const kf = snap ? 1 : 1 - Math.exp(-dt * (cv ? 4.5 : 2.8)), kz = snap ? 1 : 1 - Math.exp(-dt * (cv ? 3.8 : 3.2));
     b.tx += (tx - b.tx) * kf; b.tz += (tz - b.tz) * kf; b.zoom += (zoomT - b.zoom) * kz;
     const dist = b.dist * b.zoom;
     const s = this.trauma * this.trauma, t = this.time;
@@ -214,7 +214,7 @@ export class Game {
     const ov = m && m.camOverride ? m.camOverride() : null;
     if (ov) {
       if (!this._ov) this._ov = { p: cam.position.clone(), l: new THREE.Vector3(b.tx, 0, b.tz), f: cam.fov };
-      const k = 1 - Math.exp(-dt * (snap ? 100 : 3.5));
+      const k = 1 - Math.exp(-dt * (snap ? 100 : 2.6));
       this._ov.p.lerp(ov.p, k); this._ov.l.lerp(ov.l, k); this._ov.f += (ov.fov - this._ov.f) * k;
       cam.position.copy(this._ov.p); cam.lookAt(this._ov.l);
       if (Math.abs(cam.fov - this._ov.f) > 0.01) { cam.fov = this._ov.f; cam.updateProjectionMatrix(); }

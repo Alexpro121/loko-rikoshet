@@ -12,7 +12,7 @@ import { oppSquad, skillOf, gkBonus, gainXp, ovr, tierOf, keysFor, ROLE_UA, STAT
 
 import { Penalties } from './penalty.js';
 const { L, W, G, R } = PITCH;
-const INTRO_T = 6.4;
+const INTRO_T = 11.4;
 const H = 1 / PHYS.hz;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -86,6 +86,7 @@ export class Match {
     hud.warn(null); hud.hint(null);
     hud.banner(spec.club.name, spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of + (spec.final ? ' · ФІНАЛ' : ''), spec.note || CLUB.slogan);
     audio.music('match'); audio.crowd(0.7);
+    this.game.renderer.toneMappingExposure = this.view.exposure || 1.1;
     this.game.setIntroCam(false);
     this.introTgt = [this.mine, this.opp].map((arr) => arr.map((a) => ({ x: a.p.x, z: a.p.z })));
     this.introFlags = { wave: false, clap: false, cheer: false, roar: false };
@@ -607,27 +608,28 @@ export class Match {
    * 0–3.4 вихід, 3.4–4.8 шикування, 4.8–6.4 розбіг по позиціях, потім свисток.
    */
   driveIntro(t, dt) {
-    const F = this.introFlags, v = this.view;
-    const ease = (q) => (q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2);
-    if (t > 0.2 && !F.wave) { F.wave = true; v.stands.react('wave'); audio.crowd(0.95); }
-    if (t > 3.4 && !F.clap) { F.clap = true; v.stands.react('clap'); }
-    if (t > 3.9 && !F.cheer) { F.cheer = true; for (const arr of [this.mine, this.opp]) for (let i = 1; i < arr.length; i += 3) arr[i].p.cheer(1.1); }
-    if (t > 6.0 && !F.roar) { F.roar = true; v.stands.react('goal', { mine: true, dur: 2.4 }); }
+    const F = this.introFlags, v = this.view, tz = v.tunnel.userData.startZ, mz = v.tunnel.userData.mouthZ;
+    const ease = (q) => (q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2), sm = (q) => { q = clamp(q, 0, 1); return q * q * (3 - 2 * q); };
+    if (t > 0.3 && !F.wave) { F.wave = true; v.stands.react('wave', { dur: 5 }); audio.crowd(0.9); }
+    if (t > 6.2 && !F.clap) { F.clap = true; v.stands.react('clap', { dur: 3 }); }
+    if (t > 7.0 && !F.cheer) { F.cheer = true; for (const arr of [this.mine, this.opp]) for (let i = 1; i < arr.length; i += 3) arr[i].p.cheer(1.4); }
+    if (t > 9.0 && !F.roar) { F.roar = true; v.stands.react('goal', { mine: true, dur: 3 }); }
     [this.mine, this.opp].forEach((arr, ti) => {
       const sd = ti === 0 ? -1 : 1;
       arr.forEach((a, i) => {
-        const tgt = this.introTgt[ti][i], lx = sd * (3.2 + i * 1.5), lz = 3, z0 = -W + 2;
-        const dly = i * 0.1, x0 = lx;
+        const tgt = this.introTgt[ti][i], lx = sd * (3.2 + i * 1.5), lz = 3;
+        // вихід одним потоком із тунелю: команди йдуть із чергуванням, розходяться ліворуч і праворуч, шикуються
+        const dly = i * 0.3 + ti * 0.15, q = clamp((t - dly) / 4.2, 0, 1), eq = sm(q);
         let x, z, yaw = 0;
-        if (t < 3.4) { const q = clamp((t - dly) / 2.4, 0, 1); x = x0; z = z0 + (lz - z0) * q; }
-        else if (t < 4.8) { x = lx; z = lz; }
-        else { const q = ease(clamp((t - 4.8 - i * 0.04) / 1.4, 0, 1)); x = lx + (tgt.x - lx) * q; z = lz + (tgt.z - lz) * q; }
+        if (t < 7.4) { z = tz + (lz - tz) * eq; x = sd * 1.1 + (lx - sd * 1.1) * sm((q - 0.35) / 0.65); }
+        else if (t < 9.0) { x = lx; z = lz; }
+        else { const q2 = ease(clamp((t - 9.0 - i * 0.07) / 2.0, 0, 1)); x = lx + (tgt.x - lx) * q2; z = lz + (tgt.z - lz) * q2; }
         const px = a._ix === undefined ? x : a._ix, pz = a._iz === undefined ? z : a._iz;
         a._ix = x; a._iz = z;
         const vx = dt > 0 ? (x - px) / dt : 0, vz = dt > 0 ? (z - pz) / dt : 0;
         a.place(x, z); a.p.vx = vx; a.p.vz = vz; a.sync();
         const sp = Math.hypot(vx, vz);
-        if (sp > 0.8) yaw = Math.atan2(vx, vz); else yaw = t < 4.8 ? 0 : (a.side > 0 ? Math.PI / 2 : -Math.PI / 2);
+        if (sp > 0.6) yaw = Math.atan2(vx, vz); else yaw = t < 9.0 ? 0 : (a.side > 0 ? Math.PI / 2 : -Math.PI / 2);
         a.p.yaw = yaw;
       });
     });
@@ -641,9 +643,11 @@ export class Match {
   /** Кадри інтро: пролітаємо над стадіоном, потім низька камера на шеренгах, потім піднімаємось до ігрового плану. */
   introCam(t) {
     const L2 = (a, b, q) => a + (b - a) * clamp(q, 0, 1), sm = (q) => { q = clamp(q, 0, 1); return q * q * (3 - 2 * q); };
-    if (t < 3.4) { const q = sm(t / 3.4); return { p: new THREE.Vector3(L2(-50, -6, q), L2(34, 11, q), L2(64, 40, q)), l: new THREE.Vector3(0, 1, L2(-6, 2, q)), fov: 42 }; }
-    if (t < 4.8) { const q = (t - 3.4) / 1.4; return { p: new THREE.Vector3(L2(-4, 5, q), 4.2, L2(24, 20, q)), l: new THREE.Vector3(0, 1.8, 2), fov: 36 }; }
-    const q = sm((t - 4.8) / 1.6); return { p: new THREE.Vector3(L2(5, -8, q), L2(4.2, 18, q), L2(20, 34, q)), l: new THREE.Vector3(L2(0, -8, q), 0, L2(2, 0, q)), fov: L2(36, 42, q) };
+    // 0–4.2: плавний переліт над стадіоном до тунелю; 4.2–7.4: камера супроводжує вихід; 7.4–9.0 низький план шеренг; далі підйом до ігрового кадру
+    if (t < 4.2) { const q = sm(t / 4.2); return { p: new THREE.Vector3(L2(-56, 6, q), L2(38, 15, q), L2(70, 38, q)), l: new THREE.Vector3(L2(0, 0, q), 1, L2(-4, -26, q)), fov: 42 }; }
+    if (t < 7.4) { const q = sm((t - 4.2) / 3.2); return { p: new THREE.Vector3(L2(6, 2, q), L2(15, 5.2, q), L2(38, 24, q)), l: new THREE.Vector3(0, 1.4, L2(-26, 0, q)), fov: L2(42, 38, q) }; }
+    if (t < 9.0) { const q = sm((t - 7.4) / 1.6); return { p: new THREE.Vector3(L2(2, 5, q), 4.4, L2(24, 20, q)), l: new THREE.Vector3(0, 1.8, 2), fov: 36 }; }
+    const q = sm((t - 9.0) / 2.2); return { p: new THREE.Vector3(L2(5, -8, q), L2(4.4, 18, q), L2(20, 34, q)), l: new THREE.Vector3(L2(0, -8, q), 0, L2(2, 0, q)), fov: L2(36, 42, q) };
   }
 
   /** Запуск серії пенальті достроково (з паузи). */
@@ -1004,7 +1008,7 @@ export class Match {
     for (let i = 0; i < v.players.length; i++) v.players[i].animate(dt);
     const h = v.ball.update(dt, b.x, b.z, b.vx, b.vz);
     v.updateShadows(b.x, b.z, h);
-    v.stands.update(dt, this.time);
+    v.stands.update(dt, this.time); v.weather.update(dt);
     v.particles.update(dt);
     if (this.bs === 'ready') {
       const pr = this.danger;
@@ -1072,7 +1076,7 @@ export class Match {
   }
 
   exit() {
-    this.phase = 'idle'; this.cancelAim();
+    this.phase = 'idle'; this.cancelAim(); this.game.renderer.toneMappingExposure = 1.1;
     if (this.slow) { this.slow = false; this.ui.setSlow(false); }
     this.view.particles.clear();
     audio.crowd(0);
