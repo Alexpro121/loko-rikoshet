@@ -77,7 +77,7 @@ export class UI {
 <section class="overlay reveal" id="reveal" hidden></section>
 <section class="splash" id="splash">
   <div class="splash-in">
-    <div class="brand"><div class="splash-crest">${lokoCrest()}</div><h1><span>ЛОКОМОТИВ</span><span class="r">РИКОШЕТ</span></h1><p>Залізничники з 1919 року: від Другої ліги до Ліги чемпіонів</p></div>
+    <div class="brand"><div class="splash-crest">${lokoCrest()}</div><h1><span>LOKO</span><span class="r">RUSH</span></h1><p>Залізничники з 1919 року: від Другої ліги до Ліги чемпіонів</p></div>
     <button class="big go" data-act="start">${I.play}<b>ГРАТИ</b></button>
     <div class="ios-hint" id="ios-hint" hidden><b>Для повного екрана на iPhone</b><ol><li>Натисни <i class="shr">⬆︎</i> «Поділитись» у Safari</li><li>Обери «На початковий екран»</li><li>Відкрий гру з нової іконки</li></ol><button class="btn alt" data-act="ios-ok"><b>ЗРОЗУМІЛО</b></button></div>
     <small>Для найкращого вигляду грай на весь екран, телефон тримай горизонтально</small>

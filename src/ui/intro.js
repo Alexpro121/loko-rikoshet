@@ -133,7 +133,7 @@ export function playIntro(root, done) {
     <div class="in-cards" id="in-cards"></div>
     <div class="in-year" hidden><small>КИЇВСЬКІ ЗАЛІЗНИЧНИКИ З</small><div class="in-flap">${year}</div></div>
     <div class="in-crest">${lokoCrest()}</div>
-    <h1 class="in-title"><div class="t1">${word('ЛОКОМОТИВ', 'a')}</div><div class="t2">${word('РИКОШЕТ', 'b')}</div></h1>
+    <h1 class="in-title"><div class="t1">${word('LOKO', 'a')}</div><div class="t2">${word('RUSH', 'b')}</div></h1>
     <div class="in-slip"><span>РЕЙС №1</span><b>КИЇВ → ЛІГА ЧЕМПІОНІВ</b><i></i></div>
     <button class="in-skip" aria-label="Пропустити">ПРОПУСТИТИ ›</button>`;
   root.appendChild(el);

@@ -1,5 +1,5 @@
 // Мінімальний офлайн-кеш: перша загрузка з мережі, далі з кешу (гра без файлів звуку й моделей).
-const CACHE = 'loko-rikoshet-v2';
+const CACHE = 'loko-rikoshet-v3';
 self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {
