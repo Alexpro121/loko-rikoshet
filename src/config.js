@@ -71,21 +71,21 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function matchSpec(fixtureIdx, season) {
   const fx = FIXTURES[fixtureIdx];
   const lg = LEAGUES[fx.league];
-  const dr = fixtureIdx + season * FIXTURES.length, d = dr * 0.72;   // м'якший, плавніший ріст складності
+  const dr = fixtureIdx + season * FIXTURES.length, d = dr * 0.5;   // м'якший, плавніший ріст складності
   return {
     fixtureIdx, season, league: fx.league, leagueName: lg.name, club: fx.club, no: fx.no, of: fx.of, final: fx.final,
     globalNo: fixtureIdx + 1 + season * FIXTURES.length,
     formation: lg.formation, note: lg.note,
     scale: 1 + dr * 0.42,
     time: 75,
-    runSpeed: clamp(5.6 + d * 0.16, 5.6, 8.2),    // швидкість польових гравців суперника
-    press: clamp(0.2 + d * 0.035, 0.28, 0.85),   // наскільки агресивно суперник відбирає м'яч
+    runSpeed: clamp(5.0 + d * 0.16, 5.0, 8.2),    // швидкість польових гравців суперника
+    press: clamp(0.12 + d * 0.035, 0.15, 0.85),   // наскільки агресивно суперник відбирає м'яч
     line: clamp(0.0 + d * 0.012, 0, 0.14),        // наскільки високо грає захист
     gkSpeed: clamp(5.0 + d * 0.3, 5, 10),
-    gkTrack: clamp(0.25 + d * 0.035, 0.22, 0.8),
-    gkErr: Math.max(0.4, 3.2 - d * 0.2),
-    counterSpeed: clamp(46 + d * 0.7, 46, 62),
-    tackle: clamp(0.7 + d * 0.01, 0.7, 0.9),
+    gkTrack: clamp(0.18 + d * 0.035, 0.15, 0.8),
+    gkErr: Math.max(0.4, 4.2 - d * 0.2),
+    counterSpeed: clamp(40 + d * 0.7, 40, 62),
+    tackle: clamp(0.5 + d * 0.01, 0.5, 0.9),
     slowFactor: 0.14,   // скільки секунд суперник дозволяє тримати м'яч
   };
 }
