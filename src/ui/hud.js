@@ -7,13 +7,13 @@ export class Hud {
     root.insertAdjacentHTML('beforeend', `
 <section class="hud" id="hud" hidden>
   <div class="bug hud-mid" id="h-bug">
-    <div class="bug-top"><span id="h-title" class="plate-t"></span><i class="sig loose" id="h-sig" title="Семафор: зелений — м’яч у нас, червоний — у суперника"></i></div>
+    <span id="h-title" hidden></span>
     <div class="bug-main">
       <div class="bug-c me"><div class="crest-box" id="h-crest-me"></div><b>ЛОК</b></div>
       <div class="bug-sc me"><b id="h-sc-me">0</b></div>
       <div class="bug-sc opp"><b id="h-sc-opp">0</b></div>
       <div class="bug-c opp"><b id="h-opp-name">СУП</b><div class="crest-box" id="h-crest-opp"></div></div>
-      <div class="bug-t"><b id="h-time" class="plate-time">00:00</b><small id="h-half">1-й тайм</small></div>
+      <div class="bug-t"><b id="h-time" class="plate-time">00:00</b><small id="h-half">1-й тайм</small><i class="poss loose" id="h-sig" title="Зелений — м’яч у нас, червоний — у суперника"></i></div>
     </div>
     <div class="mcoins"><b id="h-coins">0</b>${I.coin}</div>
   </div>
@@ -39,6 +39,7 @@ export class Hud {
 
   show(spec) {
     this.el.hidden = false;
+    this.t.mid.classList.remove('enter'); void this.t.mid.offsetWidth; this.t.mid.classList.add('enter'); clearTimeout(this.tm.enter); this.tm.enter = setTimeout(() => this.t.mid.classList.remove('enter'), 1600);
     if (this.onShow) this.onShow();
     this.t.title.textContent = spec.leagueName + ' · ' + spec.no + '/' + spec.of;
     this.t.oppName.textContent = spec.club.name.slice(0, 3).toUpperCase();
@@ -49,19 +50,20 @@ export class Hud {
   hide() { if (this.onHide) this.onHide(); this.el.hidden = true; this.clearGoal(); this.warn(null); this.hint(null); this.t.banner.hidden = true; }
 
   setScore(me, opp) {
-    if (me !== this.last.me) { this.t.me.textContent = me; this.last.me = me; this.bump(this.t.me); }
-    if (opp !== this.last.opp) { this.t.opp.textContent = opp; this.last.opp = opp; this.bump(this.t.opp); }
+    const pop = (el, v) => { el.textContent = v; this.bump(el); const box = el.parentElement; box.classList.remove('goalfx'); void box.offsetWidth; box.classList.add('goalfx'); const bug = this.t.mid; bug.classList.remove('scored'); void bug.offsetWidth; bug.classList.add('scored'); };
+    if (me !== this.last.me) { const first = this.last.me < 0; this.last.me = me; if (first) this.t.me.textContent = me; else pop(this.t.me, me); }
+    if (opp !== this.last.opp) { const first = this.last.opp < 0; this.last.opp = opp; if (first) this.t.opp.textContent = opp; else pop(this.t.opp, opp); }
   }
   setTime(text, urgent, half) {
-    if (text !== this.last.time) { this.t.time.textContent = text; this.last.time = text; }
-    if (half !== undefined && half !== this.last.half) { this.t.half.textContent = half; this.last.half = half; }
+    if (text !== this.last.time) { this.last.time = text; const i = text.indexOf(':'); this.t.time.innerHTML = i > 0 ? text.slice(0, i) + '<em class="col">:</em>' + text.slice(i + 1) : text; }
+    if (half !== undefined && half !== this.last.half) { this.last.half = half; const h = this.t.half; h.classList.remove('swap'); void h.offsetWidth; h.textContent = half; h.classList.add('swap'); }
     this.t.mid.classList.toggle('urgent', !!urgent);
   }
   /** Семафор: зелений «вперед» — м'яч у нас, червоний «стоп» — у суперника, жовтий — вільний. */
   setSignal(owner) {
     const k = owner > 0 ? 'go' : owner < 0 ? 'stop' : 'loose';
     if (k === this._sig) return;
-    this._sig = k; this.t.sig.className = 'sig ' + k;
+    this._sig = k; this.t.sig.className = 'poss ' + k;
   }
   setCoins(n) {
     if (n === this.last.coins) return;
