@@ -119,7 +119,7 @@ export class Penalties {
   fire() {
     this.m.ui.hud.hint(null); this.msg.textContent = ''; this.go.style.visibility = 'hidden';
     this.decide();
-    this.state = 'live'; this.t = 0; this.live = true;
+    this.state = 'live'; this.t = 0; this.live = true; this.m.view.stands.react('flash');
     Object.assign(this, { kmode: false, kicked: false, struck: false, arrived: false, announced: false, dust: false, cel: false, gkGo: false, gkDone: false, slowUntil: 0, tArr: 0, gkTouch: false, postHit: false, inNet: false, curve: true, out: null, gcap: null });
   }
 
@@ -130,8 +130,8 @@ export class Penalties {
     const msg = { goal: 'ГОЛ!', save: me ? 'ВОРОТАР ВІДБИВ!' : 'ТИ ЗАХИСТИВ ВОРОТА!', miss: 'МИМО!', post: 'ШТАНГА!' }[this.out];
     m.ui.hud.goal(msg, '', goal ? (me ? 'me' : 'opp') : (me ? 'opp' : 'me'));
     const kp = this.kicker.p;
-    if (goal) { kp.vx = -this.dir * 6.5; kp.vz = (Math.random() < 0.5 ? -1 : 1) * 3.2; audio.goal(); m.view.stands.cheer(2.8); m.game.addTrauma(0.35); }
-    else { audio.save(); kp.setMode('sad', 2.2); }
+    if (goal) { kp.vx = -this.dir * 6.5; kp.vz = (Math.random() < 0.5 ? -1 : 1) * 3.2; audio.goal(); m.view.stands.react('goal', { mine: me, dur: 3.4 }); m.game.addTrauma(0.35); }
+    else { audio.save(); kp.setMode('sad', 2.2); m.view.stands.react(this.out === 'save' || this.out === 'post' ? 'gasp' : 'groan'); }
     this.k++;
   }
 

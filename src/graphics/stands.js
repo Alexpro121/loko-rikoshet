@@ -36,7 +36,7 @@ export class Stands {
   constructor() {
     this.group = new THREE.Group();
     const b = new VoxelBuilder(0.2);
-    const fans = [], spots = [], awaySpots = [];          // x, y, z, фаза, колір тіла, колір голови
+    const fans = [], spots = [], awaySpots = [], sides = [];          // x, y, z, фаза, колір тіла, колір голови
     const rnd = rng(7);
     const pickCloth = (home) => (home && rnd() > 0.35 ? (rnd() > 0.5 ? '#a8182b' : '#e8e4d8') : CLOTHES[(rnd() * CLOTHES.length) | 0]);
 
@@ -53,6 +53,7 @@ export class Stands {
           const lat = (k - (cols - 1) / 2) * SP;
           const home = k >= homeFrom && k < homeTo;
           fans.push(px + ax * lat, top + 0.46, pz + az * lat, rnd() * 6.28, pickCloth(home), SKINS[(rnd() * SKINS.length) | 0]);
+          sides.push(home ? 1 : (k > cols * 0.58 ? -1 : 0));
         }
       }
       const nb = Math.max(2, Math.round((homeTo - homeFrom) / 7));
@@ -92,9 +93,18 @@ export class Stands {
       this.body.setColorAt(i, c.set(fans[i * 6 + 4]).multiplyScalar(0.85 + rnd() * 0.25));
       this.head.setColorAt(i, c.set(fans[i * 6 + 5]));
     }
-    this.cheerT = 0; this.cheerMax = 1;
-    this.writeMatrices(0, 0);
-    this.group.add(this.body, this.head);
+    this.side = Int8Array.from(sides);
+    // руки: дві планки на фана (піднімаються під час радості), спалахи телефонів
+    const am = new THREE.MeshLambertMaterial({ flatShading: true });
+    this.arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.17, 0.62, 0.17), am, n * 2);
+    this.arms.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.arms.frustumCulled = false;
+    for (let i = 0; i < n; i++) { c.set(fans[i * 6 + 5]); this.arms.setColorAt(i * 2, c); this.arms.setColorAt(i * 2 + 1, c); }
+    this.flashN = 140;
+    this.flash = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.34, 0.1), new THREE.MeshBasicMaterial({ color: '#ffffff' }), this.flashN);
+    this.flash.frustumCulled = false; this.flashT = new Float32Array(this.flashN); this.flashI = new Int32Array(this.flashN);
+    this.rx = null; this.idleT = 0;
+    this.writeMatrices(0);
+    this.group.add(this.body, this.head, this.arms, this.flash);
     this.buildBanners(spots, rnd);
     this.buildAway(awaySpots);
   }
@@ -158,33 +168,73 @@ export class Stands {
     this.awayTex.needsUpdate = true;
   }
 
-  cheer(sec) { this.cheerT = sec; this.cheerMax = sec; }
 
-  writeMatrices(t, amp) {
-    const mb = this.body.instanceMatrix.array, mh = this.head.instanceMatrix.array;
-    for (let i = 0; i < this.n; i++) {
-      const jump = amp > 0 ? Math.abs(Math.sin(t * 9 + this.ph[i])) * amp : 0;
+  /** Типи реакцій: goal (радість своїх/сум гостей), groan, gasp, wave, clap, flash. */
+  react(type, o = {}) {
+    const DUR = { goal: 3.8, groan: 2.6, gasp: 1.2, wave: 4.2, clap: 2.6, flash: 3.2 };
+    this.rx = { type, t: 0, dur: o.dur || DUR[type] || 2, mine: o.mine !== false };
+  }
+  cheer(sec) { this.react('goal', { dur: sec, mine: true }); }
+
+  writeMatrices(t) {
+    const rx = this.rx, mb = this.body.instanceMatrix.array, mh = this.head.instanceMatrix.array, ma = this.arms.instanceMatrix.array;
+    const n = this.n;
+    let env = 0, ty = '', mine = true;
+    if (rx) { ty = rx.type; mine = rx.mine; const q = rx.t / rx.dur; env = Math.min(1, rx.t * 7) * (1 - q * q * (3 - 2 * q)); }
+    for (let i = 0; i < n; i++) {
+      const ph = this.ph[i], s = this.side[i];
+      let jump = 0, headY = 0, headZ = 0, arm = 0, lean = 0;
+      if (ty === 'goal') {
+        const joy = mine ? (s >= 0 ? 1 : 0.2) : (s < 0 ? 1 : 0), sad = mine ? (s < 0 ? 1 : 0) : (s >= 0 ? 0.9 : 0.4);
+        jump = Math.abs(Math.sin(t * 9 + ph)) * 0.55 * env * joy; arm = env * joy; headY = -0.16 * env * sad; lean = 0.1 * env * sad;
+      } else if (ty === 'groan') { headY = -0.17 * env; lean = 0.12 * env; headZ = Math.sin(t * 4 + ph) * 0.05 * env; }
+      else if (ty === 'gasp') { const g = Math.min(1, rx.t * 9) * Math.max(0, 1 - rx.t / rx.dur); headY = 0.22 * g; lean = -0.1 * g; jump = 0.08 * g; arm = ph < 2.6 ? 0.9 * g : 0; }
+      else if (ty === 'wave') { const wc = (this.bx[i] + this.bz[i]) * 0.11 - rx.t * 5.5; const pl = Math.pow(Math.max(0, Math.sin(wc)), 3) * (rx.t < rx.dur ? 1 : 0); jump = 0.45 * pl; arm = pl; }
+      else if (ty === 'clap') { jump = Math.abs(Math.sin(t * 13 + ph)) * 0.05 * env; arm = 0.45 * env * (0.5 + 0.5 * Math.sin(t * 13 + ph)); }
+      else if (ty === 'flash') { arm = ph < 3 ? 0.85 * Math.min(1, rx.t * 3) * (1 - rx.t / rx.dur) : 0; }
       const o = i * 16, y = this.by[i] + jump;
       mb[o] = 1; mb[o + 1] = 0; mb[o + 2] = 0; mb[o + 3] = 0; mb[o + 4] = 0; mb[o + 5] = 1; mb[o + 6] = 0; mb[o + 7] = 0;
       mb[o + 8] = 0; mb[o + 9] = 0; mb[o + 10] = 1; mb[o + 11] = 0; mb[o + 12] = this.bx[i]; mb[o + 13] = y; mb[o + 14] = this.bz[i]; mb[o + 15] = 1;
       mh[o] = 1; mh[o + 1] = 0; mh[o + 2] = 0; mh[o + 3] = 0; mh[o + 4] = 0; mh[o + 5] = 1; mh[o + 6] = 0; mh[o + 7] = 0;
-      mh[o + 8] = 0; mh[o + 9] = 0; mh[o + 10] = 1; mh[o + 11] = 0; mh[o + 12] = this.bx[i]; mh[o + 13] = y + 0.66; mh[o + 14] = this.bz[i]; mh[o + 15] = 1;
+      mh[o + 8] = 0; mh[o + 9] = 0; mh[o + 10] = 1; mh[o + 11] = 0; mh[o + 12] = this.bx[i]; mh[o + 13] = y + 0.66 + headY; mh[o + 14] = this.bz[i] + (headZ || 0) + lean; mh[o + 15] = 1;
+      // руки: планки з боків плечей; висота й нахил залежать від arm
+      const sc = arm > 0.04 ? arm : 0.0001, ay = y + 0.4 + 0.31 * sc;
+      for (let k = 0; k < 2; k++) {
+        const oa = (i * 2 + k) * 16, sx = k ? 0.43 : -0.43;
+        ma[oa] = 1; ma[oa + 1] = 0; ma[oa + 2] = 0; ma[oa + 3] = 0; ma[oa + 4] = 0; ma[oa + 5] = sc; ma[oa + 6] = 0; ma[oa + 7] = 0;
+        ma[oa + 8] = 0; ma[oa + 9] = 0; ma[oa + 10] = 1; ma[oa + 11] = 0; ma[oa + 12] = this.bx[i] + sx; ma[oa + 13] = ay; ma[oa + 14] = this.bz[i]; ma[oa + 15] = 1;
+      }
     }
-    this.body.instanceMatrix.needsUpdate = true; this.head.instanceMatrix.needsUpdate = true;
+    this.body.instanceMatrix.needsUpdate = true; this.head.instanceMatrix.needsUpdate = true; this.arms.instanceMatrix.needsUpdate = true;
   }
 
   update(dt, t) {
-    const amp = this.cheerT > 0 ? 1 : 0;
+    const rx = this.rx, amp = rx && (rx.type === 'goal' || rx.type === 'wave') ? 1 : 0;
     for (const b of this.banners) {
       b.m.rotation.z = Math.sin(t * (amp ? 5 : 1.3) + b.ph) * (amp ? 0.1 : 0.025);
       b.m.rotation.x = Math.sin(t * 0.9 + b.ph * 2) * 0.03;
       b.m.position.y = b.y + (amp ? Math.abs(Math.sin(t * 7 + b.ph)) * 0.35 : 0);
     }
-    if (this.cheerT > 0) {
-      this.cheerT -= dt;
-      const k = Math.max(0, this.cheerT / this.cheerMax);
-      this.writeMatrices(t, 0.5 * Math.min(1, k * 3));
-      if (this.cheerT <= 0) this.writeMatrices(t, 0);
+    // вільний фон: час від часу «ла-ла» легкий гул (дрібне погойдування голів) тільки під час реакції
+    if (rx) {
+      rx.t += dt;
+      this.writeMatrices(t);
+      if (rx.type === 'flash') this.runFlashes(dt);
+      if (rx.t >= rx.dur) { this.rx = null; this.writeMatrices(t); this.flash.count = 0; }
     }
+  }
+
+  /** Спалахи камер телефонів по трибунах. */
+  runFlashes(dt) {
+    const dm = new THREE.Matrix4(), tmp = new THREE.Vector3(), sc = new THREE.Vector3(), q = new THREE.Quaternion();
+    this.flash.count = this.flashN;
+    for (let i = 0; i < this.flashN; i++) {
+      this.flashT[i] -= dt;
+      if (this.flashT[i] <= 0 && Math.random() < dt * 2.6) { this.flashT[i] = 0.09; this.flashI[i] = (Math.random() * this.n) | 0; }
+      const on = this.flashT[i] > 0, f = this.flashI[i];
+      tmp.set(this.bx[f], this.by[f] + 1.2, this.bz[f]); sc.setScalar(on ? 1 : 0.0001);
+      dm.compose(tmp, q, sc); this.flash.setMatrixAt(i, dm);
+    }
+    this.flash.instanceMatrix.needsUpdate = true;
   }
 }

@@ -217,6 +217,7 @@ export class Match {
     if (this.bs === 'roll' && this.shotBy > 0 && this.shotBounces >= 2) this.ui.hud.combo(this.shotBounces);
   }
   onPost(nx, nz, impact) {
+    if (impact > 6) this.view.stands.react('gasp');
     audio.wall(5, impact); this.view.ball.squash(nx, nz, 0.3);
     this.view.particles.burst(this.ball.x, 0.6, this.ball.z, 8, 6, 0.5, 0.22, ['#ffffff', '#d9dcd8'], 10, 0.6);
     this.game.addTrauma(0.18);
@@ -242,7 +243,7 @@ export class Match {
     }
     if (a.isGK) {
       audio.save(); this.stats.saves += a.side < 0 ? 1 : 0;
-      a.p.parry(); audio.thud(); if (a.side > 0) this.addXp(a, 25);
+      a.p.parry(); audio.thud(); if (a.side > 0) this.addXp(a, 25); if (speed > 18) this.view.stands.react('gasp');
       this.floatAt(a.p.x, a.p.z, a.side > 0 ? 'СЕЙВ!' : 'ВОРОТАР!', a.side > 0 ? 'good' : 'warn');
     } else {
       audio.wall(0, 8);
@@ -518,14 +519,14 @@ export class Match {
       this.coins += c; this.ui.hud.setCoins(this.coins);
       if (this.shooter && this.mine.indexOf(this.shooter) >= 0) { this.addXp(this.shooter, 60 + (bn >= 2 ? 20 : 0)); if (this.shooter.info) this.shooter.info.goals++; }
       this.ui.hud.goal('ГОЛ!', (bn >= 2 ? 'РИКОШЕТ ×' + mult + ' · ' : '') + '+' + c, 'me');
-      v.stands.cheer(3);
+      v.stands.react('goal', { mine: true });
       for (let i = 0; i < this.opp.length; i++) this.opp[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 60, 11, 1.8, 0.4, ['#b3162a', '#117a4a', '#f1efe8', '#e8b923'], 12, 1.0);
       audio.goal(); this.game.addTrauma(0.6); this.game.fovKick(4); vibrate([30, 40, 60]);
       this.ui.flash('rgba(255,255,255,.4)');
     } else {
       this.score.opp++;
-      this.ui.hud.goal('ПРОПУСТИЛИ', 'контратака спрацювала', 'opp');
+      this.ui.hud.goal('ПРОПУСТИЛИ', 'контратака спрацювала', 'opp'); v.stands.react('goal', { mine: false });
       for (let i = 0; i < this.mine.length; i++) this.mine[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 24, 8, 1.4, 0.35, ['#9ca3af', '#4b5563', '#f1efe8'], 12, 1.0);
       audio.concede(); this.game.addTrauma(0.4); vibrate(80);
@@ -889,7 +890,7 @@ export class Match {
     if (!c.fx) {
       c.fx = true; c.bursts = 0;
       for (let i = 0; i < other.length; i++) other[i].p.sad(5);
-      this.view.stands.cheer(4.5); this.game.addTrauma(0.25);
+      this.game.addTrauma(0.25);
     }
     for (let i = 1; i < team.length; i++) {
       const a = team[i];
@@ -981,7 +982,7 @@ export class Match {
     const win = outcome === 'win';
     for (let i = 0; i < this.mine.length; i++) this.mine[i].p[win ? 'cheer' : 'sad'](3);
     for (let i = 0; i < this.opp.length; i++) this.opp[i].p[win ? 'sad' : 'cheer'](3);
-    if (win) this.view.stands.cheer(3);
+    if (win) this.view.stands.react('wave'); else if (outcome === 'loss') this.view.stands.react('groan');
     if (this.holder) this.holder.manual = false;
 
     const lines = [];
