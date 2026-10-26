@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { PITCH, PHYS, FIXTURES, ACADEMY } from '../config.js';
 import { CLUB, CHRONICLE } from '../club.js';
 import { World } from '../physics/world.js';
@@ -11,6 +12,7 @@ import { oppSquad, skillOf, gkBonus, gainXp, ovr, tierOf, keysFor, ROLE_UA, STAT
 
 import { Penalties } from './penalty.js';
 const { L, W, G, R } = PITCH;
+const INTRO_T = 6.4;
 const H = 1 / PHYS.hz;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -84,7 +86,10 @@ export class Match {
     hud.warn(null); hud.hint(null);
     hud.banner(spec.club.name, spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of + (spec.final ? ' · ФІНАЛ' : ''), spec.note || CLUB.slogan);
     audio.music('match'); audio.crowd(0.7);
-    this.game.setIntroCam(true);
+    this.game.setIntroCam(false);
+    this.introTgt = [this.mine, this.opp].map((arr) => arr.map((a) => ({ x: a.p.x, z: a.p.z })));
+    this.introFlags = { wave: false, clap: false, cheer: false, roar: false };
+    this.driveIntro(0, 0);
     this.game.snapCamera();
   }
 
@@ -126,6 +131,7 @@ export class Match {
 
   // ------------------------------------------------------------------ керування
   pointerDown(x, y) {
+    if (this.phase === 'intro') { if (this.introT > 0.6) this.introT = INTRO_T + 0.1; return; }
     if (this.phase !== 'play' || this.bs !== 'ready') return;
     if (this.ui.useJoy()) return;                         // на телефоні цілимось джойстиком
     this.joyMode = false;
@@ -562,10 +568,9 @@ export class Match {
 
     if (this.phase === 'intro') {
       this.introT += rawDt;
-      if (!this.introCheer && this.introT > 1.1) { this.introCheer = true; for (const a of this.mine) if (a.p.cheer) a.p.cheer(1.5); audio.crowd(0.95); }
-      this.game.setIntroCam(this.introT < 3.4, clamp(this.introT / 3.4, 0, 1));
-      if (this.introT > 3.4) { audio.crowd(0.7); this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true); this.ui.hud.hint(S.tutorial ? null : (this.ui.useJoy() ? 'Час сповільнено: тягни джойстик у бік удару й відпусти' : 'Час сповільнено: відтягни від м’яча й відпусти')); }
-      this.tick(dt, rawDt);
+      this.driveIntro(this.introT, rawDt);
+      if (this.introT > INTRO_T) this.endIntro();
+      this.syncView(rawDt);
       return;
     }
     if (this.phase === 'end') {
@@ -597,13 +602,60 @@ export class Match {
     }
     this.end();
   }
+  /**
+   * Вихід команд: гравці вибігають із тунелю двома колонами, шикуються перед камерою, трибуни ревуть, потім розбігаються на місця.
+   * 0–3.4 вихід, 3.4–4.8 шикування, 4.8–6.4 розбіг по позиціях, потім свисток.
+   */
+  driveIntro(t, dt) {
+    const F = this.introFlags, v = this.view;
+    const ease = (q) => (q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2);
+    if (t > 0.2 && !F.wave) { F.wave = true; v.stands.react('wave'); audio.crowd(0.95); }
+    if (t > 3.4 && !F.clap) { F.clap = true; v.stands.react('clap'); }
+    if (t > 3.9 && !F.cheer) { F.cheer = true; for (const arr of [this.mine, this.opp]) for (let i = 1; i < arr.length; i += 3) arr[i].p.cheer(1.1); }
+    if (t > 6.0 && !F.roar) { F.roar = true; v.stands.react('goal', { mine: true, dur: 2.4 }); }
+    [this.mine, this.opp].forEach((arr, ti) => {
+      const sd = ti === 0 ? -1 : 1;
+      arr.forEach((a, i) => {
+        const tgt = this.introTgt[ti][i], lx = sd * (3.2 + i * 1.5), lz = 3, z0 = -W + 2;
+        const dly = i * 0.1, x0 = lx;
+        let x, z, yaw = 0;
+        if (t < 3.4) { const q = clamp((t - dly) / 2.4, 0, 1); x = x0; z = z0 + (lz - z0) * q; }
+        else if (t < 4.8) { x = lx; z = lz; }
+        else { const q = ease(clamp((t - 4.8 - i * 0.04) / 1.4, 0, 1)); x = lx + (tgt.x - lx) * q; z = lz + (tgt.z - lz) * q; }
+        const px = a._ix === undefined ? x : a._ix, pz = a._iz === undefined ? z : a._iz;
+        a._ix = x; a._iz = z;
+        const vx = dt > 0 ? (x - px) / dt : 0, vz = dt > 0 ? (z - pz) / dt : 0;
+        a.place(x, z); a.p.vx = vx; a.p.vz = vz; a.sync();
+        const sp = Math.hypot(vx, vz);
+        if (sp > 0.8) yaw = Math.atan2(vx, vz); else yaw = t < 4.8 ? 0 : (a.side > 0 ? Math.PI / 2 : -Math.PI / 2);
+        a.p.yaw = yaw;
+      });
+    });
+  }
+  endIntro() {
+    this.formation();
+    for (const a of [...this.mine, ...this.opp]) { a._ix = undefined; a._iz = undefined; }
+    audio.crowd(0.7); this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true);
+    this.ui.hud.hint(S.tutorial ? null : (this.ui.useJoy() ? 'Час сповільнено: тягни джойстик у бік удару й відпусти' : 'Час сповільнено: відтягни від м’яча й відпусти'));
+  }
+  /** Кадри інтро: пролітаємо над стадіоном, потім низька камера на шеренгах, потім піднімаємось до ігрового плану. */
+  introCam(t) {
+    const L2 = (a, b, q) => a + (b - a) * clamp(q, 0, 1), sm = (q) => { q = clamp(q, 0, 1); return q * q * (3 - 2 * q); };
+    if (t < 3.4) { const q = sm(t / 3.4); return { p: new THREE.Vector3(L2(-50, -6, q), L2(34, 11, q), L2(64, 40, q)), l: new THREE.Vector3(0, 1, L2(-6, 2, q)), fov: 42 }; }
+    if (t < 4.8) { const q = (t - 3.4) / 1.4; return { p: new THREE.Vector3(L2(-4, 5, q), 4.2, L2(24, 20, q)), l: new THREE.Vector3(0, 1.8, 2), fov: 36 }; }
+    const q = sm((t - 4.8) / 1.6); return { p: new THREE.Vector3(L2(5, -8, q), L2(4.2, 18, q), L2(20, 34, q)), l: new THREE.Vector3(L2(0, -8, q), 0, L2(2, 0, q)), fov: L2(36, 42, q) };
+  }
+
   /** Запуск серії пенальті достроково (з паузи). */
   startPens() {
     if (this.phase === 'pens' || this.phase === 'end' || this.phase === 'idle') return;
     this.cancelAim(); this.penRes = null; this.timeUp = false;
     this.pens = new Penalties(this); this.pens.start();
   }
-  camOverride() { return this.phase === 'pens' && this.pens ? this.pens.camOverride() : null; }
+  camOverride() {
+    if (this.phase === 'intro') { const o = this.introCam(this.introT); return { p: o.p, l: o.l, fov: o.fov }; }
+    return this.phase === 'pens' && this.pens ? this.pens.camOverride() : null;
+  }
 
   /** Режим володіння: поки м'яч у нас, час сповільнюється до удару або до відбору. */
   updateSlow(rawDt) {
