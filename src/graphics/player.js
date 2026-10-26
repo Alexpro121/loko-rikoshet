@@ -38,12 +38,15 @@ const shinGeo = (kit) => cached('sh' + kit.socks, () => {
 /** Плече (рукав) і передпліччя (шкіра або рукавиця воротаря): між ними лікоть. */
 const upperGeo = (kit, gk) => cached('up' + kit.second + kit.main + gk, () => {
   const b = new VoxelBuilder(0.22, true);
-  b.box(0, -0.2, 0, 0.4, 0.46, 0.4, gk ? kit.main : kit.second);
+  b.box(0, -0.22, 0, 0.4, 0.44, 0.4, gk ? kit.main : kit.second);
+  b.box(0, -0.45, 0, 0.44, 0.07, 0.44, kit.main);     // манжета рукава
   return b.build();
 });
 const foreGeo = (gk, skin) => cached('fo' + gk + skin, () => {
   const b = new VoxelBuilder(0.22, true);
-  b.box(0, -0.2, 0, 0.34, 0.4, 0.34, skin);
+  b.box(0, -0.04, 0, 0.3, 0.12, 0.3, skin);           // лікоть
+  b.box(0, -0.22, 0, 0.3, 0.3, 0.3, skin);            // передпліччя
+  b.box(0, -0.43, 0.02, 0.36, 0.17, 0.36, skin);      // кисть
   if (gk) b.box(0, -0.38, 0, 0.5, 0.3, 0.5, '#d9772a');
   return b.build();
 });
@@ -218,7 +221,7 @@ export class Player {
       // руки: проти ніг, лікті зігнуті під ~90° і ще більше, коли рука іде вперед
       const aAmp = (walk ? 0.22 : 0.45) + 0.55 * sp;
       armA = 0.1 - sL * aAmp; armB = 0.1 - sR * aAmp;
-      const eb = walk ? 0.4 : 0.95 + 0.4 * sp;
+      const eb = walk ? 0.5 : 1.15 + 0.45 * sp;
       elbA = eb + 0.35 * Math.max(0, -sL); elbB = eb + 0.35 * Math.max(0, -sR);
       // тулуб: підстрибування, присідання на опорі, плечі крутяться проти таза, нахил уперед від швидкості та прискорення
       const w = walk ? 0.4 : 1;
