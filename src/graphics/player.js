@@ -297,6 +297,7 @@ export class Player {
         bob = -0.05;
         break;
       }
+      case 'gkwait': { const w = Math.sin(this.t * 5.5); legA = 0.18; legB = -0.1; kneeA = kneeB = 0.38 + Math.abs(w) * 0.08; drop = 0.1; armA = armB = 0.35; elbA = elbB = 0.8; spread = 0.95 + w * 0.05; leanX = 0.28; leanZ = w * 0.07; bob = Math.abs(w) * 0.025; break; }
       case 'catch': armA = armB = 1.45; elbA = elbB = 1.1; spread = 0.12; leanX = 0.2; break;
       case 'control': {
         if (this.style === 0) { legB = 1.0 * sn; legA = -0.2 * sn; kneeB = 0.9 * sn; leanX = -0.2 * sn; armA = 0.5 * sn; armB = -0.5 * sn; spread = 0.4 * sn; lift = 0.06 * sn; }
