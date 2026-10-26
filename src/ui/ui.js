@@ -606,7 +606,7 @@ export class UI {
     const next = FIXTURES[S.fixture];
     this.el.result.innerHTML = `<div class="res ${r.outcome}">
       <div class="res-l"><h1>${title}</h1>
-        <div class="res-score"><span>ЛОКОМОТИВ</span><b>${r.me}</b><i>:</i><b>${r.opp}</b><span>${spec.club.name}</span></div>
+        <div class="res-score"><span>ЛОКОМОТИВ</span><b>${r.me}</b><i>:</i><b>${r.opp}</b><span>${spec.club.name}</span></div>${r.pens ? `<div class="res-pens">Пенальті ${r.pens.me}:${r.pens.opp}</div>` : ''}
         <div class="chips">${extras.join('')}</div><p class="fact">Знали? ${randomFact()}</p></div>
       <div class="res-r"><ul class="lines">${rows}</ul>
         <div class="total"><span>Разом</span><b id="r-total" data-v="0">0</b>${I.coin}</div>

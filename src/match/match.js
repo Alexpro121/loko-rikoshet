@@ -9,6 +9,7 @@ import { S, commit } from '../state/save.js';
 import { powerMult, incomeMult, striker, keeper } from '../state/economy.js';
 import { oppSquad, skillOf, gkBonus, gainXp, ovr, tierOf, keysFor, ROLE_UA, STAT_NAMES } from '../state/squad.js';
 
+import { Penalties } from './penalty.js';
 const { L, W, G, R } = PITCH;
 const H = 1 / PHYS.hz;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -69,6 +70,7 @@ export class Match {
     this.mine[0].body.r = this.mine[0].baseR = Math.max(0.9, 0.7 + 0.6 * mg.reach);
     this.opp[0].body.r = this.opp[0].baseR = Math.max(0.9, 0.7 + 0.6 * og.reach);
     this.score = { me: 0, opp: 0 };
+    this.pens = null; this.penRes = null;
     this.clock = spec.time; this.golden = false; this.timeUp = false; this.timeUpWait = 0;
     this.coins = 0; this.stats = { goals: 0, combo: 1, saves: 0 };
     this.phase = 'intro'; this.introT = 0; this.introCheer = false; this.hitStop = 0; this.ts = 1; this.acc = 0;
@@ -549,6 +551,7 @@ export class Match {
 
   // ------------------------------------------------------------------ головний цикл
   update(rawDt) {
+    if (this.phase === 'pens') { this.pens.update(rawDt); this.syncView(rawDt); this.pens.post(); return; }
     if (this.phase === 'paused') { this.syncView(0); return; }
     if (this.hitStop > 0) { this.hitStop -= rawDt; this.syncView(0); return; }
     this.updateSlow(rawDt);
@@ -586,14 +589,13 @@ export class Match {
   }
 
   timeOver() {
-    if (this.score.me === this.score.opp && !this.golden) {
-      this.golden = true; this.clock = 25; this.timeUp = false; this.lastClock = -1;
-      this.ui.hud.banner('ЗОЛОТИЙ ГОЛ', 'наступний гол вирішує все', ''); audio.whistle(false);
-      this.ui.hud.setTime(this.timeText(), true);
+    if (this.score.me === this.score.opp && !this.penRes) {
+      this.pens = new Penalties(this); this.pens.start();
       return;
     }
     this.end();
   }
+  camOverride() { return this.phase === 'pens' && this.pens ? this.pens.camOverride() : null; }
 
   /** Режим володіння: поки м'яч у нас, час сповільнюється до удару або до відбору. */
   updateSlow(rawDt) {
@@ -962,7 +964,7 @@ export class Match {
 
   end() {
     const spec = this.spec, me = this.score.me, opp = this.score.opp;
-    const outcome = me > opp ? 'win' : me < opp ? 'loss' : 'draw';
+    const outcome = this.penRes ? (this.penRes.win ? 'win' : 'loss') : me > opp ? 'win' : me < opp ? 'loss' : 'draw';
     this.phase = 'end'; this.endT = 0; this.resultSent = false; this.cancelAim();
     this.ui.hud.warn(null); this.ui.hud.clearGoal();
     audio.whistle(true); audio.crowd(0.35);
@@ -1002,7 +1004,7 @@ export class Match {
     S.academy.progress = Math.min(ACADEMY.need, S.academy.progress + (win ? 2 : 1));
     if (S.academy.progress >= ACADEMY.need) S.academy.ready = true;
     commit();
-    this.result = { outcome, me, opp, spec, lines, total, tickets, cup, promoted, newSeason, academyReady: S.academy.ready, stats: this.stats, levelUps: this.levelUps, chapter };
+    this.result = { pens: this.penRes, outcome, me, opp, spec, lines, total, tickets, cup, promoted, newSeason, academyReady: S.academy.ready, stats: this.stats, levelUps: this.levelUps, chapter };
     if (win) audio.win(); else if (outcome === 'loss') audio.lose();
   }
 

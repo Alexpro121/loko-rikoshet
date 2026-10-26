@@ -211,6 +211,14 @@ export class Game {
     cam.lookAt(b.tx, 0, b.tz);
     const f = b.fov - this.fov;
     if (Math.abs(cam.fov - f) > 0.01) { cam.fov = f; cam.updateProjectionMatrix(); }
+    const ov = m && m.camOverride ? m.camOverride() : null;
+    if (ov) {
+      if (!this._ov) this._ov = { p: cam.position.clone(), l: new THREE.Vector3(b.tx, 0, b.tz), f: cam.fov };
+      const k = 1 - Math.exp(-dt * (snap ? 100 : 3.5));
+      this._ov.p.lerp(ov.p, k); this._ov.l.lerp(ov.l, k); this._ov.f += (ov.fov - this._ov.f) * k;
+      cam.position.copy(this._ov.p); cam.lookAt(this._ov.l);
+      if (Math.abs(cam.fov - this._ov.f) > 0.01) { cam.fov = this._ov.f; cam.updateProjectionMatrix(); }
+    } else this._ov = null;
   }
 
   /** Екран → площина газону (y = 0). */
