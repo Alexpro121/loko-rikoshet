@@ -4,7 +4,7 @@ import { locoMesh, wagonMesh, LOCO_LEN, WAGON_LEN, GAP } from './train.js';
 import { netTexture, netPlane, signTexture } from './textures.js';
 
 const SEAT = ['#a8182b', '#1f7a4f', '#e4e2da'];
-const HX = 12.4, HZ = 10.6, R = 3.2, HALF = 14;      // колія навколо стадіону
+const HX = 17.5, HZ = 15.5, R = 3.6, HALF = 19;      // колія навколо стадіону
 const easeBack = (t) => { const c1 = 0.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
 const glowTex = (() => { let t = null; return () => { if (t) return t; const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,246,214,1)'); gr.addColorStop(0.3, 'rgba(255,236,180,0.5)'); gr.addColorStop(1, 'rgba(255,230,170,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); t = new THREE.CanvasTexture(c); return t; }; })();
@@ -78,34 +78,34 @@ export class Island {
       for (let k = 0; k < 4; k++) { const s = 1 + rnd() * 2.2; const side = (rnd() > 0.5 ? 1 : -1) * sz / 2; if (rnd() > 0.5) b.box(side, y, (rnd() - 0.5) * sz, 0.8, 1.5, s, i % 2 ? '#9a5841' : '#86493a'); else b.box((rnd() - 0.5) * sz, y, side, s, 1.5, 0.8, i % 2 ? '#9a5841' : '#86493a'); }
     }
     // камені, дерева
-    for (const [x, z, s] of [[-12.6, -9, 1.2], [12.8, 8.6, 1.5], [-13, 3, 0.9], [11, -12.8, 1.1]]) {
+    for (const [x, z, s] of [[-18, -12, 1.2], [17.9, 11.5, 1.5], [-18, 4, 0.9], [15, -17.5, 1.1]]) {
       b.box(x, s * 0.35, z, s * 1.6, s * 0.7, s * 1.2, '#7b8590', rnd() * 3); b.box(x + 0.4, s * 0.8, z + 0.2, s, s * 0.6, s * 0.8, '#98a2ac', rnd() * 3);
     }
     const cone = new THREE.CylinderGeometry(0, 1, 2.4, 6);
-    for (const [x, z, s] of [[-13, -12.6, 1], [13, -13, 1.2], [-12.8, 12.8, 1.1], [13, 12.6, 0.9], [-5, 13, 0.9], [6, -13.2, 1]]) {
+    for (const [x, z, s] of [[-18, -17, 1], [18, -18, 1.2], [-17.8, 17.5, 1.1], [18, 17.2, 0.9], [-7, 18, 0.9], [8, -18, 1]]) {
       b.box(x, 0.5 * s, z, 0.5 * s, s, 0.5 * s, '#6b4a2e');
       b.shape(cone, x, 2.0 * s, z, '#2f8a56', 0, rnd() * 3, 0, 1.3 * s, 1.1 * s, 1.3 * s);
       b.shape(cone, x, 3.1 * s, z, '#256e47', 0, rnd() * 3, 0, 0.95 * s, 0.9 * s, 0.95 * s);
     }
     // станція «Локомотив»
-    b.box(-9.6, 0.9, 6.4, 3.4, 1.8, 2.2, '#f4f4f2'); b.box(-9.6, 2.0, 6.4, 3.8, 0.4, 2.6, '#e11d2e');
-    b.box(-9.6, 2.5, 6.4, 3.0, 0.5, 1.6, '#e11d2e'); b.box(-9.6, 1.0, 7.52, 3.0, 0.5, 0.06, '#12a150');
-    b.box(-9.6, 0.1, 8.5, 5.6, 0.25, 1.3, '#cfd5d8');
+    b.box(-14.7, 0.9, 11.3, 3.4, 1.8, 2.2, '#f4f4f2'); b.box(-14.7, 2.0, 11.3, 3.8, 0.4, 2.6, '#e11d2e');
+    b.box(-14.7, 2.5, 11.3, 3.0, 0.5, 1.6, '#e11d2e'); b.box(-14.7, 1.0, 12.42, 3.0, 0.5, 0.06, '#12a150');
+    b.box(-14.7, 0.1, 13.4, 5.6, 0.25, 1.3, '#cfd5d8');
     // семафор
-    b.box(-6.2, 1.6, 8.0, 0.2, 3.2, 0.2, '#dfe3e6'); b.box(-6.2, 3.3, 8.0, 0.55, 1.15, 0.3, '#15191c');
+    b.box(-11.3, 1.6, 12.9, 0.2, 3.2, 0.2, '#dfe3e6'); b.box(-11.3, 3.3, 12.9, 0.55, 1.15, 0.3, '#15191c');
     // лавки й ліхтарі на платформі
-    for (const bx of [-11.1, -8.1]) { b.box(bx, 0.45, 8.75, 1.1, 0.12, 0.38, '#7a5a3a'); b.box(bx - 0.4, 0.28, 8.75, 0.1, 0.3, 0.3, '#2a2f33'); b.box(bx + 0.4, 0.28, 8.75, 0.1, 0.3, 0.3, '#2a2f33'); b.box(bx, 0.7, 8.9, 1.1, 0.3, 0.08, '#7a5a3a'); }
-    for (const lx of [-11.6, -7.6]) { b.box(lx, 1.5, 9.0, 0.1, 3.0, 0.1, '#3a4247'); b.box(lx, 3.05, 9.0, 0.5, 0.14, 0.2, '#3a4247'); }
+    for (const bx of [-16.2, -13.2]) { b.box(bx, 0.45, 13.65, 1.1, 0.12, 0.38, '#7a5a3a'); b.box(bx - 0.4, 0.28, 13.65, 0.1, 0.3, 0.3, '#2a2f33'); b.box(bx + 0.4, 0.28, 13.65, 0.1, 0.3, 0.3, '#2a2f33'); b.box(bx, 0.7, 13.8, 1.1, 0.3, 0.08, '#7a5a3a'); }
+    for (const lx of [-16.7, -12.7]) { b.box(lx, 1.5, 13.9, 0.1, 3.0, 0.1, '#3a4247'); b.box(lx, 3.05, 13.9, 0.5, 0.14, 0.2, '#3a4247'); }
     // квіти й кущі
-    for (let i = 0; i < 46; i++) { const fx = (rnd() - 0.5) * 26, fz = (rnd() - 0.5) * 26; if (Math.abs(fx) < 11.5 && Math.abs(fz) < 9.5) continue; b.box(fx, 0.12, fz, 0.16, 0.24, 0.16, ['#ffd24a', '#ff7a8a', '#ffffff', '#c9a6ff'][i % 4]); b.box(fx, 0.03, fz, 0.3, 0.06, 0.3, '#3a8a4a'); }
+    for (let i = 0; i < 46; i++) { const fx = (rnd() - 0.5) * 36, fz = (rnd() - 0.5) * 36; if (Math.abs(fx) < 16.5 && Math.abs(fz) < 14.5) continue; b.box(fx, 0.12, fz, 0.16, 0.24, 0.16, ['#ffd24a', '#ff7a8a', '#ffffff', '#c9a6ff'][i % 4]); b.box(fx, 0.03, fz, 0.3, 0.06, 0.3, '#3a8a4a'); }
     this.base = b.mesh();
     this.group.add(this.base);
     // анімовані дрібниці: лампи семафора, годинник станції, птахи
-    this.semR = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.1), new THREE.MeshBasicMaterial({ color: '#ff4b57' })); this.semR.position.set(-6.2, 3.62, 8.17);
-    this.semG = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.1), new THREE.MeshBasicMaterial({ color: '#35e07a' })); this.semG.position.set(-6.2, 3.1, 8.17);
+    this.semR = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.1), new THREE.MeshBasicMaterial({ color: '#ff4b57' })); this.semR.position.set(-11.3, 3.62, 13.07);
+    this.semG = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.1), new THREE.MeshBasicMaterial({ color: '#35e07a' })); this.semG.position.set(-11.3, 3.1, 13.07);
     this.group.add(this.semR, this.semG);
-    const cl = new THREE.Mesh(new THREE.CircleGeometry(0.34, 18), new THREE.MeshBasicMaterial({ color: '#f4f4ee' })); cl.position.set(-8.2, 1.4, 7.53); this.group.add(cl);
-    this.hand = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.26, 0.02), new THREE.MeshBasicMaterial({ color: '#14201f' })); this.hand.geometry.translate(0, 0.12, 0); this.hand.position.set(-8.2, 1.4, 7.55); this.group.add(this.hand);
+    const cl = new THREE.Mesh(new THREE.CircleGeometry(0.34, 18), new THREE.MeshBasicMaterial({ color: '#f4f4ee' })); cl.position.set(-13.3, 1.4, 12.43); this.group.add(cl);
+    this.hand = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.26, 0.02), new THREE.MeshBasicMaterial({ color: '#14201f' })); this.hand.geometry.translate(0, 0.12, 0); this.hand.position.set(-13.3, 1.4, 12.45); this.group.add(this.hand);
     this.birds = [];
     for (let i = 0; i < 4; i++) {
       const bg = new THREE.Group(), wm = new THREE.MeshBasicMaterial({ color: '#2a3238' });
@@ -113,7 +113,7 @@ export class Island {
       bg.add(wl, wr, new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.34), wm)); this.group.add(bg); this.birds.push({ g: bg, wl, wr, ph: i * 1.7, r: 7 + i * 2.2, h: 9 + i * 1.3 });
     }
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.62), new THREE.MeshBasicMaterial({ map: signTexture('ЛОКОМОТИВ · 1919') }));
-    sign.position.set(-9.6, 1.52, 7.53); this.group.add(sign);
+    sign.position.set(-14.7, 1.52, 12.43); this.group.add(sign);
   }
 
   buildTrack() {
@@ -230,7 +230,7 @@ export class Island {
     b.box(0, 3.9, 1.5, 0.55, 1.4, 0.2, '#fff0a0'); b.box(0, 3.9, -1.5, 0.55, 1.4, 0.2, '#fff0a0');
     this.trophyGeo = b.build();
     this.trophy = new THREE.Mesh(this.trophyGeo, vcMat());
-    this.trophyHolder = new THREE.Group(); this.trophyHolder.position.set(9.4, 0, -7.6); this.trophyHolder.add(this.trophy);
+    this.trophyHolder = new THREE.Group(); this.trophyHolder.position.set(14.5, 0, -12.5); this.trophyHolder.add(this.trophy);
     const pb = new VoxelBuilder(); pb.box(0, 0.4, 0, 4.6, 0.8, 4.6, '#dfe3e6'); pb.box(0, 0.85, 0, 3.8, 0.2, 3.8, '#e11d2e');
     this.trophyHolder.add(pb.mesh());
     this.trophy.position.y = 0.9;
@@ -239,8 +239,8 @@ export class Island {
     this.mini = new THREE.InstancedMesh(this.trophyGeo, vcMat(), 8);
     this.mini.count = 0; this.mini.frustumCulled = false;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(0.2, 0.2, 0.2);
-    for (let i = 0; i < 8; i++) { m.compose(new THREE.Vector3(-5.6 + i * 1.6, 1.2, 8.7), q, s); this.mini.setMatrixAt(i, m); }
-    const shelf = new VoxelBuilder(); shelf.box(0, 0.45, 8.7, 14, 0.9, 1.3, '#dfe3e6'); shelf.box(0, 0.95, 8.7, 13.6, 0.1, 1.1, '#12a150');
+    for (let i = 0; i < 8; i++) { m.compose(new THREE.Vector3(-5.6 + i * 1.6, 1.2, 13.6), q, s); this.mini.setMatrixAt(i, m); }
+    const shelf = new VoxelBuilder(); shelf.box(0, 0.45, 13.6, 14, 0.9, 1.3, '#dfe3e6'); shelf.box(0, 0.95, 13.6, 13.6, 0.1, 1.1, '#12a150');
     this.shelf = shelf.mesh(); this.shelf.visible = false;
     this.group.add(this.mini, this.shelf);
   }
@@ -272,7 +272,7 @@ export class Island {
     this.debris.frustumCulled = false;
     this.debrisData = [];
     for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * 6.28 + rnd(), r = 24 + rnd() * 18;
+      const a = (i / 10) * 6.28 + rnd(), r = 34 + rnd() * 18;
       this.debrisData.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, y: -4 + rnd() * 10, s: 0.8 + rnd() * 2.2, ph: rnd() * 6, rot: rnd() * 3 });
     }
     this.debris.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -322,7 +322,7 @@ export class Island {
 
   celebrate() {
     const P = this.particles; if (!P) return;
-    for (let k = 0; k < 40; k++) P.emit(9.4 + (Math.random() - 0.5) * 3, 5 + Math.random() * 3, -7.6 + (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 8, 5 + Math.random() * 5, (Math.random() - 0.5) * 8, 1.6, 0.4, ['#ffc61a', '#ffffff', '#e11d2e', '#12a150'][k & 3], 12, 0.4, 10);
+    for (let k = 0; k < 40; k++) P.emit(14.5 + (Math.random() - 0.5) * 3, 5 + Math.random() * 3, -12.5 + (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 8, 5 + Math.random() * 5, (Math.random() - 0.5) * 8, 1.6, 0.4, ['#ffc61a', '#ffffff', '#e11d2e', '#12a150'][k & 3], 12, 0.4, 10);
   }
 
   update(dt, t) {
@@ -343,7 +343,7 @@ export class Island {
     this.trophyHolder.rotation.y = t * 0.5;
     this.trophy.position.y = 0.9 + Math.sin(t * 1.6) * 0.12;
     if (this.particles && Math.random() < dt * 5) {
-      this.particles.emit(9.4 + (Math.random() - 0.5) * 3, 3 + Math.random() * 4, -7.6 + (Math.random() - 0.5) * 3, 0, 1.4, 0, 1.1, 0.26, Math.random() > 0.5 ? '#fff6b0' : '#ffffff', -0.2, 0.2, 6, -1);
+      this.particles.emit(14.5 + (Math.random() - 0.5) * 3, 3 + Math.random() * 4, -12.5 + (Math.random() - 0.5) * 3, 0, 1.4, 0, 1.1, 0.26, Math.random() > 0.5 ? '#fff6b0' : '#ffffff', -0.2, 0.2, 6, -1);
     }
     // яруси «вискакують»
     for (let i = this.pops.length - 1; i >= 0; i--) {
