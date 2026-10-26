@@ -108,7 +108,7 @@ export class Match {
           if (d < R0) { if (d < 0.01) { x = -side * R0; z = 0; } else { x *= R0 / d; z *= R0 / d; } }
         }
         a.place(x, z); a.kx = x; a.kz = z;
-        a.manual = false; a.cool = 0; a.noTrap = 0; a.stun = 0; a.receiver = false; a.hug = false; a.hugged = false; a.frozen = 0; a.slide = null; a.dive = null; a.sliding = false; a.slideCool = 0; a.decided = -1; a.body.r = a.baseR; a.p.dribble = false; a.p.setThreat(0, 0); a.body.on = true; a.p.setMode('idle');
+        a.manual = false; a.cool = 0; a.noTrap = 0; a.stun = 0; a.receiver = false; a.hug = false; a.hugged = false; a.cheered = false; a.frozen = 0; a.slide = null; a.dive = null; a.sliding = false; a.slideCool = 0; a.decided = -1; a.body.r = a.baseR; a.p.dribble = false; a.p.setThreat(0, 0); a.body.on = true; a.p.setMode('idle');
       });
       t.gk.manual = false; t.gk.cool = 0; t.gk.noTrap = 0; t.gk.stun = 0; t.gk.frozen = 0; t.gk.slide = null; t.gk.dive = null; t.gk.sliding = false; t.gk.slideCool = 0; t.gk.decided = -1; t.gk.body.r = t.gk.baseR; t.gk.p.setMode('idle');
       for (const a of [t.gk, ...t.out]) a.p.yaw = side > 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -225,7 +225,7 @@ export class Match {
     const a = b.ref, v = this.view;
     if (a.sliding && this.bs === 'roll') return this.onSlideContact(a, speed, nx, nz);
     if (this.bs === 'ready' || this.bs === 'aim') {          // суперник дотягнувся до м'яча, який ми тримаємо
-      if (a.side < 0) this.attemptTackle(a);
+      if (a.side < 0 && !(this.holder && this.holder.isGK)) this.attemptTackle(a);   // м'яч у руках воротаря забрати не можна
       return true;
     }
     if (this.bs !== 'roll') return true;
@@ -264,7 +264,7 @@ export class Match {
 
   /** Відбір: шанс залежить від пресингу; невдала спроба «оглушує» захисника й відтерміновує наступну. */
   attemptTackle(a) {
-    if (a.noTrap > 0 || a.stun > 0) return;
+    if (a.noTrap > 0 || a.stun > 0 || (this.holder && this.holder.isGK)) return;
     if (Math.random() < this.tackleChance(a)) {
       const h = this.holder;
       this.cancelAim(); a.p.tackle(); h.p.stumble(); h.p.setThreat(0, 0); h.stun = 1.4; h.frozen = 1.0; h.manual = false;
@@ -517,16 +517,14 @@ export class Match {
       if (this.shooter && this.mine.indexOf(this.shooter) >= 0) { this.addXp(this.shooter, 60 + (bn >= 2 ? 20 : 0)); if (this.shooter.info) this.shooter.info.goals++; }
       this.ui.hud.goal('ГОЛ!', (bn >= 2 ? 'РИКОШЕТ ×' + mult + ' · ' : '') + '+' + c, 'me');
       v.stands.cheer(3);
-      for (let i = 0; i < this.mine.length; i++) this.mine[i].p.cheer(2.2);
-      for (let i = 0; i < this.opp.length; i++) this.opp[i].p.sad(2.2);
+      for (let i = 0; i < this.opp.length; i++) this.opp[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 60, 11, 1.8, 0.4, ['#b3162a', '#117a4a', '#f1efe8', '#e8b923'], 12, 1.0);
       audio.goal(); this.game.addTrauma(0.6); this.game.fovKick(4); vibrate([30, 40, 60]);
       this.ui.flash('rgba(255,255,255,.4)');
     } else {
       this.score.opp++;
       this.ui.hud.goal('ПРОПУСТИЛИ', 'контратака спрацювала', 'opp');
-      for (let i = 0; i < this.mine.length; i++) this.mine[i].p.sad(2.2);
-      for (let i = 0; i < this.opp.length; i++) this.opp[i].p.cheer(2.2);
+      for (let i = 0; i < this.mine.length; i++) this.mine[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 24, 8, 1.4, 0.35, ['#9ca3af', '#4b5563', '#f1efe8'], 12, 1.0);
       audio.concede(); this.game.addTrauma(0.4); vibrate(80);
     }
@@ -540,7 +538,7 @@ export class Match {
     const k = clamp((this.goalT - 0.5) / 0.7, 0, 1);
     this.ts = 0.28 + (1 - 0.28) * k;
     this.tick(rawDt * this.ts, rawDt);
-    if (this.goalT > 2.4) this.afterGoal();
+    if (this.goalT > 6.0) this.afterGoal();
   }
   afterGoal() {
     this.ui.hud.clearGoal();
@@ -617,6 +615,7 @@ export class Match {
 
   /** Суперник, що дістався до м'яча або до самого виконавця (з будь-якого боку), намагається відібрати. */
   checkTackles() {
+    if (this.holder.isGK) return;                                   // воротар тримає м'яч у руках: захисники не втручаються
     const b = this.ball, h = this.holder.p;
     for (let i = 1; i < this.opp.length; i++) {
       const a = this.opp[i];
@@ -829,6 +828,21 @@ export class Match {
   }
 
   /** Святкування: автор голу біжить до кута й ковзає на колінах, найближчі партнери біжать до нього, суперники плетуться назад. */
+  /** Кадри святкування: крупний план автора голу, потім гурт, потім загальний. Повертає null, коли святкування нема. */
+  celebView() {
+    const c = this.celeb; if (!c || this.game.sm.name !== 'GOAL') return null;
+    const sc = c.scorer, team = c.mine ? this.mine : this.opp;
+    const shot = c.t < 1.7 ? 0 : c.t < 3.5 ? 1 : 2;
+    if (c.shot !== shot) { c.shot = shot; this.game.addTrauma(0.14); this.game.fovKick(3); if (shot > 0) this.ui.flash('rgba(255,255,255,.22)'); }
+    if (shot === 0) return { tx: sc.p.x, tz: sc.p.z, zoom: 0.5, ang: -0.55 + c.t * 0.35 };
+    if (shot === 1) {
+      let cx = sc.p.x, cz = sc.p.z, n = 1;
+      for (let i = 1; i < team.length; i++) { const a = team[i]; if (a !== sc && Math.hypot(a.p.x - sc.p.x, a.p.z - sc.p.z) < 6) { cx += a.p.x; cz += a.p.z; n++; } }
+      return { tx: cx / n, tz: cz / n, zoom: 0.72, ang: 0.15 + (c.t - 1.7) * 0.4 };
+    }
+    return { tx: sc.p.x * 0.8, tz: sc.p.z * 0.8, zoom: 1.12, ang: 0.85 - (c.t - 3.5) * 0.2 };
+  }
+
   updateCelebration(dt) {
     const c = this.celeb; if (!c) return;
     c.t += dt;
@@ -840,25 +854,21 @@ export class Match {
         if (c.t > 1.0 || Math.hypot(c.tx - sc.p.x, c.tz - sc.p.z) < 2.4) { sc.p.kneel(); c.kneeled = true; c.kx = sc.p.x; c.kz = sc.p.z; sc.p.vx = sc.p.vz = 0; }
       } else { sc.p.vx = sc.p.vz = 0; }
     }
-    // найближчі партнери збігаються до автора голу
-    if (!c.assigned) for (let pass = 0; pass < 4; pass++) {
-      let best = null, bd = 1e9;
-      for (let i = 1; i < team.length; i++) {
-        const a = team[i]; if (a === sc || a.hug) continue;
-        const d = (a.p.x - sc.p.x) * (a.p.x - sc.p.x) + (a.p.z - sc.p.z) * (a.p.z - sc.p.z);
-        if (d < bd) { bd = d; best = a; }
-      }
-      if (best) best.hug = true;
-    }
+    // усі польові партнери збігаються до автора голу й радіють колом; воротар підбігає на кілька кроків і піднімає руки
     c.assigned = true;
     for (let i = 1; i < team.length; i++) {
       const a = team[i]; if (a === sc) continue;
-      if (a.hug) {
-        const ang = i * 1.9, rx = Math.cos(ang) * 1.6, rz = Math.sin(ang) * 1.6;
-        a.move(sc.p.x + rx, sc.p.z + rz, 8.5, dt);
-        const d = Math.hypot(sc.p.x - a.p.x, sc.p.z - a.p.z);
-        a.p.yaw = d > 2 ? Math.atan2(a.p.vx, a.p.vz) : Math.atan2(sc.p.x - a.p.x, sc.p.z - a.p.z);
-      } else { a.p.vx *= 0.9; a.p.vz *= 0.9; }
+      a.hug = true;
+      const ang = i * 2.4 + c.t * 0.35, rad = 1.5 + (i % 3) * 0.95;
+      const tx = sc.p.x + Math.cos(ang) * rad, tz = sc.p.z + Math.sin(ang) * rad;
+      a.move(tx, tz, 8.8 + (i % 4) * 0.5, dt);
+      const d = Math.hypot(sc.p.x - a.p.x, sc.p.z - a.p.z);
+      a.p.yaw = d > 3 ? Math.atan2(a.p.vx, a.p.vz) || a.p.yaw : Math.atan2(sc.p.x - a.p.x, sc.p.z - a.p.z);
+      if (d < 3.4 && !a.cheered) { a.cheered = true; a.p.cheer(2.6 + (i % 3) * 0.5); }
+    }
+    {
+      const gk = team[0]; gk.p.vx = gk.p.vz = 0;
+      if (c.t > 0.8 && !gk.cheered) { gk.cheered = true; gk.p.cheer(3.5); }
     }
     // команда-суперник: ті, що програли, плетуться до своєї половини опустивши голови
     for (let i = 1; i < other.length; i++) { const a = other[i]; a.move(a.p.x * 0.92, a.p.z, 2.1, dt); a.p.yaw = Math.atan2(a.p.vx, a.p.vz) || a.p.yaw; }
@@ -866,9 +876,7 @@ export class Match {
     // загальне святкування: усі свої радіють, суперники сумують, салют і хвилі трибун
     if (!c.fx) {
       c.fx = true; c.bursts = 0;
-      team[0].p.cheer(3.2);
-      for (let i = 1; i < team.length; i++) if (team[i] !== sc && !team[i].hug) team[i].p.cheer(2.8);
-      for (let i = 0; i < other.length; i++) other[i].p.sad(3);
+      for (let i = 0; i < other.length; i++) other[i].p.sad(5);
       this.view.stands.cheer(4.5); this.game.addTrauma(0.25);
     }
     for (let i = 1; i < team.length; i++) {

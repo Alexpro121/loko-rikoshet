@@ -22,7 +22,7 @@ export class Game {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.1;
     this.coarse = coarse;
     this.res = 1; this.ema = 16; this.evalT = 0; this.goodRuns = 0; this.pr = 0;
-    this.trauma = 0; this.fov = 0; this.time = 0; this.introK = 1; this.intro = false;
+    this.trauma = 0; this.fov = 0; this.time = 0; this.introK = 1; this.intro = false; this.celebK = 0; this.celebAng = 0;
     this.w = 1; this.h = 1;
 
     // меню: острів, що висить у небі
@@ -192,17 +192,22 @@ export class Game {
     }
     if (b.gx === undefined) { b.gx = 0; b.gz = 0; }
     const ie = this.intro ? 1 - Math.pow(1 - this.introK, 3) : 1;
-    const zoomT = (this.intro ? 1 + (1 - ie) * 1.1 : 1) * (aiming ? 1.16 : (m && m.slow ? 0.94 : 1));
+    const cv = m && m.celebView ? m.celebView() : null;
+    this.celebK += ((cv ? 1 : 0) - this.celebK) * Math.min(1, dt * 5);
+    if (cv) { b.gx = cv.tx; b.gz = cv.tz; this.celebAng = cv.ang; }
+    const zoomT0 = (this.intro ? 1 + (1 - ie) * 1.1 : 1) * (aiming ? 1.16 : (m && m.slow ? 0.94 : 1));
     const hx = b.dist * b.zoom * 2 * b.half * b.asp / 2, hz = 18 * b.zoom;
     const maxX = Math.max(0, L + 7 - hx), maxZ = Math.max(0, W + 3 - hz);
     const sweep = this.intro ? (1 - ie) * -26 : 0;
-    const tx = Math.max(-maxX, Math.min(maxX, b.gx + sweep)), tz = Math.max(-maxZ, Math.min(maxZ, b.gz));
-    const kf = snap ? 1 : 1 - Math.exp(-dt * 3.4), kz = snap ? 1 : 1 - Math.exp(-dt * 4);
+    const zoomT = cv ? cv.zoom : zoomT0;
+    const tx = cv ? cv.tx : Math.max(-maxX, Math.min(maxX, b.gx + sweep)), tz = cv ? cv.tz : Math.max(-maxZ, Math.min(maxZ, b.gz));
+    const kf = snap ? 1 : 1 - Math.exp(-dt * (cv ? 6 : 3.4)), kz = snap ? 1 : 1 - Math.exp(-dt * (cv ? 5 : 4));
     b.tx += (tx - b.tx) * kf; b.tz += (tz - b.tz) * kf; b.zoom += (zoomT - b.zoom) * kz;
     const dist = b.dist * b.zoom;
     const s = this.trauma * this.trauma, t = this.time;
     const sx = Math.sin(t * 47) * 0.6 * s, sy = Math.sin(t * 61 + 1) * 0.45 * s;
-    cam.position.set(b.tx + sx, b.dirY * dist + sy, b.tz + b.dirZ * dist);
+    const ang = (this.celebAng || 0) * this.celebK;
+    cam.position.set(b.tx + sx + Math.sin(ang) * b.dirZ * dist, b.dirY * dist + sy, b.tz + Math.cos(ang) * b.dirZ * dist);
     cam.lookAt(b.tx, 0, b.tz);
     const f = b.fov - this.fov;
     if (Math.abs(cam.fov - f) > 0.01) { cam.fov = f; cam.updateProjectionMatrix(); }
