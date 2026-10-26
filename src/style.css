@@ -582,3 +582,28 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 
 .in-run { --W: min(calc(var(--u) * 150), 97vw); }
 .in-run { --W: min(calc(var(--u) * 124), 84vw); } .in-sem { right: calc(var(--u) * 3); } .in-say { font-size: calc(var(--u) * 3.4); }
+
+/* ===== денний краєвид як у «404-потязі»: пагорби й хмари пливуть, колія біжить, потяг пружинить ===== */
+.intro { background: linear-gradient(180deg, #a9d8ee 0%, #dff1f4 52%, #fff3d6 74%); }
+.in-clouds { inset: 0; overflow: hidden; pointer-events: none; }
+.in-clouds i { position: absolute; left: -20%; width: calc(var(--u) * 22 * var(--s)); height: calc(var(--u) * 7 * var(--s)); border-radius: 99px; background: #fff; box-shadow: calc(var(--u) * 5 * var(--s)) calc(var(--u) * -2.6 * var(--s)) 0 calc(var(--u) * 1.2 * var(--s)) #fff, calc(var(--u) * -4 * var(--s)) calc(var(--u) * -1 * var(--s)) 0 0 #fff; opacity: 0.92; animation: cloud var(--sp) var(--d) linear infinite; }
+@keyframes cloud { to { transform: translateX(calc(100vw + var(--u) * 50)); } }
+.in-hills { left: 0; bottom: 24%; width: 200%; height: 20%; }
+.in-hills.h2 { height: 26%; animation: hill 38s linear infinite; } .in-hills.h1 { animation: hill 12s linear infinite; }
+@keyframes hill { to { transform: translateX(-50%); } }
+.in-ground { background: linear-gradient(180deg, #8a7a66, #4d4237); border-top: max(3px, calc(var(--u) * 0.5)) solid #5db070; }
+.in-sleepers { background: repeating-linear-gradient(90deg, #5a4430 0 calc(var(--u) * 2.4), transparent calc(var(--u) * 2.4) calc(var(--u) * 5.4)); }
+.in-rail { background: linear-gradient(180deg, #e3eaed, #8a959b); }
+.in-wh { transform-box: fill-box; transform-origin: 50% 50%; animation: spin 0.5s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.in-rod { animation: rod 0.5s linear infinite; } @keyframes rod { 0%, 100% { transform: translateX(-2px); } 50% { transform: translateX(3px); } }
+.in-train { animation: jig 0.35s linear infinite; } @keyframes jig { 50% { transform: translateY(1px); } }
+.in-train { filter: drop-shadow(0 calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.25)); }
+.go .in-sleepers { animation: sleep 0.42s linear infinite; }
+.in-year small { color: #0b3d2a; } .in-say .s1 { color: #c8202b; } .in-say .s2 { color: #12803f; }
+.in-skip { background: rgba(255, 255, 255, 0.55); color: #0b3d2a; border-color: rgba(11, 61, 42, 0.4); }
+.in-slip { box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.25); }
+/* їде без зупинок: заїзд, хід, плавний розгін уперед */
+.go .in-run { animation: cruise 5.6s 0.2s linear forwards; }
+@keyframes cruise { 0% { transform: translateX(-105%); animation-timing-function: cubic-bezier(0.1, 0.6, 0.3, 1); } 30% { transform: translateX(calc((100vw - var(--W)) / 2)); } 62% { transform: translateX(calc((100vw - var(--W)) / 2 + var(--u) * 3)); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); } 100% { transform: translateX(110vw); } }
+@media (prefers-reduced-motion: reduce) { .in-clouds i, .in-hills, .in-train, .in-rod { animation: none !important; } }
