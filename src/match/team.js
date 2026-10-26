@@ -29,8 +29,20 @@ export class Actor {
     dvx += this.avx; dvz += this.avz;
     const m = Math.hypot(dvx, dvz), cap = speed * 1.05;
     if (m > cap) { dvx *= cap / m; dvz *= cap / m; }
-    const k = Math.min(1, dt * 8);
-    p.vx += (dvx - p.vx) * k; p.vz += (dvz - p.vz) * k;
+    // обмежені сили: розгін слабшає зі швидкістю, гальмування сильніше, бічне зчеплення обмежує поворот (радіус ≈ v²/a)
+    let ex = dvx - p.vx, ez = dvz - p.vz;
+    const v = Math.hypot(p.vx, p.vz), sc = Math.max(1, speed / 7.4);
+    const aF = 8.5 * sc * (1 - 0.4 * Math.min(1, v / (speed * 1.05 + 0.1))), aB = 15 * sc, aL = 13 * sc;
+    if (v > 0.6) {
+      const hx = p.vx / v, hz = p.vz / v;
+      let el = ex * hx + ez * hz, et = -ex * hz + ez * hx;
+      el = clamp(el, -aB * dt, aF * dt); et = clamp(et, -aL * dt, aL * dt);
+      p.vx += el * hx - et * hz; p.vz += el * hz + et * hx;
+    } else {
+      const m = Math.hypot(ex, ez), lim = aF * dt;
+      if (m > lim) { ex *= lim / m; ez *= lim / m; }
+      p.vx += ex; p.vz += ez;
+    }
     p.x += p.vx * dt; p.z += p.vz * dt;
   }
 }

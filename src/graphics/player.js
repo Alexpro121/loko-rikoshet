@@ -4,12 +4,30 @@ import { playerAtlas, faceCell, numberCell } from './textures.js';
 
 const HIP = 1.05;
 const THIGH = 0.52, UPPER = 0.43;          // довжина стегна й плеча: тут розміщені колінний і ліктьовий суглоби
+const SHIN = 0.40, YA = 0.14, LEG = THIGH + SHIN;   // гомілка до щиколотки; висота щиколотки над травою; довжина ноги бедро→щиколотка
+const NECK = 1.25, WAIST = 0.3;                      // висота шиї й талії у вихідних координатах тулуба
+const G_ACC = 9.8;
 const TAU = Math.PI * 2;
 export const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const easeOut = (t) => 1 - (1 - t) * (1 - t);
 const smooth = (t) => t * t * (3 - 2 * t);
 const lerp = (a, b, t) => a + (b - a) * t;
+
+/**
+ * Дволанкова зворотна кінематика ноги в сагітальній площині.
+ * x — щиколотка вперед від стегна, y — вертикаль униз від стегна. Повертає кут стегна (вперед +) і згин коліна.
+ */
+function legIK(x, y, out) {
+  let d = Math.hypot(x, y);
+  const dmax = LEG * 0.998, dmin = 0.2;
+  if (d > dmax) { x *= dmax / d; y *= dmax / d; d = dmax; } else if (d < dmin) { d = dmin; }
+  const cosK = (THIGH * THIGH + SHIN * SHIN - d * d) / (2 * THIGH * SHIN);
+  const cosH = (THIGH * THIGH + d * d - SHIN * SHIN) / (2 * THIGH * d);
+  out.knee = Math.PI - Math.acos(clamp(cosK, -1, 1));
+  out.hip = Math.atan2(x, y) + Math.acos(clamp(cosH, -1, 1));
+  return out;
+}
 
 let _mat = null;
 /** Один матеріал на всіх гравців: вершинний колір × атлас (обличчя, номери). */
@@ -36,19 +54,34 @@ const thighGeo = (kit, gk) => cached('th' + kit.shorts + kit.socks + gk, () => {
   b.box(0, -0.48, 0, 0.46, 0.1, 0.46, kit.socks);
   return b.build();
 });
-const shinGeo = (kit, gk) => cached('sh' + kit.socks + kit.shorts + (kit.boot || '') + gk, () => {
+const shinGeo = (kit, gk) => cached('sh' + kit.socks + kit.shorts + gk, () => {
   const b = new VoxelBuilder(0.22, true);
-  if (gk) {                                               // штани, наколінник, бутси з накладками
+  if (gk) {                                               // штани й наколінник
     b.box(0, -0.19, 0, 0.54, 0.38, 0.54, kit.shorts);
     b.box(0, -0.06, 0.28, 0.46, 0.2, 0.08, '#56606a');
-    b.box(0, -0.43, 0.07, 0.56, 0.2, 0.7, '#e8e4d8');
-    b.box(0, -0.52, 0.12, 0.58, 0.04, 0.72, '#17191c');
     return b.build();
   }
   b.box(0, -0.19, 0, 0.46, 0.38, 0.46, kit.socks);
   if (kit.under) b.box(0, -0.33, 0, 0.48, 0.05, 0.48, '#f1efe8');          // біла стрічка на гетрах
-  b.box(0, -0.43, 0.07, 0.5, 0.2, 0.66, kit.boot || '#17191c');
-  if (kit.boot) { b.box(0, -0.52, 0.12, 0.52, 0.04, 0.7, '#2a2f33'); b.box(0, -0.4, 0.2, 0.2, 0.06, 0.3, '#f1efe8'); }
+  return b.build();
+});
+/** Стопа: бутса на шарнірі щиколотки (початок координат = щиколотка). */
+const footGeo = (kit, gk) => cached('ft' + (kit.boot || '') + gk, () => {
+  const b = new VoxelBuilder(0.22, true), Y = 0.40;
+  if (gk) {
+    b.box(0, -0.03, 0.07, 0.56, 0.2, 0.7, '#e8e4d8');
+    b.box(0, -0.12, 0.12, 0.58, 0.04, 0.72, '#17191c');
+    return b.build();
+  }
+  b.box(0, -0.43 + Y, 0.07, 0.5, 0.2, 0.66, kit.boot || '#17191c');
+  if (kit.boot) { b.box(0, -0.52 + Y, 0.12, 0.52, 0.04, 0.7, '#2a2f33'); b.box(0, -0.4 + Y, 0.2, 0.2, 0.06, 0.3, '#f1efe8'); }
+  else b.box(0, -0.52 + Y, 0.12, 0.52, 0.04, 0.7, '#0e0f11');
+  return b.build();
+});
+/** Таз: шорти. */
+const hipsGeo = (kit) => cached('hp' + kit.shorts, () => {
+  const b = new VoxelBuilder(0.18, true);
+  b.box(0, 0.19, 0, 1.3, 0.34, 0.8, kit.shorts);
   return b.build();
 });
 /** Плече (рукав) і передпліччя (шкіра або рукавиця воротаря): між ними лікоть. */
@@ -142,7 +175,6 @@ function bodyGeo(look) {
   const { kit, skin } = look, light = kit.ink === 'light';
   const b = new VoxelBuilder(0.18, true);
   b.box(0, 0.775, 0, 1.3, 0.95, 0.8, kit.main);
-  b.box(0, 0.19, 0, 1.3, 0.32, 0.8, kit.shorts);
   b.box(0, 1.2, 0, 1.0, 0.1, 0.66, kit.collar || kit.second);                 // комір
   if (kit.collar) { b.ao = 0; b.box(0, 1.17, 0.335, 0.34, 0.12, 0.04, kit.collar); b.ao = 0.18; }
   if (kit.stripe) { b.ao = 0; for (const sx of [-0.5, 0.5]) b.box(sx, 0.78, 0.404, 0.15, 0.88, 0.03, kit.stripe); b.ao = 0.18; }
@@ -161,7 +193,15 @@ function bodyGeo(look) {
   }
   b.box(0, 0.84, -0.405, 0.62, 0.62, 0.03, '#ffffff', 0, 0, 0, [null, null, null, null, null, num]);   // номер на спині
   b.ao = 0.18;
-  const headY = 1.25 + 0.55, hc = look.hairCol;
+  return b.build();
+}
+
+/** Голова на шиї: початок координат = основа шиї. Обличчя й вуха в тому ж меші, UV обличчя змінюється при емоціях. */
+function headGeo(look) {
+  const { kit, skin } = look;
+  const b = new VoxelBuilder(0.18, true);
+  b.box(0, 0.02, 0, 0.42, 0.22, 0.4, skin);                                   // шия
+  const headY = 0.55;
   const faceStart = b.n;
   b.box(0, headY, 0, 1.05, 1.05, 1.05, skin, 0, 0, 0, [null, null, null, null, faceCell('neutral', look.beard || 0), null]);
   hairBlock(b, look, kit, headY, skin);
@@ -183,28 +223,39 @@ export class Player {
     this.root = new THREE.Group();
     this.body = new THREE.Group();
     this.pose = new THREE.Group(); this.pose.rotation.order = 'ZXY'; this.pose.position.y = HIP;
-    this.lean = new THREE.Group();
+    this.pelvis = new THREE.Group(); this.pelvis.rotation.order = 'ZYX';
+    this.lean = new THREE.Group(); this.lean.position.y = WAIST;          // грудна клітка гнеться навколо талії
+    this.neck = new THREE.Group(); this.neck.position.y = NECK - WAIST; this.neck.rotation.order = 'ZYX';
     this.legL = new THREE.Group(); this.legR = new THREE.Group();
     this.shinL = new THREE.Group(); this.shinR = new THREE.Group();
+    this.footL = new THREE.Group(); this.footR = new THREE.Group();
     this.armL = new THREE.Group(); this.armR = new THREE.Group();
     this.foreL = new THREE.Group(); this.foreR = new THREE.Group();
     this.root.add(this.body);
     this.body.add(this.pose);
-    this.pose.add(this.legL, this.legR, this.lean);
-    this.lean.add(this.armL, this.armR);
-    this.torso = new THREE.Mesh(undefined, m);
+    this.pose.add(this.pelvis, this.lean);
+    this.pelvis.add(this.legL, this.legR);
+    this.lean.add(this.armL, this.armR, this.neck);
+    this.torso = new THREE.Mesh(undefined, m); this.torso.position.y = -WAIST;
+    this.head = new THREE.Mesh(undefined, m);
+    this.hips = new THREE.Mesh(undefined, m);
     this.thighLm = new THREE.Mesh(undefined, m); this.thighRm = new THREE.Mesh(undefined, m);
     this.shinLm = new THREE.Mesh(undefined, m); this.shinRm = new THREE.Mesh(undefined, m);
+    this.footLm = new THREE.Mesh(undefined, m); this.footRm = new THREE.Mesh(undefined, m);
     this.upperLm = new THREE.Mesh(undefined, m); this.upperRm = new THREE.Mesh(undefined, m);
     this.foreLm = new THREE.Mesh(undefined, m); this.foreRm = new THREE.Mesh(undefined, m);
     this.lean.add(this.torso);
+    this.neck.add(this.head);
+    this.pelvis.add(this.hips);
     this.legL.add(this.thighLm, this.shinL); this.legR.add(this.thighRm, this.shinR);
-    this.shinL.add(this.shinLm); this.shinR.add(this.shinRm);
+    this.shinL.add(this.shinLm, this.footL); this.shinR.add(this.shinRm, this.footR);
+    this.footL.add(this.footLm); this.footR.add(this.footRm);
     this.armL.add(this.upperLm, this.foreL); this.armR.add(this.upperRm, this.foreR);
     this.foreL.add(this.foreLm); this.foreR.add(this.foreRm);
     this.legL.position.set(-0.3, 0, 0); this.legR.position.set(0.3, 0, 0);
     this.shinL.position.y = -THIGH; this.shinR.position.y = -THIGH;
-    this.armL.position.set(-0.87, 1.12, 0); this.armR.position.set(0.87, 1.12, 0);
+    this.footL.position.y = -SHIN; this.footR.position.y = -SHIN;
+    this.armL.position.set(-0.87, 1.12 - WAIST, 0); this.armR.position.set(0.87, 1.12 - WAIST, 0);
     this.foreL.position.y = -UPPER; this.foreR.position.y = -UPPER;
 
     this.x = 0; this.z = 0; this.vx = 0; this.vz = 0;
@@ -215,7 +266,8 @@ export class Player {
     this.threat = 0; this.threatYaw = 0; this.dribble = false; this.style = 0; this.amp = 1;
     this.r = { tx: 0, tz: 0, leanX: 0, legs: 0, arms: 0, drop: 0, spread: 0 };
     // згладжені значення суглобів: рухи плавно переходять один в одний, коли гравець зупиняється чи починає біг
-    this.sm = { legA: 0, legB: 0, kneeA: 0.06, kneeB: 0.06, armA: 0, armB: 0, elbA: 0.3, elbB: 0.3, spread: 0, leanX: 0, leanY: 0, leanZ: 0, tiltX: 0, tiltZ: 0, drop: 0 };
+    this.sm = { legA: 0, legB: 0, kneeA: 0.06, kneeB: 0.06, ankA: 0, ankB: 0, armA: 0, armB: 0, elbA: 0.3, elbB: 0.3, spread: 0, leanX: 0, leanY: 0, leanZ: 0, tiltX: 0, tiltZ: 0, drop: 0, pelY: 0, pelZ: 0, hdX: 0, hdY: 0, hdZ: 0 };
+    this.gp = Math.random(); this.pvx = 0; this.pvz = 0; this.aLong = 0; this.aLat = 0; this.ik = { hip: 0, knee: 0 };
     this.setLook(look);
   }
 
@@ -223,9 +275,13 @@ export class Player {
     this.look = look;
     const { kit, gk } = look;
     if (this.torso.geometry && this.torso.geometry.dispose) this.torso.geometry.dispose();
+    if (this.head.geometry && this.head.geometry.dispose) this.head.geometry.dispose();
     this.torso.geometry = bodyGeo(look);
+    this.head.geometry = headGeo(look);
+    this.hips.geometry = hipsGeo(kit);
     this.thighLm.geometry = this.thighRm.geometry = thighGeo(kit, !!gk);
     this.shinLm.geometry = this.shinRm.geometry = shinGeo(kit, !!gk);
+    this.footLm.geometry = this.footRm.geometry = footGeo(kit, !!gk);
     const as = gk ? 1.1 : 1; this.armL.scale.setScalar(as); this.armR.scale.setScalar(as);   // воротар має довші руки для дотяжки
     this.upperLm.geometry = this.upperRm.geometry = upperGeo(kit, !!gk);
     this.foreLm.geometry = this.foreRm.geometry = foreGeo(!!gk, look.skin, kit.under);
@@ -237,7 +293,7 @@ export class Player {
     this.exprT = hold;
     if (this.expr === e) return;
     this.expr = e;
-    const uv = this.torso.geometry.attributes.uv, s = this.torso.geometry.userData.faceStart, r = faceCell(e, (this.look && this.look.beard) || 0);
+    const uv = this.head.geometry.attributes.uv, s = this.head.geometry.userData.faceStart, r = faceCell(e, (this.look && this.look.beard) || 0);
     for (let k = 0; k < 4; k++) uv.setXY(s + k, r[0] + FACE_UV[k][0] * (r[2] - r[0]), r[1] + FACE_UV[k][1] * (r[3] - r[1]));
     uv.needsUpdate = true;
   }
@@ -292,11 +348,21 @@ export class Player {
     const speed = Math.hypot(this.vx, this.vz);
     const sp = clamp(speed / 8.5, 0, 1);
     const prevYaw = this.bodyYaw;
-    this.bodyYaw += angDiff(this.bodyYaw, this.yaw) * Math.min(1, dt * 14);
+    {   // поворот корпусу: швидкість обмежена (повільніше на великій швидкості) — тіло має інерцію
+      const dy = angDiff(this.bodyYaw, this.yaw), wmax = (13 - 6 * sp) * dt;
+      this.bodyYaw += clamp(dy * Math.min(1, dt * 12), -wmax, wmax);
+    }
     this.body.rotation.y = this.bodyYaw;
     const turn = dt > 0 ? angDiff(prevYaw, this.bodyYaw) / dt : 0;
     const acc = dt > 0 ? (speed - (this.pSpeed || 0)) / dt : 0; this.pSpeed = speed;
     this.accL = (this.accL || 0) + (clamp(acc, -25, 25) - (this.accL || 0)) * Math.min(1, dt * 8);
+    // прискорення з вектора швидкості: поздовжнє (розгін/гальмування) і бічне (поворот) у системі координат тіла
+    if (dt > 0) {
+      const ax = (this.vx - this.pvx) / dt, az = (this.vz - this.pvz) / dt, hs = Math.sin(this.bodyYaw), hc = Math.cos(this.bodyYaw);
+      const al = clamp(ax * hs + az * hc, -30, 30), at = clamp(ax * hc - az * hs, -30, 30);
+      const kk = Math.min(1, dt * 9); this.aLong += (al - this.aLong) * kk; this.aLat += (at - this.aLat) * kk;
+    }
+    this.pvx = this.vx; this.pvz = this.vz;
 
     if (this.exprT > 0) { this.exprT -= dt; if (this.exprT <= 0) this.setExpr('neutral'); }
     if (this.modeT > 0) { this.modeT -= dt; if (this.modeT <= 0) this.mode = 'idle'; }
@@ -304,40 +370,63 @@ export class Player {
     let aBoost = 0, legA = 0, legB = 0, kneeA = 0.06, kneeB = 0.06, armA = 0, armB = 0, elbA = 0.3, elbB = 0.3;
     let leanX = 0, leanZ = 0, leanY = 0, bob = 0, lift = 0, spread = 0, drop = 0;
     let tiltX = 0, tiltZ = 0, tiltY = 0, flip = 0, slide = 0;
+    let ankA = null, ankB = null, pelY = 0, pelZ = 0, hdX = 0, hdY = 0, hdZ = 0;
+    const loc = { legA: 0, legB: 0, kneeA: 0, kneeB: 0, on: false };
     const grounded = this.mode === 'slide' || this.mode === 'gkdive' || this.mode === 'stumble' || this.mode === 'kneel';
 
     if (speed > 0.5 && !grounded) {
-      // ---- біг: довжина кроку росте зі швидкістю, фази лівої й правої ноги зсунуті на півциклу
-      const walk = speed < 3.4;
-      this.phase += speed * dt * (TAU / (1.9 + 1.7 * sp));
-      const ph = this.phase, sL = Math.sin(ph), sR = -sL;
-      const amp = walk ? 0.28 + 0.12 * sp : 0.5 + 0.55 * sp;                 // розмах стегна
-      const base = 0.08 + 0.12 * sp;
-      legA = base + amp * sL; legB = base + amp * sR;
-      // коліно: сильно згинається, поки нога несеться вперед (мах), трохи пружинить під час опори
-      const K = (walk ? 0.45 : 0.85) + 0.9 * sp;
-      const cL = Math.max(0, Math.cos(ph - 0.5)), cR = Math.max(0, Math.cos(ph + Math.PI - 0.5));
-      kneeA = 0.18 + K * cL * cL; kneeB = 0.18 + K * cR * cR;
-      // руки: проти ніг, лікті зігнуті під ~90° і ще більше, коли рука іде вперед
-      const aAmp = (walk ? 0.22 : 0.45) + 0.55 * sp;
-      armA = 0.1 - sL * aAmp; armB = 0.1 - sR * aAmp;
-      const eb = walk ? 0.5 : 1.15 + 0.45 * sp;
-      elbA = eb + 0.35 * Math.max(0, -sL); elbB = eb + 0.35 * Math.max(0, -sR);
-      // тулуб: підстрибування, присідання на опорі, плечі крутяться проти таза, нахил уперед від швидкості та прискорення
-      const w = walk ? 0.4 : 1;
-      bob = (Math.abs(Math.cos(ph)) - 0.5) * 0.14 * sp; drop = (0.04 + 0.07 * sp) * w;
-      leanY = -sL * 0.24 * sp * w; tiltY = sL * 0.1 * sp * w;
-      leanX = 0.04 + 0.2 * sp + (speed > 7 ? 0.08 : 0) + clamp(this.accL * 0.006, -0.1, 0.12);
-      leanZ = clamp(-turn * 0.025 * sp, -0.22, 0.22) + sL * 0.05 * sp * w; spread = 0.07 + 0.1 * sp;
-      // балансують руками: на різких поворотах руки розходяться, при розгоні різкіше працюють
-      spread += clamp(Math.abs(turn) * 0.045, 0, 0.55) * sp; aBoost = clamp(this.accL * 0.02, 0, 0.35);
-      armA += (armA < 0 ? -aBoost : aBoost); armB += (armB < 0 ? -aBoost : aBoost);
-      if (this.dribble) {
-        leanX += 0.1; armA *= 0.6; armB *= 0.6; leanZ += Math.sin(ph * 2) * 0.07; bob += Math.abs(Math.sin(ph * 2)) * 0.05; spread += 0.18;
-        legA += Math.max(0, Math.sin(ph * 2 + 1)) * 0.2;
+      // ---- біг за фізикою контакту: стопа опори нерухома відносно трави (швидкість стопи відносно таза = −швидкість тіла),
+      // довжина кроку й час контакту залежать від швидкості, висота таза випливає з довжини ноги (перевернутий маятник + пружина).
+      const vm = speed / (this.root.scale.x || 0.82), spd = clamp(vm / 9, 0, 1);
+      const Ls = 0.4 + 0.22 * vm, D = clamp(Ls * 1.1, 0.35, 0.9 + 0.014 * vm);
+      const beta = D / (2 * Ls), fs = vm / Ls;
+      this.gp = (this.gp + fs * 0.5 * dt) % 1; this.phase = this.gp * TAU;
+      const clear = 0.06 + 0.4 * spd, comp = 0.03 + 0.07 * spd, ik = this.ik;
+      const leg = (ph) => {
+        if (ph < beta) {                                                  // опора: щиколотка їде назад із швидкістю бігу
+          const u = ph / beta, x = D * 0.5 * (1 - 2 * u);
+          const psi = u < 0.25 ? 0.25 * (1 - u / 0.25) : u < 0.6 ? 0 : -0.55 * smooth((u - 0.6) / 0.4);
+          const eps = 0.985 - comp * Math.sin(Math.PI * u);
+          return { st: true, u, x, psi, hh: YA + Math.sqrt(Math.max(0.05, eps * eps * LEG * LEG - x * x)) };
+        }
+        const u = (ph - beta) / (1 - beta), e = smooth(u);                // мах: нога несеться вперед, коліно згинається
+        return { st: false, u, x: -D * 0.5 + D * e, y: clear * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.8)), 1.1), psi: lerp(-0.55, 0.25, e), hh: 0 };
+      };
+      const A = leg(this.gp), B = leg((this.gp + 0.5) % 1);
+      // висота таза: опорна нога задає її; у польоті — балістична дуга
+      let hh;
+      if (A.st && B.st) hh = (A.hh + B.hh) * 0.5; else if (A.st) hh = A.hh; else if (B.st) hh = B.hh;
+      else {
+        const tf = (0.5 - beta) / (fs * 0.5), uf = ((this.gp % 0.5) - beta) / (0.5 - beta);
+        hh = YA + Math.sqrt(Math.max(0.05, 0.985 * 0.985 * LEG * LEG - D * D * 0.25)) + 4 * (G_ACC / (this.root.scale.x || 0.82)) * tf * tf / 8 * clamp(uf, 0, 1) * (1 - clamp(uf, 0, 1));
       }
+      const solve = (f) => {
+        const ay = f.st ? 0 : f.y, psi = f.psi;
+        const lift_ = YA * Math.cos(psi) + (psi > 0 ? 0.26 * Math.sin(psi) : -0.3 * Math.sin(psi)) - YA + ay;   // щиколотка піднімається разом із п'ятою або носком
+        legIK(f.x, hh - (YA + lift_), ik);
+        return { hip: ik.hip, knee: ik.knee, ank: -psi + ik.hip - ik.knee };
+      };
+      const SA = solve(A), SB = solve(B);
+      legA = SA.hip; legB = SB.hip; kneeA = SA.knee; kneeB = SB.knee; ankA = SA.ank; ankB = SB.ank;
+      loc.legA = legA; loc.legB = legB; loc.kneeA = kneeA; loc.kneeB = kneeB; loc.on = true;
+      bob = hh - HIP; drop = 0;
+      // руки працюють проти ніг (збереження кутового моменту): амплітуда з розмаху стегон; лікоть згинається більше при бігу
+      const dsw0 = clamp((legA - legB) / 1.4, -1, 1), ka = 0.45 + 0.95 * spd;
+      armA = 0.1 - dsw0 * ka; armB = 0.1 + dsw0 * ka;
+      const eb = 0.45 + 0.95 * spd;
+      elbA = eb + 0.5 * spd * Math.max(0, armA); elbB = eb + 0.5 * spd * Math.max(0, armB);
+      // таз і плечі крутяться назустріч, таз провисає на боці маху, тулуб нахиляється від прискорення й у повороті
+      const dsw = clamp((legA - legB) / 1.5, -1, 1), tw = 0.25 + 0.75 * spd;
+      pelY = 0.16 * tw * dsw; leanY = -0.24 * tw * dsw; tiltY = 0;
+      pelZ = -0.045 * tw * ((A.st ? 1 : 0) - (B.st ? 1 : 0));
+      leanX = 0.03 + 0.12 * spd + clamp(Math.atan(this.aLong / G_ACC) * 0.95, -0.4, 0.42);
+      leanZ = -clamp(Math.atan(this.aLat / G_ACC) * 1.05, -0.5, 0.5) + 0.03 * tw * ((A.st ? 1 : 0) - (B.st ? 1 : 0));
+      spread = 0.07 + 0.1 * spd + clamp(Math.abs(turn) * 0.045, 0, 0.55) * spd;
+      aBoost = clamp(this.accL * 0.02, 0, 0.3); armA += armA < 0 ? -aBoost : aBoost; armB += armB < 0 ? -aBoost : aBoost;
+      if (this.dribble) { leanX += 0.08; armA *= 0.65; armB *= 0.65; spread += 0.16; leanZ += Math.sin(this.phase * 2) * 0.04; }
     } else if (!grounded) {
       bob = Math.sin(this.t * 1.6) * 0.007; { const g = Math.sin(this.t * 0.7 + (this.ph0 ??= Math.random() * 20)), hips = Math.sin(this.t * 0.23 + (this.ph0 ??= Math.random() * 20) * 2) > 0.55; armA = armB = hips ? -0.25 : 0.05 + 0.04 * g; elbA = elbB = hips ? 1.9 : 0.35 + 0.1 * g; spread = hips ? 0.5 : 0.08 + 0.03 * g; }          // майже статична стійка
+      leanX = clamp(Math.atan(this.aLong / G_ACC) * 0.6, -0.3, 0.3);                // гальмування до зупинки відкидає корпус назад
     }
 
     const md = this.modeD || 1, mk = md > 0 ? clamp(1 - this.modeT / md, 0, 1) : 1;     // прогрес режиму 0..1
@@ -512,24 +601,37 @@ export class Player {
       }
     }
 
+    // стопа: якщо режим не задав щиколотку — тримаємо її рівно до землі при малому махові й тягнемо носок вниз при високому
+    const defAnk = (lg, kn) => { const psi = lg > 0.35 ? -0.5 * clamp((lg - 0.35) / 1.2, 0, 1) : 0; return -psi + lg - kn; };
+    if (ankA === null || !loc.on || legA !== loc.legA || kneeA !== loc.kneeA) ankA = defAnk(legA, kneeA);
+    if (ankB === null || !loc.on || legB !== loc.legB || kneeB !== loc.kneeB) ankB = defAnk(legB, kneeB);
+    // голова стабілізується проти розвороту грудей і нахилу, дивиться вперед
+    hdY = -leanY * 0.55 - pelY * 0.2; hdX = -leanX * 0.45; hdZ = -leanZ * 0.6;
+
     // ---- згладжування суглобів і застосування
-    const S = this.sm, k2 = Math.min(1, dt * 38);
-    S.legA += (legA - S.legA) * k2; S.legB += (legB - S.legB) * k2;
-    S.kneeA += (kneeA - S.kneeA) * k2; S.kneeB += (kneeB - S.kneeB) * k2;
+    const S = this.sm, k2 = Math.min(1, dt * 38), kl = loc.on ? Math.min(1, dt * 80) : k2;
+    S.legA += (legA - S.legA) * kl; S.legB += (legB - S.legB) * kl;
+    S.kneeA += (kneeA - S.kneeA) * kl; S.kneeB += (kneeB - S.kneeB) * kl;
+    S.ankA += (ankA - S.ankA) * kl; S.ankB += (ankB - S.ankB) * kl;
     S.armA += (armA - S.armA) * k2; S.armB += (armB - S.armB) * k2;
     S.elbA += (elbA - S.elbA) * k2; S.elbB += (elbB - S.elbB) * k2;
     S.spread += (spread - S.spread) * k2; S.drop += (drop - S.drop) * k2;
     S.leanX += (leanX - S.leanX) * k2; S.leanY += (leanY - S.leanY) * k2; S.leanZ += (leanZ - S.leanZ) * k2;
     S.tiltX += (tiltX - S.tiltX) * k2; S.tiltZ += (tiltZ - S.tiltZ) * k2;
+    S.pelY += (pelY - S.pelY) * k2; S.pelZ += (pelZ - S.pelZ) * k2;
+    S.hdX += (hdX - S.hdX) * k2; S.hdY += (hdY - S.hdY) * k2; S.hdZ += (hdZ - S.hdZ) * k2;
 
     this.legL.rotation.x = -S.legA; this.legR.rotation.x = -S.legB;
     this.shinL.rotation.x = S.kneeA; this.shinR.rotation.x = S.kneeB;
+    this.footL.rotation.x = S.ankA; this.footR.rotation.x = S.ankB;
+    this.pelvis.rotation.set(0, S.pelY, S.pelZ);
     this.armL.rotation.x = -S.armA; this.armR.rotation.x = -S.armB;
     const lagA = clamp((S.armA - (S.pArmA || 0)) / Math.max(dt, 1e-3) * 0.03, -0.35, 0.35), lagB = clamp((S.armB - (S.pArmB || 0)) / Math.max(dt, 1e-3) * 0.03, -0.35, 0.35);
     S.pArmA = S.armA; S.pArmB = S.armB;
     this.foreL.rotation.x = -(S.elbA + lagA); this.foreR.rotation.x = -(S.elbB + lagB);
     this.armL.rotation.z = -S.spread; this.armR.rotation.z = S.spread;
     this.lean.rotation.set(S.leanX, S.leanY, S.leanZ);
+    this.neck.rotation.set(S.hdX, S.hdY, S.hdZ);
     // висота стегон з нахилу всього тіла: лежачи — на траві, а не в ній
     const cosT = Math.max(0, Math.cos(S.tiltX) * Math.cos(S.tiltZ));
     const hip = Math.max(0.4, 0.42 + 0.63 * cosT - S.drop + bob);
