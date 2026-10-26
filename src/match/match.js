@@ -108,7 +108,7 @@ export class Match {
           if (d < R0) { if (d < 0.01) { x = -side * R0; z = 0; } else { x *= R0 / d; z *= R0 / d; } }
         }
         a.place(x, z); a.kx = x; a.kz = z;
-        a.manual = false; a.cool = 0; a.noTrap = 0; a.stun = 0; a.receiver = false; a.hug = false; a.frozen = 0; a.slide = null; a.dive = null; a.sliding = false; a.slideCool = 0; a.decided = -1; a.body.r = a.baseR; a.p.dribble = false; a.p.setThreat(0, 0); a.body.on = true; a.p.setMode('idle');
+        a.manual = false; a.cool = 0; a.noTrap = 0; a.stun = 0; a.receiver = false; a.hug = false; a.hugged = false; a.frozen = 0; a.slide = null; a.dive = null; a.sliding = false; a.slideCool = 0; a.decided = -1; a.body.r = a.baseR; a.p.dribble = false; a.p.setThreat(0, 0); a.body.on = true; a.p.setMode('idle');
       });
       t.gk.manual = false; t.gk.cool = 0; t.gk.noTrap = 0; t.gk.stun = 0; t.gk.frozen = 0; t.gk.slide = null; t.gk.dive = null; t.gk.sliding = false; t.gk.slideCool = 0; t.gk.decided = -1; t.gk.body.r = t.gk.baseR; t.gk.p.setMode('idle');
       for (const a of [t.gk, ...t.out]) a.p.yaw = side > 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -863,6 +863,23 @@ export class Match {
     // команда-суперник: ті, що програли, плетуться до своєї половини опустивши голови
     for (let i = 1; i < other.length; i++) { const a = other[i]; a.move(a.p.x * 0.92, a.p.z, 2.1, dt); a.p.yaw = Math.atan2(a.p.vx, a.p.vz) || a.p.yaw; }
     team[0].p.vx = team[0].p.vz = 0; other[0].p.vx = other[0].p.vz = 0;
+    // загальне святкування: усі свої радіють, суперники сумують, салют і хвилі трибун
+    if (!c.fx) {
+      c.fx = true; c.bursts = 0;
+      team[0].p.cheer(3.2);
+      for (let i = 1; i < team.length; i++) if (team[i] !== sc && !team[i].hug) team[i].p.cheer(2.8);
+      for (let i = 0; i < other.length; i++) other[i].p.sad(3);
+      this.view.stands.cheer(4.5); this.game.addTrauma(0.25);
+    }
+    for (let i = 1; i < team.length; i++) {
+      const a = team[i];
+      if (a.hug && !a.hugged && a !== sc && Math.hypot(sc.p.x - a.p.x, sc.p.z - a.p.z) < 2.2) { a.hugged = true; a.p.cheer(2.4); }
+    }
+    if (sc && c.t > c.bursts * 0.75 + 0.3 && c.bursts < 4) {
+      c.bursts++;
+      const cols = c.mine ? ['#b3162a', '#117a4a', '#f1efe8', '#e8b923'] : ['#f1efe8', '#9ca3af', '#e8b923'];
+      this.view.particles.burst(sc.p.x, 1.8, sc.p.z, 26, 7, 1.5, 0.3, cols, 12, 1.0);
+    }
   }
 
   /** М'яч завис серед гравців: найближчий вільний гравець (з невеликою перевагою своїх) отримує його. */
