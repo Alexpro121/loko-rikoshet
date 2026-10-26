@@ -644,3 +644,9 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .in-run { --W: calc(var(--u) * 335); }
 
 .in-run { --W: calc(var(--u) * 607); }
+/* потяг стоїть колесами на рейці: тінь, головка рейки, баласт */
+.in-run { bottom: calc(26% - var(--u) * 2.9); }
+.in-run::after { content: ''; position: absolute; left: 0; right: 0; bottom: calc(var(--u) * 1.4); height: calc(var(--u) * 1.1); background: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.45), transparent 70%); pointer-events: none; }
+.in-rail { top: calc(var(--u) * 1.2); height: max(4px, calc(var(--u) * 1.1)); background: linear-gradient(180deg, #f2f6f7 0 25%, #b5bfc4 25% 60%, #6f7a80); box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.5); }
+.in-ground::before { content: ''; position: absolute; inset: calc(var(--u) * 0.2) 0 0; background: repeating-linear-gradient(90deg, rgba(0,0,0,.14) 0 2px, transparent 2px 9px), radial-gradient(circle at 20% 60%, rgba(255,255,255,.08) 0 2px, transparent 3px) 0 0 / 14px 9px; opacity: .6; }
+.in-run { bottom: calc(26% - var(--u) * 6.5); } .in-run::after { bottom: calc(var(--u) * 5); }
