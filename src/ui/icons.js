@@ -27,8 +27,7 @@ export function crest(kit, label) {
   return `<svg class="crest" viewBox="0 0 40 46" aria-hidden="true"><path d="M3 3h34v22c0 9-9 16-17 19C12 41 3 34 3 25z" fill="${a}" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M20 3h17v22c0 9-9 16-17 19z" fill="${b}"/><path d="M3 3h34v22c0 9-9 16-17 19C12 41 3 34 3 25z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/></svg><b class="crest-t">${label}</b>`;
 }
 
-/** Власний значок Локо: червона й зелена половини (сигнали «стоп» і «вперед») та залізничне колесо. Не офіційний логотип. */
+/** Емблема ФК «Локомотив» Київ (файл з Вікіпедії, public/loko-logo.svg). */
 export function lokoCrest() {
-  const spokes = [0, 60, 120].map((a) => `<line x1="20" y1="22" x2="${(20 + 6.2 * Math.cos((a * Math.PI) / 180)).toFixed(1)}" y2="${(22 + 6.2 * Math.sin((a * Math.PI) / 180)).toFixed(1)}" stroke="#fff" stroke-width="1.6"/><line x1="20" y1="22" x2="${(20 - 6.2 * Math.cos((a * Math.PI) / 180)).toFixed(1)}" y2="${(22 - 6.2 * Math.sin((a * Math.PI) / 180)).toFixed(1)}" stroke="#fff" stroke-width="1.6"/>`).join('');
-  return `<svg class="crest" viewBox="0 0 40 46" aria-hidden="true"><path d="M3 3h34v22c0 9-9 16-17 19C12 41 3 34 3 25z" fill="#c8213a"/><path d="M20 3h17v22c0 9-9 16-17 19z" fill="#18884f"/><circle cx="20" cy="22" r="7.6" fill="none" stroke="#fff" stroke-width="2"/>${spokes}<circle cx="20" cy="22" r="1.8" fill="#fff"/><path d="M3 3h34v22c0 9-9 16-17 19C12 41 3 34 3 25z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><text x="20" y="37" text-anchor="middle" font-size="5.6" font-weight="800" fill="#fff" font-family="Rubik, sans-serif">1919</text></svg>`;
+  return `<img class="crest" src="${import.meta.env.BASE_URL}loko-logo.svg" alt="ФК Локомотив Київ" draggable="false"/>`;
 }

@@ -958,7 +958,9 @@ export class Match {
 
     S.coins += total;
     for (let i = 0; i < 11; i++) { const e = S.squad[i]; e.apps++; gainXp(e, this.xp[i] + 10 + (win ? 20 : 0), this.levelUps); }
+    for (const e of S.bench || []) gainXp(e, 6 + (win ? 6 : 0));   // запасні теж тренуються
     this.ui.hud.setCard(null);
+    S.form = [...(S.form || []), win ? 'W' : outcome === 'draw' ? 'D' : 'L'].slice(-5);
     S.stats.matches++; S.stats.goals += this.stats.goals; S.stats.bestCombo = Math.max(S.stats.bestCombo, this.stats.combo);
     let tickets = 0, promoted = null, newSeason = false, chapter = null;
     if (win) {

@@ -3,10 +3,10 @@ import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_T
 import { kickCost, stadiumCost, KICK_STEP, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
 import { audio } from '../core/audio.js';
 import { I, crest, lokoCrest } from './icons.js';
-import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, randomFact } from '../club.js';
+import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact } from '../club.js';
 import { Hud } from './hud.js';
 import { portrait } from './portrait.js';
-import { ensureSquad, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook } from '../state/squad.js';
+import { ensureSquad, oppSquad, allPlayers, swapTargets, swapPlayers, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook } from '../state/squad.js';
 import { striker } from '../state/economy.js';
 
 const rarCol = (id) => ACADEMY.rarities.find((r) => r.id === id) || ACADEMY.rarities[0];
@@ -43,12 +43,15 @@ export class UI {
       <button class="cash" id="m-cash" data-act="cash" hidden></button>
     </div>
   </header>
+  <aside class="m-side m-left" id="m-club" data-act="nav-transfers"></aside>
+  <aside class="m-side m-right" id="m-next"></aside>
   <button class="cta" id="m-cta" data-act="play"><b>ТОРКНИСЬ, ЩОБ ГРАТИ</b><small id="m-cta-s"></small></button>
   <footer class="bottom">
     <div class="cards">
       <button class="card" id="m-kick" data-act="up-kick"><span class="card-ic">${I.boot}</span><span class="card-t"><b>УДАР</b><em id="m-kick-v"></em></span><span class="card-p" id="m-kick-c"></span></button>
       <button class="card" id="m-stad" data-act="up-stadium"><span class="card-ic">${I.stadium}</span><span class="card-t"><b>СТАДІОН</b><em id="m-stad-v"></em></span><span class="card-p" id="m-stad-c"></span></button>
     </div>
+    <div class="ticker" aria-hidden="true"><em>ЗНАЄШ?</em><div class="tk"><div class="tk-in" id="m-tick"></div></div></div>
     <nav class="nav" id="m-nav">
       <button class="nb on" data-act="nav-match"><i>${I.ball}</i><span>МАТЧ</span></button>
       <button class="nb" data-act="nav-transfers"><i>${I.shirt}</i><span>КОМАНДА</span></button>
@@ -83,7 +86,13 @@ export class UI {
 <div class="flash" id="flash"></div>
 <div class="slowfx" id="slowfx"></div>`);
     const q = (id) => root.querySelector('#' + id);
-    this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), kick: q('m-kick'), kickV: q('m-kick-v'), kickC: q('m-kick-c'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
+    this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), club: q('m-club'), next: q('m-next'), tick: q('m-tick'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), kick: q('m-kick'), kickV: q('m-kick-v'), kickC: q('m-kick-c'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
+    root.addEventListener('input', (e) => {
+      const t = e.target.closest('[data-range]'); if (!t) return;
+      const k = t.dataset.range, v = +t.value;
+      S.settings[k] = v; this.applyControls(); commit();
+      const o = t.parentElement.querySelector('output'); if (o) o.textContent = v + '%';
+    });
     root.addEventListener('click', (e) => { const t = e.target.closest('[data-act]'); if (t) this.act(t.dataset.act, t); });
     this.hud.onShow = () => this.setMatchUi(true);
     this.hud.onHide = () => this.setMatchUi(false);
@@ -126,6 +135,9 @@ export class UI {
   applyControls() {
     this.el.joy.hidden = !(this.matchActive && this.useJoy());
     this.root.classList.toggle('hand-left', S.settings.hand === 'left');
+    const st = this.root.style;
+    st.setProperty('--joy-s', (S.settings.joySize / 100).toFixed(2));
+    st.setProperty('--joy-a', (S.settings.joyAlpha / 100).toFixed(2));
   }
   initJoy() {
     const el = this.el.joy, ring = el.querySelector('.joy-ring'), knob = el.querySelector('.joy-knob');
@@ -185,6 +197,7 @@ export class UI {
       default:
         if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); return this.renderPanel(); }
         if (a.startsWith('train:')) return this.train(a);
+        if (a.startsWith('swap:')) { const [, bi, slot] = a.split(':'); if (swapPlayers(+slot, +bi - 11)) { this.sel = +slot; audio.buy(); this.toast('Заміна проведена'); } else audio.deny(); return this.renderPanel(); }
         if (a.startsWith('buy:')) return this.buy(a.slice(4));
         if (a.startsWith('equip:')) return this.equip(a.slice(6));
     }
@@ -241,8 +254,47 @@ export class UI {
     e.kick.classList.toggle('can', S.coins >= kickCost()); e.stad.classList.toggle('can', S.coins >= stadiumCost());
     e.acadDot.hidden = !S.academy.ready;
     if (force || this._leagueKey !== S.fixture + ':' + S.season) { this._leagueKey = S.fixture + ':' + S.season; this.leagueStrip(); }
+    this.menuCards(force);
     this.tickCash();
     if (this.panel) this.renderPanel();
+  }
+
+  /** Інформаційні картки меню: клуб, наступний суперник, зірка складу та стрічка фактів. */
+  menuCards(force) {
+    const g = this.game; if (!g) return;
+    ensureSquad();
+    const spec = matchSpec(S.fixture, S.season), all = allPlayers();
+    const star = all.reduce((a, e) => (ovr(e) > ovr(a) ? e : a), all[0]);
+    const rating = squadRating();
+    const form = (S.form || []).slice(-5);
+    const dots = Array.from({ length: 5 }, (_, i) => { const r = form[i - (5 - form.length)]; return `<i class="f ${r ? r.toLowerCase() : ''}">${r === 'W' ? 'П' : r === 'D' ? 'Н' : r === 'L' ? 'Ц' : ''}</i>`; }).join('');
+    const kc = [rating, S.stats.wins, S.stats.goals, S.stats.bestCombo, form.join(''), S.trophies, star.id, ovr(star), S.striker].join('|');
+    if (force || this._clubKey !== kc) {
+      this._clubKey = kc;
+      const L = squadLook(star), gk = star.line === 'G', o = ovr(star);
+      const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : KIT_LOKO, num: star.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, gk, scale: 0.9 }, 'sq-' + star.id + (star.role === 'ST' ? striker().id : ''));
+      this.el.club.innerHTML = `<div class="mc-h">${lokoCrest()}<div><b>ЛОКОМОТИВ</b><em>Київ · з 1919</em></div></div>
+        <div class="mc-stats"><div><b>${rating}</b><span>рейтинг</span></div><div><b>${S.stats.wins}</b><span>перемог</span></div><div><b>${S.stats.goals}</b><span>голів</span></div></div>
+        <div class="mc-form"><span>Форма</span><div>${dots}</div></div>
+        <div class="mc-star"><img src="${img}" alt=""/><div><small>Зірка складу</small><b>${star.name.split(' ')[0]}</b><em>№${star.num} · ${star.role}</em></div><i class="ovr ${tierOf(o)}">${o}</i></div>
+        <div class="mc-tro">${I.trophy}<b>${S.trophies}</b><span>кубків</span><u>${I.up}<b>${S.stats.bestCombo}</b><span>комбо</span></u></div>`;
+    }
+    const nk = [S.fixture, S.season, rating, S.up.stadium].join('|');
+    if (force || this._nextKey !== nk) {
+      this._nextKey = nk;
+      const oq = oppSquad(spec), oAvg = Math.round(oq.reduce((a, e) => a + ovr(e), 0) / oq.length), diff = oAvg - rating;
+      const lvl = diff <= -8 ? 1 : diff <= 3 ? 2 : diff <= 14 ? 3 : 4, label = ['', 'Легко', 'Рівний бій', 'Складно', 'Дуже складно'][lvl];
+      const rew = Math.round(120 * spec.scale * incomeMult());
+      const pips = [1, 2, 3, 4].map((n) => `<i class="${n <= lvl ? 'on l' + lvl : ''}"></i>`).join('');
+      this.el.next.innerHTML = `<div class="mn-t"><span>Наступний матч</span><b>${spec.no}/${spec.of}</b></div>
+        <div class="mn-vs">${crest(spec.club.kit, spec.club.name.slice(0, 2))}<div><b>${spec.club.name}</b><em>${spec.club.city} · ${spec.leagueName}</em></div></div>
+        <div class="mn-d"><span>${label}<small>рейтинг ${oAvg}</small></span><div class="pips">${pips}</div></div>
+        <div class="mn-r"><span>За перемогу</span><b>+${fmt(rew)}</b>${I.coin}</div>${spec.final ? `<div class="mn-cup">${I.trophy}<span>Фінал: кубок ліги +3 квитки</span></div>` : ''}${spec.note ? `<p>${spec.note}</p>` : ''}`;
+    }
+    if (force || !this.el.tick.innerHTML) {
+      const f = FACTS.map((t) => [Math.random(), t]).sort((a, b) => a[0] - b[0]).slice(0, 6).map((a) => `<span>${a[1]}</span>`).join('');
+      this.el.tick.innerHTML = f + f;
+    }
   }
 
   tickCash() {
@@ -310,25 +362,27 @@ export class UI {
   /** Склад: картки гравців з рейтингом і праворуч детальна картка з тренуванням навичок. */
   squadHtml() {
     const g = this.game; ensureSquad();
-    if (this.sel == null || !S.squad[this.sel]) this.sel = Math.max(1, S.squad.findIndex((e) => e.role === 'ST'));
-    const cards = S.squad.map((e, i) => {
+    if (this.sel == null || !allPlayers()[this.sel]) this.sel = Math.max(1, S.squad.findIndex((e) => e.role === 'ST'));
+    const all = allPlayers();
+    const cards = all.map((e, i) => {
       const L = squadLook(e), gk = e.line === 'G', o = ovr(e);
       const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : KIT_LOKO, num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, gk, scale: 0.9 }, 'sq-' + e.id + (e.role === 'ST' ? striker().id : ''));
-      return `<button class="sq-card ${i === this.sel ? 'on' : ''}" data-act="sel:${i}"><i class="ovr ${tierOf(o)}">${o}</i><img src="${img}" alt=""/><b>${e.name.split(' ').slice(-1)[0]}</b><em>${e.role}</em></button>`;
+      return `<button class="sq-card ${i === this.sel ? 'on' : ''} ${i >= 11 ? 'sub' : ''}" data-act="sel:${i}"><i class="ovr ${tierOf(o)}">${o}</i><img src="${img}" alt=""/><b>${e.name.split(' ').slice(-1)[0]}</b><em>№${e.num} · ${i >= 11 ? 'запас' : e.role}</em></button>`;
     }).join('');
-    const e = S.squad[this.sel], o = ovr(e), need = xpNeed(e.lvl);
+    const e = all[this.sel], o = ovr(e), need = xpNeed(e.lvl), isSub = this.sel >= 11;
+    const swaps = isSub ? `<div class="swaps"><small>Замінити в основі:</small>${swapTargets(e).map((si) => `<button class="btn sw" data-act="swap:${this.sel}:${si}"><b>№${S.squad[si].num} ${S.squad[si].name.split(' ')[0]}</b><em>${S.squad[si].role} · ${ovr(S.squad[si])}</em></button>`).join('')}</div>` : '';
     const tiles = keysFor(e.line).map((k) => {
       const v = e.stats[k], c = trainCost(v), can = S.coins >= c && v < 99;
       return `<div class="st"><div class="st-t"><span>${STAT_NAMES[k]}</span><b>${v}</b></div><i><u style="width:${v}%"></u></i><button class="btn buy ${can ? 'can' : ''}" data-act="train:${this.sel}:${k}" ${v >= 99 ? 'disabled' : ''}><b>+1 · ${fmt(c)}</b>${I.coin}</button><small>${STAT_HINT[k]}</small></div>`;
     }).join('');
-    const detail = `<div class="sq-d"><div class="sq-h"><i class="ovr big ${tierOf(o)}">${o}</i><div><h3>${e.name}</h3><p>№${e.num} · ${ROLE_UA[e.role]}</p><div class="xp"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></div><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small></div></div><div class="st-grid">${tiles}</div></div>`;
+    const detail = `<div class="sq-d"><div class="sq-h"><i class="ovr big ${tierOf(o)}">${o}</i><div><h3>${e.name}</h3><p>№${e.num} · ${ROLE_UA[isSub ? (e.pos || e.role) : e.role]}${isSub ? ' · запасний' : ''}</p><div class="xp"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></div><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small></div></div>${swaps}<div class="st-grid">${tiles}</div></div>`;
     return sheet('Команда · рейтинг ' + squadRating(), this.teamTabs() + `<div class="sq-wrap"><div class="sq-list scroller">${cards}</div>${detail}</div>`, 'wide');
   }
 
   train(a) {
     const [, i, k] = a.split(':');
     const c = trainStat(+i, k);
-    if (c === false) { audio.deny(); const e = S.squad[+i]; this.toast(e && e.stats[k] >= 99 ? 'Навичка на максимумі' : 'Не вистачає монет'); return; }
+    if (c === false) { audio.deny(); const e = allPlayers()[+i]; this.toast(e && e.stats[k] >= 99 ? 'Навичка на максимумі' : 'Не вистачає монет'); return; }
     audio.buy();
   }
 
@@ -461,6 +515,7 @@ export class UI {
         <div class="tg q"><span>Графіка</span><div class="seg">${qb('auto', 'АВТО')}${qb('high', 'ВИСОКА')}${qb('low', 'ЕКОНОМНА')}</div></div>
         <div class="tg q"><span>Керування ударом</span><div class="seg">${cb('auto', 'АВТО')}${cb('joy', 'ДЖОЙСТИК')}${cb('drag', 'ВІДТЯГУВАННЯ')}</div></div>
         <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
+        <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>
         <button class="tg" data-act="fs"><span>На весь екран</span>${I.full}</button>
         <button class="tg danger" data-act="reset"><span></span><b>СКИНУТИ ПРОГРЕС</b></button>
       </div></div>`;

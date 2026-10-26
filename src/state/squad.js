@@ -61,16 +61,72 @@ export function newEntry(role, idx, rnd, base, names = 'ua') {
 
 const GK_ROLE = { name: 'GK', line: 'G', num: 1 };
 
-/** Початковий склад: воротар + 10 польових за розстановкою 4-3-3. */
+/** Реальний склад ФК «Локомотив» Київ: [номер, прізвище та ім'я, природна позиція]. Номери без підтвердження (8, 11, 14) призначені умовно. */
+export const ROSTER = [
+  [1, 'Роман Льопка', 'GK'], [12, 'Арсен Беліменко', 'GK'], [71, 'Максим Карпенко', 'GK'],
+  [3, 'Роман Савченко', 'LB'], [5, 'Микола Сираш', 'CB'], [18, 'Денис Гаркавенко', 'CB'], [32, 'Даніїл Романенко', 'CB'],
+  [44, 'Тимур Тітаренко', 'CB'], [99, 'Євгеній Ярмак', 'CB'], [19, 'Руслан Ткаченко', 'RB'], [16, 'Ілля Засовицький', 'LB'],
+  [6, 'Артем Сабалаєв', 'DM'], [9, 'Богдан Мануйлов', 'CM'], [90, 'Петро Савчук', 'CM'], [77, 'Олександр Савчук', 'CM'],
+  [8, 'Володимир Чернецький', 'CM'], [14, 'Данило Костиря', 'DM'],
+  [33, 'Сергій М’якушко', 'ST'], [10, 'Данило Голуб', 'LW'], [11, 'Володимир Тименко', 'RW'],
+];
+/** Хто виходить у стартовому складі: слот розстановки 4-3-3 -> номер гравця. */
+const STARTERS = [1, 3, 5, 32, 19, 90, 6, 9, 10, 33, 11];
+const LINE_OF = { GK: 'G', LB: 'D', CB: 'D', RB: 'D', DM: 'M', CM: 'M', AM: 'M', LM: 'M', RM: 'M', LW: 'W', RW: 'W', ST: 'F' };
+/** Групи, між якими можна міняти гравців: воротарі, захисники, півзахисники, атака. */
+const GROUP = { G: 'G', D: 'D', M: 'M', W: 'A', F: 'A' };
+export const groupOf = (e) => GROUP[e.line] || 'M';
+
+function rosterEntry(r, idx, rnd, base, slot) {
+  const [num, name, pos] = r;
+  const line = LINE_OF[pos];
+  const pick = (a) => a[(rnd() * a.length) | 0];
+  return {
+    id: 'r' + num, role: slot ? slot.name : pos, pos, line: slot ? (slot.name === 'GK' ? 'G' : slot.line) : line, num, name, real: true,
+    stats: makeStats(slot ? (slot.name === 'GK' ? 'G' : slot.line) : line, base, rnd), xp: 0, lvl: 1, apps: 0, goals: 0,
+    skin: pick(ACADEMY.skins), hair: pick(ACADEMY.hairs), hairCol: pick(ACADEMY.hairCols),
+  };
+}
+
+/** Початковий склад: 11 у стартовому складі за розстановкою 4-3-3 і 9 у запасі (реальні гравці). */
 export function defaultSquad() {
-  const rnd = rng(77), roles = FORMATIONS['433'];
-  const sq = [newEntry(GK_ROLE, 0, rnd, 40)];
-  roles.forEach((r, i) => sq.push(newEntry(r, i + 1, rnd, 40)));
-  return sq;
+  const rnd = rng(77), slots = [GK_ROLE, ...FORMATIONS['433']];
+  const byNum = new Map(ROSTER.map((r) => [r[0], r]));
+  const squad = slots.map((slot, i) => rosterEntry(byNum.get(STARTERS[i]), i, rnd, 40, slot));
+  const bench = ROSTER.filter((r) => !STARTERS.includes(r[0])).map((r, i) => rosterEntry(r, 20 + i, rnd, 34));
+  return { squad, bench };
 }
 
 export function ensureSquad() {
-  if (!Array.isArray(S.squad) || S.squad.length !== 11 || !S.squad[0] || !S.squad[0].stats) { S.squad = defaultSquad(); commit(); }
+  const ok = Array.isArray(S.squad) && S.squad.length === 11 && S.squad[0] && S.squad[0].stats;
+  if (!ok) { const d = defaultSquad(); S.squad = d.squad; S.bench = d.bench; commit(); return; }
+  if (!S.squad.every((e) => e.real) || !Array.isArray(S.bench)) {
+    // старий збережений склад: залишаємо навички й досвід, але даємо реальні імена та номери
+    const d = defaultSquad();
+    S.squad = S.squad.map((e, i) => { const t = d.squad[i]; return { ...e, id: t.id, name: t.name, num: t.num, pos: t.pos, real: true, skin: t.skin, hair: t.hair, hairCol: t.hairCol }; });
+    S.bench = d.bench; commit();
+  }
+}
+
+/** Усі гравці клубу: спершу основа, потім запас. */
+export const allPlayers = () => [...S.squad, ...(S.bench || [])];
+
+/** Хто з основи може бути замінений гравцем із запасу (та сама група позицій). */
+export function swapTargets(benchEntry) {
+  const g = groupOf(benchEntry);
+  return S.squad.map((e, i) => [e, i]).filter(([e]) => groupOf(e) === g).map(([, i]) => i);
+}
+
+/** Міняє гравця з основи на запасного: новачок займає роль слота, замінений повертається на лаву зі своєю природною позицією. */
+export function swapPlayers(slot, benchIdx) {
+  const out = S.squad[slot], inn = S.bench[benchIdx];
+  if (!out || !inn || groupOf(out) !== groupOf(inn)) return false;
+  const slotRole = out.role, slotLine = out.line;
+  inn.role = slotRole; inn.line = slotLine;
+  out.role = out.pos || out.role; out.line = LINE_OF[out.role] || out.line;
+  S.squad[slot] = inn; S.bench[benchIdx] = out;
+  commit();
+  return true;
 }
 
 /** Склад суперника: сила росте з прогресом, ролі мають свої сильні сторони. */
@@ -118,7 +174,7 @@ export function gainXp(e, amount, events) {
 }
 
 export function trainStat(idx, key) {
-  const e = S.squad[idx]; if (!e) return false;
+  const e = allPlayers()[idx]; if (!e) return false;
   const v = e.stats[key], c = trainCost(v);
   if (v >= 99 || S.coins < c) return false;
   S.coins -= c; e.stats[key] = v + 1; commit();
@@ -130,8 +186,11 @@ export function signGraduate(gr) {
   const idx = S.squad.findIndex((e) => e.role === 'LW');
   if (idx < 0) return false;
   const base = gr.rar === 'e' ? 66 : gr.rar === 'r' ? 54 : 44, rnd = Math.random;
-  const e = { id: gr.id, role: 'LW', line: 'W', num: gr.num, name: gr.name, stats: makeStats('W', base, rnd, 4), xp: 0, lvl: 1, apps: 0, goals: 0, skin: gr.skin, hair: gr.hair, hairCol: gr.hairCol };
-  if (ovr(e) > ovr(S.squad[idx])) { S.squad[idx] = e; return true; }
+  const e = { id: gr.id, role: 'LW', pos: 'LW', line: 'W', num: gr.num, name: gr.name, stats: makeStats('W', base, rnd, 4), xp: 0, lvl: 1, apps: 0, goals: 0, skin: gr.skin, hair: gr.hair, hairCol: gr.hairCol };
+  if (ovr(e) > ovr(S.squad[idx])) {
+    const old = S.squad[idx]; old.role = old.pos || 'LW'; old.line = LINE_OF[old.role] || 'W';
+    S.bench.push(old); S.squad[idx] = e; return true;
+  }
   return false;
 }
 

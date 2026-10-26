@@ -17,10 +17,10 @@ function tex(c, { repeat = false, mip = true, aniso = 4 } = {}) {
 }
 
 // ---------------------------------------------------------------- атлас гравців: обличчя + номери
-const CELL = 32, COLS = 8, ROWS = 16, AW = COLS * CELL, AH = ROWS * CELL;
+const CELL = 32, COLS = 8, ROWS = 32, AW = COLS * CELL, AH = ROWS * CELL;
 export const ATLAS = { cell: CELL, cols: COLS, rows: ROWS, w: AW, h: AH };
 const FACES = ['neutral', 'happy', 'shock', 'angry'];
-const NUMS = 32;             // номери 0..31 у двох варіантах (темний/світлий напис)
+const NUMS = 100;            // номери 0..99 у двох варіантах (темний/світлий напис)
 
 /** Комірка атласу -> [u0, v0, u1, v1] з відступом пів-текселя. */
 export function cellRect(cx, cy) {

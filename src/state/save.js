@@ -18,6 +18,8 @@ const defaults = () => ({
   cashAt: Date.now(),
   tutorial: false,
   squad: null,
+  bench: null,
+  form: [],
 });
 
 function merge(base, src) {
