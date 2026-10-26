@@ -39,7 +39,7 @@ export class UI {
     <div class="top-l"><button class="sq btn-dark" data-act="settings" aria-label="Налаштування">${I.gear}</button><button class="sq btn-dark" data-act="fs" aria-label="На весь екран">${I.full}</button></div>
     <div class="league" id="m-league"></div>
     <div class="wallet">
-      <div class="pill gold"><b id="m-coins" data-v="0">0</b>${I.coin}</div>
+      <button class="pill gold" data-act="test-coins" aria-label="+10000 монет (тест)"><b id="m-coins" data-v="0">0</b>${I.coin}</button>
       <div class="pill mint"><b id="m-tickets" data-v="0">0</b>${I.ticket}</div>
       <button class="cash" id="m-cash" data-act="cash" hidden></button>
     </div>
@@ -204,6 +204,7 @@ export class UI {
     switch (a) {
       case 'start': this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.click(); g.ensureMatch(); playIntro(this.root, () => { audio.music('menu'); this.showMenu(); }); return;
       case 'play': return this.menuTap();
+      case 'test-coins': S.coins += 10000; commit(); audio.coin(3); this.toast('+10 000 монет (тест)'); return;
       case 'pens': { const mm = g.match; if (!mm) return; audio.click(); this.el.pause.hidden = true; if (mm.phase === 'paused') mm.resume(); mm.startPens(); return; }
       case 'ios-ok': try { localStorage.setItem('loko-ios-hint', '1'); } catch (_) { /* ignore */ } this.iosHint(); return;
       case 'fs': audio.click(); if (this.isIOS() && !this.isStandalone()) { this.closeSettings(); this.el.splash.hidden = false; this.el.splash.classList.remove('out'); this.iosHint(true); return; } return g.toggleFullscreen();
