@@ -251,7 +251,7 @@ export class Penalties {
     const lift = P < 1 ? Math.sin(clamp((P - 0.09) / 0.55, 0, 1) * Math.PI) * (this.gHigh ? 1.0 : 0.5) * (1 - settle * 0.3) * 0.9 : 0;
     const yh = 0.5 + 0.8 * Math.cos(th) + lift;
     const dz = side * Math.sin(th), dy = Math.cos(th);
-    const cap = { a: { x: gk.x, y: yh - dy * 1.15, z: gk.z - dz * 1.15 }, b: { x: gk.x, y: yh + dy * 1.9, z: gk.z + dz * 1.9 }, r: 0.62 };
+    const cap = { a: { x: gk.x, y: yh - dy * 1.15, z: gk.z - dz * 1.15 }, b: { x: gk.x, y: yh + dy * 2.05, z: gk.z + dz * 2.05 }, r: 0.62 };
     cap.a.y = Math.max(cap.a.y, 0.1);
     const pv = this.gcap;
     cap.va = pv && dt > 0 ? { x: (cap.a.x - pv.a.x) / dt, y: (cap.a.y - pv.a.y) / dt, z: (cap.a.z - pv.a.z) / dt } : { x: 0, y: 0, z: 0 };

@@ -23,14 +23,28 @@ const cached = (key, make) => { let g = cache.get(key); if (!g) { g = make(); ca
 const FACE_UV = [[0, 1], [1, 1], [0, 0], [1, 0]];
 
 /** Стегно (шорти + верх гетр) і гомілка (гетра + бутса): окремі частини, між ними коліно. */
-const thighGeo = (kit) => cached('th' + kit.shorts + kit.socks, () => {
+const thighGeo = (kit, gk) => cached('th' + kit.shorts + kit.socks + gk, () => {
   const b = new VoxelBuilder(0.22, true);
+  if (gk) {                                               // воротар: довгі штани з боковою смугою
+    b.box(0, -0.22, 0, 0.64, 0.44, 0.64, kit.shorts);
+    b.box(0.33, -0.22, 0, 0.04, 0.44, 0.5, kit.main);
+    b.box(-0.33, -0.22, 0, 0.04, 0.44, 0.5, kit.main);
+    b.box(0, -0.48, 0, 0.56, 0.1, 0.56, kit.shorts);
+    return b.build();
+  }
   b.box(0, -0.22, 0, 0.58, 0.44, 0.58, kit.shorts);
   b.box(0, -0.48, 0, 0.46, 0.1, 0.46, kit.socks);
   return b.build();
 });
-const shinGeo = (kit) => cached('sh' + kit.socks, () => {
+const shinGeo = (kit, gk) => cached('sh' + kit.socks + kit.shorts + gk, () => {
   const b = new VoxelBuilder(0.22, true);
+  if (gk) {                                               // штани, наколінник, бутси з накладками
+    b.box(0, -0.19, 0, 0.54, 0.38, 0.54, kit.shorts);
+    b.box(0, -0.06, 0.28, 0.46, 0.2, 0.08, '#56606a');
+    b.box(0, -0.43, 0.07, 0.56, 0.2, 0.7, '#e8e4d8');
+    b.box(0, -0.52, 0.12, 0.58, 0.04, 0.72, '#17191c');
+    return b.build();
+  }
   b.box(0, -0.19, 0, 0.46, 0.38, 0.46, kit.socks);
   b.box(0, -0.43, 0.07, 0.5, 0.2, 0.66, '#17191c');
   return b.build();
@@ -42,6 +56,7 @@ const upperGeo = (kit, gk) => cached('up' + kit.second + kit.main + gk, () => {
   b.box(0, -0.2, 0, 0.4, 0.28, 0.38, c);              // біцепс/трицепс, звужується до ліктя
   b.box(0, -0.36, 0, 0.34, 0.1, 0.34, c);
   b.box(0, -0.43, 0, 0.38, 0.06, 0.38, kit.main);     // манжета рукава
+  if (gk) { b.box(0, -0.3, -0.2, 0.44, 0.2, 0.1, kit.second); b.box(0, 0.06, 0, 0.52, 0.24, 0.5, kit.second); }   // налокітник і плечова накладка
   return b.build();
 });
 const foreGeo = (gk, skin) => cached('fo' + gk + skin, () => {
@@ -52,7 +67,13 @@ const foreGeo = (gk, skin) => cached('fo' + gk + skin, () => {
   b.box(0, -0.46, 0.02, 0.32, 0.16, 0.26, skin);      // долоня
   b.box(0.17, -0.42, 0.06, 0.08, 0.12, 0.1, skin);    // великий палець
   b.box(0, -0.57, 0.04, 0.3, 0.07, 0.22, skin);       // пальці
-  if (gk) { b.box(0, -0.44, 0.02, 0.5, 0.3, 0.42, '#d9772a'); b.box(0, -0.6, 0.04, 0.46, 0.08, 0.36, '#f0a050'); }
+  if (gk) {
+    b.box(0, -0.3, 0, 0.36, 0.1, 0.36, '#23272b');                                    // манжета зап'ястка
+    b.box(0, -0.46, 0.02, 0.58, 0.3, 0.46, '#d9772a');                                // долоня рукавиці
+    for (const fx of [-0.2, -0.07, 0.07, 0.2]) b.box(fx, -0.68, 0.04, 0.11, 0.18, 0.34, '#f0a050');   // пальці
+    b.box(0.34, -0.5, 0.1, 0.12, 0.24, 0.2, '#f0a050');                               // великий палець
+    b.box(0, -0.46, 0.25, 0.46, 0.2, 0.06, '#8a4a16');                                // подушечка
+  }
   return b.build();
 });
 
@@ -64,6 +85,7 @@ function bodyGeo(look) {
   b.box(0, 0.19, 0, 1.3, 0.32, 0.8, kit.shorts);
   b.box(0, 1.2, 0, 1.0, 0.1, 0.66, kit.second);
   if (kit.stripe) { b.ao = 0; for (const sx of [-0.5, 0.5]) b.box(sx, 0.78, 0.404, 0.15, 0.88, 0.03, kit.stripe); b.ao = 0.18; }   // зелені «рейки» на червоній футболці
+  if (look.gk) { b.box(-0.68, 1.16, 0, 0.18, 0.18, 0.7, kit.second); b.box(0.68, 1.16, 0, 0.18, 0.18, 0.7, kit.second); b.box(0, 0.58, 0.41, 0.9, 0.1, 0.02, kit.second); }   // накладки на плечах і смуга на животі
   const num = numberCell(look.num, light);
   b.ao = 0;
   b.box(0, 0.84, 0.405, 0.6, 0.6, 0.03, '#ffffff', 0, 0, 0, [null, null, null, null, num, null]);
@@ -139,8 +161,9 @@ export class Player {
     const { kit, gk } = look;
     if (this.torso.geometry && this.torso.geometry.dispose) this.torso.geometry.dispose();
     this.torso.geometry = bodyGeo(look);
-    this.thighLm.geometry = this.thighRm.geometry = thighGeo(kit);
-    this.shinLm.geometry = this.shinRm.geometry = shinGeo(kit);
+    this.thighLm.geometry = this.thighRm.geometry = thighGeo(kit, !!gk);
+    this.shinLm.geometry = this.shinRm.geometry = shinGeo(kit, !!gk);
+    const as = gk ? 1.1 : 1; this.armL.scale.setScalar(as); this.armR.scale.setScalar(as);   // воротар має довші руки для дотяжки
     this.upperLm.geometry = this.upperRm.geometry = upperGeo(kit, !!gk);
     this.foreLm.geometry = this.foreRm.geometry = foreGeo(!!gk, look.skin);
     this.root.scale.setScalar(look.scale || 0.82);
