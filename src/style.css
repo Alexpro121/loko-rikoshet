@@ -849,3 +849,12 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .splash .ios-hint { margin-left: calc(var(--u) * 2.4); }
 @media (max-aspect-ratio: 5/3) { .sp-title .l1, .sp-title .l2 { font-size: calc(var(--u) * 21); } }
 @media (prefers-reduced-motion: reduce) { .sp-trail i, .sp-rails::before, .sp-rails u, .sp-go svg path { animation: none !important; } }
+
+/* картки прокачки: коли вистачає монет — яскраво-зелені й підсвічені */
+.cards .card.can { background: linear-gradient(180deg, #9af0bc, #3fc27c); border-color: #0f6b3a; color: #0a2a1a; animation: ready 1.6s ease-in-out infinite; }
+.cards .card.can .card-ic { background: #0f6b3a; }
+.cards .card.can .card-t em { color: #0a4a28; }
+.cards .card.can .card-p { color: #0a2a1a; font-weight: 800; }
+.cards .card.can::after { content: ''; position: absolute; inset: calc(var(--u) * -0.6); border-radius: inherit; border: calc(var(--u) * 0.5) solid rgba(63, 224, 143, 0.65); animation: readyring 1.6s ease-out infinite; pointer-events: none; }
+@keyframes readyring { 0% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.08); } }
+.cards .card:not(.can) { filter: saturate(0.55) brightness(0.92); }
