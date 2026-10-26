@@ -5,6 +5,7 @@ import { audio } from '../core/audio.js';
 import { I, crest, lokoCrest } from './icons.js';
 import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact } from '../club.js';
 import { Hud } from './hud.js';
+import { playIntro } from './intro.js';
 import { portrait } from './portrait.js';
 import { ensureSquad, oppSquad, allPlayers, swapTargets, swapPlayers, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook } from '../state/squad.js';
 import { striker } from '../state/economy.js';
@@ -177,7 +178,7 @@ export class UI {
   act(a, el) {
     const g = this.game;
     switch (a) {
-      case 'start': this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.music('menu'); this.showMenu(); audio.click(); g.ensureMatch(); return;
+      case 'start': this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.click(); g.ensureMatch(); playIntro(this.root, () => { audio.music('menu'); this.showMenu(); }); return;
       case 'play': return this.menuTap();
       case 'fs': audio.click(); return g.toggleFullscreen();
       case 'settings': audio.click(); return this.openSettings();
