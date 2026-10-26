@@ -642,3 +642,5 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .in-sem { right: calc(var(--u) * 2); }
 
 .in-run { --W: calc(var(--u) * 335); }
+
+.in-run { --W: calc(var(--u) * 607); }
