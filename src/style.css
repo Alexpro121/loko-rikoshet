@@ -621,3 +621,22 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .in-train { animation: none; filter: none; }
 .in-run { --W: min(calc(var(--u) * 120), 84vw); bottom: calc(26% - var(--u) * 1.4); }
 .in-run { --W: min(calc(var(--u) * 104), 80vw); }
+
+/* розвернутий локомотив у клубних кольорах + 3 вагони */
+#not_found_train #not_found_car { fill: #d6282f; stroke: #7d1219; stroke-width: 1.4; }
+#not_found_train #not_found_streamline-outine { fill: #14202a; stroke: #0b1217; }
+#not_found_train #not_found_window-front { fill: #1d2f3b; stroke: #0b1217; }
+#not_found_train .not_found_st9 { stroke: #fff; stroke-width: 1.6; }
+#not_found_train #not_found_window-grate .not_found_st9 { stroke: #8fa4b0; stroke-width: 1; }
+#not_found_train .not_found_st8 { stroke: #7d1219; }
+#not_found_train #not_found_ladders .not_found_st8 { fill: #3a4248; stroke: #1b1e21; }
+#not_found_train #not_found_ladders .not_found_st9 { stroke: #aeb6bb; }
+#not_found_train path[fill="#b3dcdf"] { fill: #23272b; }
+.in-train .not_found_st6 { fill: #f1efe8; stroke: #1b1e21; stroke-width: 3; } .in-train .not_found_st2 { fill: #59636a; }
+.in-train .not_found_st7 { stroke: #7d868c; }
+.in-ltx { fill: #fff; font-family: Rubik, 'Arial Black', sans-serif; font-weight: 800; letter-spacing: 1px; }
+.in-wrod { animation: not_found_braces 1s linear infinite; }
+.in-run { --W: calc(var(--u) * 330); bottom: calc(26% - var(--u) * 1.6); }
+.go .in-run { animation: cruise2 5.8s 0.2s linear forwards; }
+@keyframes cruise2 { 0% { transform: translateX(-100%); animation-timing-function: cubic-bezier(0.1, 0.6, 0.3, 1); } 32% { transform: translateX(calc(80vw - var(--W))); } 62% { transform: translateX(calc(80vw - var(--W) + var(--u) * 3)); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); } 100% { transform: translateX(100vw); } }
+.in-sem { right: calc(var(--u) * 2); }
