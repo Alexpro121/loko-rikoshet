@@ -161,7 +161,8 @@ export class Player {
   kick(power = 1) { this.kicking = 0.0001; this.kickPow = power; this.kickAmp = 0.6 + 0.6 * power; this.setExpr('angry', 0.6); }
   cheer(t = 2.4) {
     this.setMode('cheer', t); this.setExpr('happy', t);
-    const r = Math.random(); this.style = r < 0.12 ? 5 : (Math.random() * 5) | 0; this.amp = 0.6 + Math.random() * 0.5;
+    const pool = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 6, 7, 10, 12];
+    this.style = Math.random() < 0.08 ? 5 : pool[(Math.random() * pool.length) | 0]; this.amp = 0.6 + Math.random() * 0.5;
   }
   sad(t = 2.4) { this.setMode('sad', t); this.setExpr('shock', t); this.style = (Math.random() * 4) | 0; }
   control() { this.style = Math.random() < 0.5 ? 0 : 1; this.setMode('control', 0.45); }
@@ -265,7 +266,25 @@ export class Player {
         else if (st === 2) { lift = Math.abs(Math.sin(this.t * 9)) * 0.45 * a; armA = armB = 1.55; spread = 1.0; leanZ = Math.sin(this.t * 4.5) * 0.25; leanX = 0.15; elbA = elbB = 0.1; }
         else if (st === 3) { lift = Math.abs(Math.sin(this.t * 7)) * 0.35 * a; armA = armB = 2.35; spread = 0.12; leanX = 0.1; bob = Math.sin(this.t * 14) * 0.03; elbA = elbB = 1.7; }
         else if (st === 4) { armA = Math.sin(this.t * 9) * 1.2; armB = -armA; elbA = elbB = 0.9; legA = Math.sin(this.t * 9) * 0.5; legB = -legA; kneeA = 0.3 + Math.max(0, legA) * 0.8; kneeB = 0.3 + Math.max(0, legB) * 0.8; leanZ = Math.sin(this.t * 4.5) * 0.18; bob = Math.abs(Math.sin(this.t * 9)) * 0.1; spread = 0.5; }
-        else { const q = clamp((md - this.modeT) / 0.9, 0, 1); flip = -easeOut(q) * TAU; lift = Math.sin(q * Math.PI) * 1.5; armA = armB = q < 1 ? 1.2 : 2.7; spread = 0.4; legA = q < 1 ? 1.0 : 0; legB = q < 1 ? -0.4 : 0; kneeA = kneeB = q < 1 ? 1.4 : 0.06; }
+        else if (st === 6) {                                   // «Локомотив»: руки-шатуни, крок на місці
+          const w = Math.sin(this.t * 10);
+          armA = 0.5 + w * 0.9; armB = 0.5 - w * 0.9; elbA = elbB = 1.5; legA = w * 0.8; legB = -legA;
+          kneeA = 0.3 + Math.max(0, legA) * 1.0; kneeB = 0.3 + Math.max(0, legB) * 1.0; leanX = 0.22; lift = Math.abs(w) * 0.18; spread = 0.1; bob = Math.sin(this.t * 20) * 0.02;
+        } else if (st === 7) {                                 // стрибок із обертом на 360° і руки вниз
+          const q = clamp((md - this.modeT) / 0.9, 0, 1), e2 = easeOut(q);
+          this.body.rotation.y = this.bodyYaw + e2 * TAU;
+          lift = Math.sin(q * Math.PI) * 1.15 * a; armA = armB = q < 1 ? 0.2 : 0.1; spread = q < 1 ? 0.9 : 0.55; legA = q < 1 ? 0.5 : 0.12; legB = q < 1 ? -0.3 : -0.12; kneeA = kneeB = q < 1 ? 0.9 : 0.1; leanX = q < 1 ? 0.1 : -0.18;
+        } else if (st === 8) {                                 // «тихо!»: палець до губ
+          armA = 2.95; elbA = 2.7; armB = 0.7; elbB = 1.7; spread = 0.18; leanX = -0.08; bob = Math.sin(this.t * 2) * 0.012;
+        } else if (st === 9) {                                 // колиска
+          armA = armB = 0.95; elbA = elbB = 1.75; spread = 0.0; leanZ = Math.sin(this.t * 3) * 0.22; leanX = 0.1; bob = Math.sin(this.t * 3) * 0.015;
+        } else if (st === 10) {                                // літак: руки в боки, нахили
+          armA = armB = 0.0; spread = 1.5; leanZ = Math.sin(this.t * 2.4) * 0.38; leanX = 0.15; lift = Math.abs(Math.sin(this.t * 2.4)) * 0.12; legA = Math.sin(this.t * 4) * 0.25; legB = -legA;
+        } else if (st === 11) {                                // відданя честі
+          armA = 2.5; elbA = 2.35; armB = 0.05; elbB = 0.2; spread = 0.12; leanX = -0.04; bob = Math.sin(this.t * 6) * 0.01;
+        } else if (st === 12) {                                // дэб
+          armA = 2.3; elbA = 2.45; armB = 1.75; elbB = 0.1; spread = 0.5; leanX = 0.14; leanZ = 0.05;
+        } else { const q = clamp((md - this.modeT) / 0.9, 0, 1); flip = -easeOut(q) * TAU; lift = Math.sin(q * Math.PI) * 1.5; armA = armB = q < 1 ? 1.2 : 2.7; spread = 0.4; legA = q < 1 ? 1.0 : 0; legB = q < 1 ? -0.4 : 0; kneeA = kneeB = q < 1 ? 1.4 : 0.06; }
         break;
       }
       case 'sad': {

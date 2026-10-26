@@ -853,8 +853,11 @@ export class Match {
       if (!c.kneeled) {
         sc.move(c.tx, c.tz, 9.2, dt);
         if (Math.hypot(sc.p.vx, sc.p.vz) > 0.5) sc.p.yaw = Math.atan2(sc.p.vx, sc.p.vz);
-        if (c.t > 1.0 || Math.hypot(c.tx - sc.p.x, c.tz - sc.p.z) < 2.4) { sc.p.kneel(); c.kneeled = true; c.kx = sc.p.x; c.kz = sc.p.z; sc.p.vx = sc.p.vz = 0; }
-      } else { sc.p.vx = sc.p.vz = 0; }
+        if (c.t > 1.0 || Math.hypot(c.tx - sc.p.x, c.tz - sc.p.z) < 2.4) { sc.p.kneel(); c.kneeled = true; c.kt = c.t; c.kx = sc.p.x; c.kz = sc.p.z; sc.p.vx = sc.p.vz = 0; }
+      } else {
+        sc.p.vx = sc.p.vz = 0;
+        if (!c.special && c.t > c.kt + 1.6) { c.special = true; sc.p.cheer(3.6); sc.p.style = [6, 7, 12, 10, 8, 11, 9][(Math.random() * 7) | 0]; sc.p.amp = 1; }
+      }
     }
     // усі польові партнери збігаються до автора голу й радіють колом; воротар підбігає на кілька кроків і піднімає руки
     c.assigned = true;
