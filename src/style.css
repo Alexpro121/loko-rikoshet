@@ -795,3 +795,57 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .ios-hint { max-width: calc(var(--u) * 64); padding: calc(var(--u) * 1.6) calc(var(--u) * 2.4); background: rgba(8, 40, 30, 0.9); border: var(--edge) solid #ffcf3a; border-radius: calc(var(--u) * 1.8); text-align: left; font-size: var(--fs-s); }
 .ios-hint b { color: #ffcf3a; font-size: var(--fs-m); } .ios-hint ol { margin: calc(var(--u) * 0.8) 0 calc(var(--u) * 1.2) calc(var(--u) * 2.6); line-height: 1.45; } .ios-hint .shr { font-style: normal; display: inline-grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: 0.3em; background: #fff; color: #0b3d2a; font-weight: 800; }
 .ios-hint .btn { min-height: 36px; }
+
+/* ===== головна: ЛОКО РАШ — швидкість, залізниця, лівреї УЗ ===== */
+.splash { justify-content: flex-start; align-items: stretch; overflow: hidden; background: linear-gradient(100deg, rgba(4, 24, 17, 0.96) 0%, rgba(4, 24, 17, 0.9) 34%, rgba(4, 24, 17, 0.35) 66%, rgba(4, 24, 17, 0.0) 100%); }
+.splash-in { position: relative; z-index: 2; align-items: flex-start; justify-content: center; text-align: left; gap: calc(var(--u) * 3.2); padding: var(--pad-t) 0 var(--pad-b) calc(var(--pad-l) + var(--u) * 6); }
+.sp-crest { width: calc(var(--u) * 11); height: calc(var(--u) * 12.6); filter: drop-shadow(0 calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.4)); animation: crestin 0.9s 0.1s cubic-bezier(0.2, 1.2, 0.4, 1) both; }
+.sp-crest .crest { width: 100%; height: 100%; }
+@keyframes crestin { from { opacity: 0; transform: translateY(-30%) scale(0.7); } to { opacity: 1; transform: none; } }
+
+/* назва: косі літери, «розріз» швидкості, шлейф */
+.sp-title { position: relative; display: flex; flex-direction: column; line-height: 0.82; font-weight: 800; letter-spacing: -0.03em; font-style: italic; }
+.sp-title .l1, .sp-title .l2 { position: relative; display: block; width: max-content; transform: skewX(-9deg); animation: wordin 0.8s cubic-bezier(0.2, 1, 0.3, 1) both; }
+.sp-title .l1 { font-size: calc(var(--u) * 27); color: #f6f4ec; animation-delay: 0.15s; }
+.sp-title .l2 { font-size: calc(var(--u) * 27); color: #e02a38; margin-left: calc(var(--u) * 6); animation-delay: 0.32s; -webkit-text-stroke: 0; }
+.sp-title .l1::before, .sp-title .l2::before { content: attr(data-t); position: absolute; inset: 0; clip-path: inset(46% 0 40% 0); transform: translateX(calc(var(--u) * -1.1)); color: inherit; }
+.sp-title .l2::before { color: #1f8f3f; transform: translateX(calc(var(--u) * 1.1)); }
+.sp-title .l1::after, .sp-title .l2::after { content: ''; position: absolute; left: -2%; right: 4%; top: 46%; height: calc(var(--u) * 0.5); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.0)); }
+@keyframes wordin { from { opacity: 0; transform: skewX(-9deg) translateX(-14%); filter: blur(6px); } to { opacity: 1; transform: skewX(-9deg); filter: none; } }
+.sp-trail { position: absolute; left: calc(var(--u) * -9); top: 12%; width: calc(var(--u) * 9); height: 70%; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.sp-trail i { display: block; height: calc(var(--u) * 0.7); background: linear-gradient(90deg, transparent, #e02a38); transform-origin: right; animation: trail 1.8s ease-in-out infinite; }
+.sp-trail i:nth-child(2) { background: linear-gradient(90deg, transparent, #f6f4ec); animation-delay: 0.25s; width: 70%; align-self: flex-end; } .sp-trail i:nth-child(3) { background: linear-gradient(90deg, transparent, #1f8f3f); animation-delay: 0.5s; }
+@keyframes trail { 0%, 100% { transform: scaleX(0.35); opacity: 0.35; } 50% { transform: scaleX(1); opacity: 1; } }
+
+/* кнопка */
+.sp-go { position: relative; display: inline-flex; align-items: center; gap: calc(var(--u) * 2.4); height: calc(var(--u) * 11); padding: 0 calc(var(--u) * 5.6) 0 calc(var(--u) * 6); margin-left: calc(var(--u) * 2.4); background: #d4202c; color: #fff; font-weight: 800; font-size: calc(var(--u) * 5.2); letter-spacing: 0.08em; transform: skewX(-9deg); box-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #1f8f3f, calc(var(--u) * 1) calc(var(--u) * 1) 0 calc(var(--u) * 0.3) #08140f; animation: wordin 0.8s 0.55s cubic-bezier(0.2, 1, 0.3, 1) both; transition: transform 0.15s, box-shadow 0.15s; }
+.sp-go::before { content: ''; position: absolute; left: calc(var(--u) * -2.4); top: 0; bottom: 0; width: calc(var(--u) * 1.4); background: #f6f4ec; }
+.sp-go-t { transform: skewX(9deg); }
+.sp-go svg { width: calc(var(--u) * 7); height: calc(var(--u) * 4.2); fill: #fff; transform: skewX(9deg); }
+.sp-go svg path { animation: chev 1.2s ease-in-out infinite; } .sp-go svg path:nth-child(2) { animation-delay: 0.15s; } .sp-go svg path:nth-child(3) { animation-delay: 0.3s; }
+@keyframes chev { 0%, 100% { opacity: 0.35; } 40% { opacity: 1; } }
+.sp-go:hover { transform: skewX(-9deg) translate(calc(var(--u) * 0.6), calc(var(--u) * -0.4)); box-shadow: calc(var(--u) * 1.6) calc(var(--u) * 1.6) 0 #1f8f3f, calc(var(--u) * 1.6) calc(var(--u) * 1.6) 0 calc(var(--u) * 0.3) #08140f; }
+.sp-go:active { transform: skewX(-9deg) translate(calc(var(--u) * 0.8), calc(var(--u) * 0.8)); box-shadow: 0 0 0 #1f8f3f; }
+
+/* діагональні смуги лівреї УЗ праворуч */
+.sp-bg { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.sp-bg i { position: absolute; top: -12%; bottom: -12%; transform: skewX(-18deg); animation: bandin 1.1s cubic-bezier(0.2, 1, 0.3, 1) both; }
+.sp-bg .b1 { right: 6%; width: 7%; background: linear-gradient(180deg, rgba(224, 42, 56, 0.85), rgba(224, 42, 56, 0.35)); animation-delay: 0.3s; }
+.sp-bg .b2 { right: 14%; width: 1.6%; background: rgba(246, 244, 236, 0.85); animation-delay: 0.4s; }
+.sp-bg .b3 { right: 17.5%; width: 4.5%; background: linear-gradient(180deg, rgba(31, 143, 63, 0.8), rgba(31, 143, 63, 0.3)); animation-delay: 0.5s; }
+.sp-bg .b4 { right: -2%; width: 5%; background: rgba(246, 244, 236, 0.08); animation-delay: 0.2s; }
+@keyframes bandin { from { opacity: 0; transform: skewX(-18deg) translateX(40%); } to { opacity: 1; transform: skewX(-18deg); } }
+
+/* колія внизу: рейки, що біжать, і вогні поїзда */
+.sp-rails { position: absolute; left: 0; right: 0; bottom: calc(var(--pad-b) + var(--u) * 1.6); height: calc(var(--u) * 5); z-index: 1; pointer-events: none; opacity: 0.9; }
+.sp-rails i { position: absolute; left: 0; right: 0; height: max(2px, calc(var(--u) * 0.35)); background: rgba(246, 244, 236, 0.55); }
+.sp-rails i:first-child { top: calc(var(--u) * 1); } .sp-rails i:nth-child(2) { top: calc(var(--u) * 4); }
+.sp-rails::before { content: ''; position: absolute; left: 0; right: 0; top: calc(var(--u) * 1); height: calc(var(--u) * 3.4); background: repeating-linear-gradient(90deg, rgba(246, 244, 236, 0.22) 0 calc(var(--u) * 0.7), transparent calc(var(--u) * 0.7) calc(var(--u) * 3.6)); animation: railrun 1.1s linear infinite; }
+@keyframes railrun { to { background-position-x: calc(var(--u) * -3.6); } }
+.sp-rails u { position: absolute; top: calc(var(--u) * 1.5); width: calc(var(--u) * 14); height: calc(var(--u) * 1.6); border-radius: 99px; background: linear-gradient(90deg, transparent, #e02a38); filter: blur(1px); animation: dash 3.6s linear infinite; }
+.sp-rails u.g { top: calc(var(--u) * 3.4); background: linear-gradient(90deg, transparent, #3fe08f); animation-delay: 1.6s; animation-duration: 4.2s; }
+@keyframes dash { from { transform: translateX(-20vw); } to { transform: translateX(120vw); } }
+
+.splash .ios-hint { margin-left: calc(var(--u) * 2.4); }
+@media (max-aspect-ratio: 5/3) { .sp-title .l1, .sp-title .l2 { font-size: calc(var(--u) * 21); } }
+@media (prefers-reduced-motion: reduce) { .sp-trail i, .sp-rails::before, .sp-rails u, .sp-go svg path { animation: none !important; } }

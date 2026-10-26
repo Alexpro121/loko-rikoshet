@@ -76,12 +76,17 @@ export class UI {
 <section class="overlay custom" id="custom" hidden></section>
 <section class="overlay reveal" id="reveal" hidden></section>
 <section class="splash" id="splash">
+  <div class="sp-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></div>
+  <div class="sp-rails" aria-hidden="true"><i></i><i></i><u></u><u class="g"></u></div>
   <div class="splash-in">
-    <div class="brand"><div class="splash-crest">${lokoCrest()}</div><h1><span>LOKO</span><span class="r">RUSH</span></h1><p>Залізничники з 1919 року: від Другої ліги до Ліги чемпіонів</p></div>
-    <button class="big go" data-act="start">${I.play}<b>ГРАТИ</b></button>
+    <div class="sp-crest">${lokoCrest()}</div>
+    <h1 class="sp-title" aria-label="LOKO RUSH">
+      <span class="sp-trail" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="l1" data-t="LOKO">LOKO</span>
+      <span class="l2" data-t="RUSH">RUSH</span>
+    </h1>
+    <button class="sp-go" data-act="start"><span class="sp-go-t">ГРАТИ</span><svg viewBox="0 0 40 24" aria-hidden="true"><path d="M2 3l11 9-11 9V3zM15 3l11 9-11 9V3zM28 3l11 9-11 9V3z"/></svg></button>
     <div class="ios-hint" id="ios-hint" hidden><b>Для повного екрана на iPhone</b><ol><li>Натисни <i class="shr">⬆︎</i> «Поділитись» у Safari</li><li>Обери «На початковий екран»</li><li>Відкрий гру з нової іконки</li></ol><button class="btn alt" data-act="ios-ok"><b>ЗРОЗУМІЛО</b></button></div>
-    <small>Для найкращого вигляду грай на весь екран, телефон тримай горизонтально</small>
-    <small class="club-line">Фан-гра за мотивами історії ФК Локомотив Київ · «${CLUB.slogan}»</small>
   </div>
 </section>
 <div class="joy-bar" id="joy-bar" hidden><span>Перетягни джойстик у зручне місце</span><button class="btn alt" data-act="joy-reset"><b>СКИНУТИ</b></button><button class="btn go" data-act="joy-done"><b>ГОТОВО</b></button></div>
