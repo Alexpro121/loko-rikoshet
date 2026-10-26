@@ -378,3 +378,7 @@ svg { display: block; }
 @keyframes tick { to { transform: translateX(-50%); } }
 @media (max-height: 340px) { .mc-tro, .m-right p, .mn-cup { display: none; } }
 @media (prefers-reduced-motion: reduce) { .tk-in, .mc-h .crest, .m-side { animation: none; } }
+
+/* емблема-картинка заповнює свій контейнер */
+img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
+.mc-h img.crest { width: calc(var(--u) * 6.4); height: calc(var(--u) * 7.4); }
