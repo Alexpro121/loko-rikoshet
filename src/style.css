@@ -859,3 +859,12 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 @keyframes readyring { 0% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.08); } }
 .cards .card:not(.can) { filter: saturate(0.55) brightness(0.92); }
 button.pill { background: none; padding: 0; cursor: pointer; } button.pill:active { transform: scale(0.94); }
+
+/* налаштування джойстика: рядок не накладається на «На весь екран» */
+.set-grid .tg.q.joy-set { display: grid; grid-template-columns: 1fr 1fr auto auto; align-items: center; gap: calc(var(--u) * 2); height: auto; min-height: max-content; overflow: visible; flex-shrink: 0; }
+.set-grid { grid-auto-rows: min-content; align-content: start; }
+.set-grid .tg.q.joy-set .rng { min-width: 0; }
+.set-grid .tg.q.joy-set .rng input { width: 100%; }
+.set-grid .tg.q.joy-set .joy-prev { flex: none; }
+@media (max-height: 470px) { .set-grid .tg.q.joy-set { grid-template-columns: 1fr 1fr auto auto; gap: 8px; padding: 8px 10px; } }
+@media (max-width: 560px) { .set-grid .tg.q.joy-set { grid-template-columns: 1fr 1fr; } .set-grid .tg.q.joy-set .joy-mv { grid-column: 1 / 2; } .set-grid .tg.q.joy-set .joy-prev { grid-column: 2 / 3; justify-self: end; } }
