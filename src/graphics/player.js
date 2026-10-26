@@ -198,7 +198,7 @@ export class Player {
     if (this.exprT > 0) { this.exprT -= dt; if (this.exprT <= 0) this.setExpr('neutral'); }
     if (this.modeT > 0) { this.modeT -= dt; if (this.modeT <= 0) this.mode = 'idle'; }
 
-    let legA = 0, legB = 0, kneeA = 0.06, kneeB = 0.06, armA = 0, armB = 0, elbA = 0.3, elbB = 0.3;
+    let aBoost = 0, legA = 0, legB = 0, kneeA = 0.06, kneeB = 0.06, armA = 0, armB = 0, elbA = 0.3, elbB = 0.3;
     let leanX = 0, leanZ = 0, leanY = 0, bob = 0, lift = 0, spread = 0, drop = 0;
     let tiltX = 0, tiltZ = 0, tiltY = 0, flip = 0, slide = 0;
     const grounded = this.mode === 'slide' || this.mode === 'gkdive' || this.mode === 'stumble' || this.mode === 'kneel';
@@ -226,12 +226,15 @@ export class Player {
       leanY = -sL * 0.24 * sp * w; tiltY = sL * 0.1 * sp * w;
       leanX = 0.04 + 0.2 * sp + (speed > 7 ? 0.08 : 0) + clamp(this.accL * 0.006, -0.1, 0.12);
       leanZ = clamp(-turn * 0.025 * sp, -0.22, 0.22) + sL * 0.05 * sp * w; spread = 0.07 + 0.1 * sp;
+      // балансують руками: на різких поворотах руки розходяться, при розгоні різкіше працюють
+      spread += clamp(Math.abs(turn) * 0.045, 0, 0.55) * sp; aBoost = clamp(this.accL * 0.02, 0, 0.35);
+      armA += (armA < 0 ? -aBoost : aBoost); armB += (armB < 0 ? -aBoost : aBoost);
       if (this.dribble) {
         leanX += 0.1; armA *= 0.6; armB *= 0.6; leanZ += Math.sin(ph * 2) * 0.07; bob += Math.abs(Math.sin(ph * 2)) * 0.05; spread += 0.18;
         legA += Math.max(0, Math.sin(ph * 2 + 1)) * 0.2;
       }
     } else if (!grounded) {
-      bob = Math.sin(this.t * 1.6) * 0.007; armA = armB = 0.03;          // майже статична стійка
+      bob = Math.sin(this.t * 1.6) * 0.007; { const g = Math.sin(this.t * 0.7 + (this.ph0 ??= Math.random() * 20)), hips = Math.sin(this.t * 0.23 + (this.ph0 ??= Math.random() * 20) * 2) > 0.55; armA = armB = hips ? -0.25 : 0.05 + 0.04 * g; elbA = elbB = hips ? 1.9 : 0.35 + 0.1 * g; spread = hips ? 0.5 : 0.08 + 0.03 * g; }          // майже статична стійка
     }
 
     const md = this.modeD || 1, mk = md > 0 ? clamp(1 - this.modeT / md, 0, 1) : 1;     // прогрес режиму 0..1
