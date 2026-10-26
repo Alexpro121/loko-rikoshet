@@ -33,7 +33,7 @@ export const COL = {
   gold: '#e8b923',
 };
 
-export const KIT_LOKO = { stripe: '#18884f', main: '#c8213a', second: '#18884f', shorts: '#10613c', socks: '#c8213a', plate: '#f1efe8', numInk: '#13321f', ink: 'dark' };
+export const KIT_LOKO = { stripe: null, main: '#d4202c', second: '#1f8f3f', sleeve: '#d4202c', shorts: '#1f8f3f', socks: '#d4202c', under: '#f1efe8', collar: '#1f8f3f', boot: '#b9c1c7', plate: '#f1efe8', numInk: '#13321f', ink: 'dark', sponsor: true };
 /** Комплекти форми клубу на вибір: домашня (червоно-зелена), виїзна (біла) і третя (чорно-золота). */
 export const KITS = {
   home: { name: 'Домашня', kit: KIT_LOKO },
