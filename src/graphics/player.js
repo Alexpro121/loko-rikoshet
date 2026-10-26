@@ -175,6 +175,8 @@ export class Player {
   slideTackle() { this.setMode('slide', 1.6); this.setExpr('angry', 0.7); }
   kneel() { this.setMode('kneel', 1.5); this.setExpr('happy', 1.5); }
   gkDive(dir, kind = 0) { this.diveDir = dir; this.diveKind = kind; this.setMode('gkdive', 1.7); this.setExpr('shock', 1.0); }
+  /** Керований стрибок воротаря (пенальті): прогрес diveP задає зовнішній код, поза будується безперервно. */
+  startPDive(dir, high) { this.mode = 'pdive'; this.modeT = 999; this.modeD = 999; this.diveDir = dir; this.diveKind = high ? 0 : 1; this.diveP = 0; this.setExpr('shock', 2); }
   gkJump() { this.setMode('gkjump', 0.7); this.setExpr('shock', 0.6); }
   parry() { if (this.mode === 'gkdive' || this.mode === 'gkjump') return; this.setMode('parry', 0.45); }
   throwBall() { this.setMode('throw', 0.7); }
@@ -328,6 +330,22 @@ export class Player {
       case 'kneel': {
         const e = easeOut(Math.min(1, mk * 2.4)), up = mk > 0.8 ? (mk - 0.8) / 0.2 : 0, k = e * (1 - up);
         slide = 2.4 * e * (1 - up * 0.5); tiltX = -0.32 * k; legA = legB = 0.05 * k; kneeA = kneeB = 1.6 * k + 0.06; drop = THIGH * k; leanX = -0.3 * k; armA = armB = 2.6 * k + 0.4 * up; spread = 0.5;
+        break;
+      }
+      case 'pdive': {
+        const P = this.diveP || 0, sg = (Math.sign(Math.sin(this.bodyYaw)) || 1) * this.diveDir, high = this.diveKind === 0, maxTilt = high ? 1.45 : 1.28;
+        const sm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+        const load = sm(P / 0.12) * (1 - sm((P - 0.1) / 0.1)), launch = sm((P - 0.09) / 0.3), settle = sm((P - 0.5) / 0.4);
+        if (P < 1) {
+          tiltZ = sg * maxTilt * launch;
+          lift = Math.sin(clamp((P - 0.09) / 0.55, 0, 1) * Math.PI) * (high ? 1.0 : 0.5) * (1 - settle * 0.3);
+          armA = armB = 0.35 + 2.55 * launch * (1 - 0.7 * settle); elbA = elbB = 0.12 + 0.3 * settle; spread = 0.14 + 0.32 * launch;
+          legA = 0.85 * load - 0.35 * launch * (1 - settle); legB = 0.85 * load + 0.4 * launch * (1 - settle);
+          kneeA = 0.95 * load + 0.25 * launch; kneeB = 0.95 * load + 0.3 * launch; leanX = 0.3 * load - 0.12 * launch;
+          drop = THIGH * (1 - Math.cos(0.85 * load));
+        } else {
+          this.rise(clamp((P - 1) / 0.5, 0, 1), 0, sg * maxTilt); tiltZ = r.tz; leanX = r.leanX; legA = r.legs; legB = r.legs * 0.8; kneeA = r.legs * 1.15; kneeB = r.legs * 0.95; armA = armB = r.arms; spread = r.spread; drop = r.drop;
+        }
         break;
       }
       case 'gkdive': {

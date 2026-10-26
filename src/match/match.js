@@ -551,7 +551,7 @@ export class Match {
 
   // ------------------------------------------------------------------ головний цикл
   update(rawDt) {
-    if (this.phase === 'pens') { this.pens.update(rawDt); this.syncView(rawDt); this.pens.post(); return; }
+    if (this.phase === 'pens') { const pd = this.pens.update(rawDt); this.syncView(pd); this.pens.post(); return; }
     if (this.phase === 'paused') { this.syncView(0); return; }
     if (this.hitStop > 0) { this.hitStop -= rawDt; this.syncView(0); return; }
     this.updateSlow(rawDt);
