@@ -267,10 +267,10 @@ export class Match {
     if (a.noTrap > 0 || a.stun > 0) return;
     if (Math.random() < this.tackleChance(a)) {
       const h = this.holder;
-      this.cancelAim(); a.p.tackle(); h.p.stumble(); h.p.setThreat(0, 0); h.stun = 1.4; h.frozen = 1.2; h.manual = false;
+      this.cancelAim(); a.p.tackle(); h.p.stumble(); h.p.setThreat(0, 0); h.stun = 1.4; h.frozen = 1.0; h.manual = false;
       this.floatAt(a.p.x, a.p.z, 'ВІДІБРАВ!', 'warn'); this.trapOpp(a, 0);
     } else {
-      a.stun = 1.0; a.noTrap = 1.1; a.frozen = 0.8; a.p.stumble();
+      a.stun = 1.0; a.noTrap = 1.1; a.frozen = Math.random() < 0.25 ? 0.8 : 0.3; if (a.frozen > 0.5) a.p.stumble(); else a.p.hit();
       this.floatAt(this.holder.p.x, this.holder.p.z, 'ЗАХИСТИВ М’ЯЧ!', 'good'); audio.pass(); this.addXp(this.holder, 12);
     }
   }
@@ -460,7 +460,7 @@ export class Match {
         this.placeBallAt(near, true); near.noTrap = 0; near.p.control(); this.makeReady(near);
         return;
       }
-      near.stun = 1.4; near.frozen = 1.0; near.p.stumble(); this.floatAt(near.p.x, near.p.z, 'НЕ ДОТЯГНУВСЯ', 'warn');
+      near.stun = 1.2; if (Math.random() < 0.3) { near.frozen = 1.0; near.p.stumble(); } else near.frozen = 0.3; this.floatAt(near.p.x, near.p.z, 'НЕ ДОТЯГНУВСЯ', 'warn');
     }
     if (this.telegraph) {
       this.shootT -= dt;
