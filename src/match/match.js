@@ -82,7 +82,7 @@ export class Match {
     this.formation();
     const hud = this.ui.hud;
     hud.show(spec);
-    hud.setScore(0, 0); hud.setTime(this.timeText(), false); hud.setCoins(0);
+    hud.setScore(0, 0); hud.setTime(this.timeText(), false, this.halfText()); hud.setCoins(0);
     hud.warn(null); hud.hint(null);
     hud.banner(spec.club.name, spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of + (spec.final ? ' · ФІНАЛ' : ''), spec.note || CLUB.slogan);
     audio.music('match'); audio.crowd(0.7);
@@ -128,7 +128,17 @@ export class Match {
     this.shotBy = 0; this.shotBounces = 0; this.counter = false; this.looseT = 0; this.protectT = 0; this.pressWarn = false;
   }
 
-  timeText() { const s = Math.max(0, Math.ceil(this.clock)); const m = (s / 60) | 0, r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+  /** Час як на ТБ: стиснутий 90-хвилинний матч, «45:00», у доданий час «90+N». */
+  timeText() {
+    const f = clamp(1 - this.clock / this.spec.time, 0, 1), gs = Math.floor(f * 5400), m = (gs / 60) | 0, r = gs % 60;
+    if (this.timeUp && f >= 1) return '90+' + (1 + ((this.timeUpWait * 1.5) | 0));
+    return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r;
+  }
+  halfText() {
+    if (this.phase === 'pens') return 'Пенальті';
+    const f = clamp(1 - this.clock / this.spec.time, 0, 1);
+    return f >= 1 ? 'Дод. час' : f < 0.5 ? '1-й тайм' : '2-й тайм';
+  }
 
   // ------------------------------------------------------------------ керування
   pointerDown(x, y) {
@@ -583,7 +593,7 @@ export class Match {
       this.clock -= dt;                  // годинник іде в темпі гри: у сповільненні він теж повільніший
       const s = Math.ceil(Math.max(0, this.clock));
       if (s !== this.lastClock) {
-        this.lastClock = s; this.ui.hud.setTime(this.timeText(), this.clock <= 10);
+        this.lastClock = s; this.ui.hud.setTime(this.timeText(), this.clock <= 10, this.halfText());
         if (s <= 5 && s > 0) audio.click();
       }
       if (this.clock <= 0 && !this.timeUp) { this.timeUp = true; this.timeUpWait = 0; }

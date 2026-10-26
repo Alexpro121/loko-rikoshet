@@ -745,3 +745,20 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
   .cu-wrap { grid-template-columns: 150px 1fr; gap: 12px; } .cu-prev img { width: 120px; height: 120px; }
   .sheet-h .sq { width: 44px; height: 44px; }
 }
+
+/* ===== табло як на телебаченні: компактна плашка зліва вгорі ===== */
+.bug.hud-mid { left: var(--pad-l); top: var(--pad-t); transform: none; align-items: stretch; gap: calc(var(--u) * 0.5); }
+.bug-top { display: flex; align-items: center; gap: calc(var(--u) * 1); padding: 0 calc(var(--u) * 1.2); font-size: max(8px, calc(var(--u) * 1.8)); }
+.bug-top .plate-t { color: #dff3e8; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 1px 0 rgba(0,0,0,.6); }
+.bug-main { display: flex; align-items: stretch; height: calc(var(--u) * 7.4); border-radius: calc(var(--u) * 0.9); overflow: hidden; box-shadow: 0 calc(var(--u) * 0.5) calc(var(--u) * 1.4) rgba(0, 0, 0, 0.45); background: rgba(8, 20, 16, 0.92); }
+.bug-c { display: flex; align-items: center; gap: calc(var(--u) * 0.8); padding: 0 calc(var(--u) * 1.4); color: #fff; font-size: calc(var(--u) * 3); font-weight: 800; letter-spacing: 0.05em; }
+.bug-c .crest-box { width: calc(var(--u) * 4.4); height: calc(var(--u) * 5); }
+.bug-c.me { border-left: calc(var(--u) * 0.7) solid #d4202c; } .bug-c.opp { border-right: calc(var(--u) * 0.7) solid var(--cb, #254e9c); }
+.bug-sc { display: grid; place-items: center; min-width: calc(var(--u) * 5.4); font-size: calc(var(--u) * 4.8); font-weight: 800; color: #14231e; background: #f1efe8; font-variant-numeric: tabular-nums; }
+.bug-sc.opp { background: #e3e1d8; border-left: max(1px, calc(var(--u) * 0.2)) solid #b8b4a4; }
+.bug-t { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 calc(var(--u) * 1.8); background: #12633f; color: #fff; line-height: 1; min-width: calc(var(--u) * 12); }
+.bug-t b { font-size: calc(var(--u) * 3.6); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.bug-t small { font-size: max(8px, calc(var(--u) * 1.5)); font-weight: 700; color: #bfe9d2; margin-top: calc(var(--u) * 0.4); text-transform: uppercase; letter-spacing: 0.08em; }
+.bug.urgent .bug-t { background: #a8182b; animation: pulse 0.6s ease-in-out infinite; }
+.bug .mcoins { align-self: flex-start; margin-top: calc(var(--u) * 0.3); }
+.pause-btn { z-index: 3; }

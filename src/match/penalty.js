@@ -23,7 +23,7 @@ export class Penalties {
     const m = this.m, ui = m.ui;
     document.querySelectorAll('#pen').forEach((e) => e.remove());
     m.phase = 'pens'; m.ts = 1; m.slow = false; m.slowT = 0; if (ui.setSlow) ui.setSlow(false); m.cancelAim();
-    ui.setMatchUi(false); ui.hud.warn(null); ui.hud.hint(null); ui.hud.setCard(null);
+    ui.setMatchUi(false); ui.hud.setTime('90+', false, 'Пенальті'); ui.hud.warn(null); ui.hud.hint(null); ui.hud.setCard(null);
     this.k = 0; this.res = { me: [], opp: [] }; this.state = 'wait'; this.t = -1.6; this.mark = null; this.by = 0; this.bvy = 0; this.over = false; this.ts = 1; this.live = false;
     const order = (arr) => arr.slice(1).sort((x, y) => ovr(y.info) - ovr(x.info));
     this.orderMe = order(m.mine); this.orderOpp = order(m.opp);

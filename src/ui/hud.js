@@ -6,12 +6,17 @@ export class Hud {
   constructor(root) {
     root.insertAdjacentHTML('beforeend', `
 <section class="hud" id="hud" hidden>
-  <div class="team me"><div class="crest-box" id="h-crest-me"></div><div class="team-txt"><span>ЛОКОМОТИВ</span><b id="h-sc-me">0</b></div></div>
-  <div class="hud-mid">
-    <div class="plate"><span id="h-title" class="plate-t"></span><div class="plate-r"><i class="sig loose" id="h-sig" title="Семафор: зелений — м’яч у нас, червоний — у суперника"></i><b id="h-time" class="plate-time">0:60</b></div></div>
+  <div class="bug hud-mid" id="h-bug">
+    <div class="bug-top"><span id="h-title" class="plate-t"></span><i class="sig loose" id="h-sig" title="Семафор: зелений — м’яч у нас, червоний — у суперника"></i></div>
+    <div class="bug-main">
+      <div class="bug-c me"><div class="crest-box" id="h-crest-me"></div><b>ЛОК</b></div>
+      <div class="bug-sc me"><b id="h-sc-me">0</b></div>
+      <div class="bug-sc opp"><b id="h-sc-opp">0</b></div>
+      <div class="bug-c opp"><b id="h-opp-name">СУП</b><div class="crest-box" id="h-crest-opp"></div></div>
+      <div class="bug-t"><b id="h-time" class="plate-time">00:00</b><small id="h-half">1-й тайм</small></div>
+    </div>
     <div class="mcoins"><b id="h-coins">0</b>${I.coin}</div>
   </div>
-  <div class="team opp"><div class="team-txt"><span id="h-opp-name">СУПЕРНИК</span><b id="h-sc-opp">0</b></div><div class="crest-box" id="h-crest-opp"></div></div>
   <button class="sq pause-btn" data-act="pause" aria-label="Пауза">${I.pause}</button>
   <div class="warn" id="h-warn" hidden></div>
   <div class="combo" id="h-combo" hidden></div>
@@ -23,7 +28,7 @@ export class Hud {
 </section>`);
     const q = (id) => root.querySelector('#' + id);
     this.el = q('hud');
-    this.t = { title: q('h-title'), time: q('h-time'), coins: q('h-coins'), me: q('h-sc-me'), opp: q('h-sc-opp'), oppName: q('h-opp-name'), crestMe: q('h-crest-me'), crestOpp: q('h-crest-opp'), warn: q('h-warn'), combo: q('h-combo'), banner: q('h-banner'), banT: q('h-ban-t'), banS: q('h-ban-sub'), banN: q('h-ban-note'), goal: q('h-goal'), goalT: q('h-goal-t'), goalS: q('h-goal-s'), hint: q('h-hint'), hintT: q('h-hint-t'), floats: q('h-floats'), mid: root.querySelector('.hud-mid'), pcard: q('h-pcard') };
+    this.t = { title: q('h-title'), time: q('h-time'), coins: q('h-coins'), me: q('h-sc-me'), opp: q('h-sc-opp'), oppName: q('h-opp-name'), crestMe: q('h-crest-me'), crestOpp: q('h-crest-opp'), warn: q('h-warn'), combo: q('h-combo'), banner: q('h-banner'), banT: q('h-ban-t'), banS: q('h-ban-sub'), banN: q('h-ban-note'), goal: q('h-goal'), goalT: q('h-goal-t'), goalS: q('h-goal-s'), hint: q('h-hint'), hintT: q('h-hint-t'), floats: q('h-floats'), mid: root.querySelector('#h-bug'), half: q('h-half'), pcard: q('h-pcard') };
     this.t.sig = q('h-sig'); this._sig = '';
     this.floatEls = [];
     for (let i = 0; i < 10; i++) { const d = document.createElement('div'); d.className = 'float'; d.hidden = true; this.t.floats.appendChild(d); this.floatEls.push(d); }
@@ -36,7 +41,8 @@ export class Hud {
     this.el.hidden = false;
     if (this.onShow) this.onShow();
     this.t.title.textContent = spec.leagueName + ' · ' + spec.no + '/' + spec.of;
-    this.t.oppName.textContent = spec.club.name;
+    this.t.oppName.textContent = spec.club.name.slice(0, 3).toUpperCase();
+    this.el.style.setProperty('--cb', spec.club.kit.main); this.el.style.setProperty('--cbt', spec.club.kit.main === '#eceff1' || spec.club.kit.main === '#f4f4f1' || spec.club.kit.main === '#e4e8ec' ? '#14231e' : '#fff');
     this.t.crestOpp.innerHTML = crest(spec.club.kit, spec.club.name.slice(0, 2));
     this.last = { time: '', me: -1, opp: -1, coins: -1 };
   }
@@ -46,8 +52,9 @@ export class Hud {
     if (me !== this.last.me) { this.t.me.textContent = me; this.last.me = me; this.bump(this.t.me); }
     if (opp !== this.last.opp) { this.t.opp.textContent = opp; this.last.opp = opp; this.bump(this.t.opp); }
   }
-  setTime(text, urgent) {
+  setTime(text, urgent, half) {
     if (text !== this.last.time) { this.t.time.textContent = text; this.last.time = text; }
+    if (half !== undefined && half !== this.last.half) { this.t.half.textContent = half; this.last.half = half; }
     this.t.mid.classList.toggle('urgent', !!urgent);
   }
   /** Семафор: зелений «вперед» — м'яч у нас, червоний «стоп» — у суперника, жовтий — вільний. */
