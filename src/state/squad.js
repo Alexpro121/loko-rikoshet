@@ -132,7 +132,7 @@ export function swapPlayers(slot, benchIdx) {
 /** Склад суперника: сила росте з прогресом, ролі мають свої сильні сторони. */
 export function oppSquad(spec) {
   const d = spec.fixtureIdx + spec.season * 13, rnd = rng(spec.globalNo * 977 + 13);
-  const base = clamp(28 + d * 2.5 + (spec.no - 1) * 1.0, 26, 88), names = spec.league >= 3 ? 'int' : 'ua';
+  const base = clamp(24 + d * 1.9 + (spec.no - 1) * 0.6, 22, 86), names = spec.league >= 3 ? 'int' : 'ua';
   const roles = FORMATIONS[spec.formation];
   const sq = [newEntry(GK_ROLE, 0, rnd, base + 2, names)];
   roles.forEach((r, i) => sq.push(newEntry(r, i + 1, rnd, base, names)));

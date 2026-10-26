@@ -3,7 +3,7 @@
 export const PITCH = {
   L: 50,          // пів-довжини газону по X (100 одиниць, як справжнє поле 105×68 у масштабі)
   W: 32,          // пів-ширини по Z (64)
-  G: 4.6,         // пів-ширини воріт
+  G: 5.8,         // пів-ширини воріт
   CH: 2.4,        // зріз кутів арени
   WALL: 1.2,
   WALL_H: 1.2,
@@ -71,15 +71,15 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function matchSpec(fixtureIdx, season) {
   const fx = FIXTURES[fixtureIdx];
   const lg = LEAGUES[fx.league];
-  const d = fixtureIdx + season * FIXTURES.length;
+  const dr = fixtureIdx + season * FIXTURES.length, d = dr * 0.72;   // м'якший, плавніший ріст складності
   return {
     fixtureIdx, season, league: fx.league, leagueName: lg.name, club: fx.club, no: fx.no, of: fx.of, final: fx.final,
     globalNo: fixtureIdx + 1 + season * FIXTURES.length,
     formation: lg.formation, note: lg.note,
-    scale: 1 + d * 0.42,
+    scale: 1 + dr * 0.42,
     time: 75,
     runSpeed: clamp(5.6 + d * 0.16, 5.6, 8.2),    // швидкість польових гравців суперника
-    press: clamp(0.28 + d * 0.035, 0.28, 0.85),   // наскільки агресивно суперник відбирає м'яч
+    press: clamp(0.2 + d * 0.035, 0.28, 0.85),   // наскільки агресивно суперник відбирає м'яч
     line: clamp(0.0 + d * 0.012, 0, 0.14),        // наскільки високо грає захист
     gkSpeed: clamp(5.0 + d * 0.3, 5, 10),
     gkTrack: clamp(0.25 + d * 0.035, 0.22, 0.8),
