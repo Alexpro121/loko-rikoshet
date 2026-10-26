@@ -51,7 +51,6 @@ export class UI {
       <button class="card" id="m-kick" data-act="up-kick"><span class="card-ic">${I.boot}</span><span class="card-t"><b>УДАР</b><em id="m-kick-v"></em></span><span class="card-p" id="m-kick-c"></span></button>
       <button class="card" id="m-stad" data-act="up-stadium"><span class="card-ic">${I.stadium}</span><span class="card-t"><b>СТАДІОН</b><em id="m-stad-v"></em></span><span class="card-p" id="m-stad-c"></span></button>
     </div>
-    <div class="ticker" aria-hidden="true"><em>ЗНАЄШ?</em><div class="tk"><div class="tk-in" id="m-tick"></div></div></div>
     <nav class="nav" id="m-nav">
       <button class="nb on" data-act="nav-match"><i>${I.ball}</i><span>МАТЧ</span></button>
       <button class="nb" data-act="nav-transfers"><i>${I.shirt}</i><span>КОМАНДА</span></button>
@@ -86,7 +85,7 @@ export class UI {
 <div class="flash" id="flash"></div>
 <div class="slowfx" id="slowfx"></div>`);
     const q = (id) => root.querySelector('#' + id);
-    this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), club: q('m-club'), next: q('m-next'), tick: q('m-tick'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), kick: q('m-kick'), kickV: q('m-kick-v'), kickC: q('m-kick-c'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
+    this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), club: q('m-club'), next: q('m-next'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), kick: q('m-kick'), kickV: q('m-kick-v'), kickC: q('m-kick-c'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
     root.addEventListener('input', (e) => {
       const t = e.target.closest('[data-range]'); if (!t) return;
       const k = t.dataset.range, v = +t.value;
@@ -264,20 +263,15 @@ export class UI {
     const g = this.game; if (!g) return;
     ensureSquad();
     const spec = matchSpec(S.fixture, S.season), all = allPlayers();
-    const star = all.reduce((a, e) => (ovr(e) > ovr(a) ? e : a), all[0]);
     const rating = squadRating();
     const form = (S.form || []).slice(-5);
     const dots = Array.from({ length: 5 }, (_, i) => { const r = form[i - (5 - form.length)]; return `<i class="f ${r ? r.toLowerCase() : ''}">${r === 'W' ? 'П' : r === 'D' ? 'Н' : r === 'L' ? 'Ц' : ''}</i>`; }).join('');
-    const kc = [rating, S.stats.wins, S.stats.goals, S.stats.bestCombo, form.join(''), S.trophies, star.id, ovr(star), S.striker].join('|');
+    const kc = [rating, S.stats.wins, S.stats.goals, S.stats.bestCombo, form.join(''), S.trophies].join('|');
     if (force || this._clubKey !== kc) {
       this._clubKey = kc;
-      const L = squadLook(star), gk = star.line === 'G', o = ovr(star);
-      const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : KIT_LOKO, num: star.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, gk, scale: 0.9 }, 'sq-' + star.id + (star.role === 'ST' ? striker().id : ''));
       this.el.club.innerHTML = `<div class="mc-h">${lokoCrest()}<div><b>ЛОКОМОТИВ</b><em>Київ · з 1919</em></div></div>
-        <div class="mc-stats"><div><b>${rating}</b><span>рейтинг</span></div><div><b>${S.stats.wins}</b><span>перемог</span></div><div><b>${S.stats.goals}</b><span>голів</span></div></div>
-        <div class="mc-form"><span>Форма</span><div>${dots}</div></div>
-        <div class="mc-star"><img src="${img}" alt=""/><div><small>Зірка складу</small><b>${star.name.split(' ')[0]}</b><em>№${star.num} · ${star.role}</em></div><i class="ovr ${tierOf(o)}">${o}</i></div>
-        <div class="mc-tro">${I.trophy}<b>${S.trophies}</b><span>кубків</span><u>${I.up}<b>${S.stats.bestCombo}</b><span>комбо</span></u></div>`;
+        <div class="mc-stats"><div><b>${rating}</b><span>рейтинг</span></div><div><b>${S.stats.wins}</b><span>перемог</span></div><div><b>${S.trophies}</b><span>кубків</span></div></div>
+        <div class="mc-form"><span>Форма</span><div>${dots}</div></div>`;
     }
     const nk = [S.fixture, S.season, rating, S.up.stadium].join('|');
     if (force || this._nextKey !== nk) {
@@ -287,13 +281,9 @@ export class UI {
       const rew = Math.round(120 * spec.scale * incomeMult());
       const pips = [1, 2, 3, 4].map((n) => `<i class="${n <= lvl ? 'on l' + lvl : ''}"></i>`).join('');
       this.el.next.innerHTML = `<div class="mn-t"><span>Наступний матч</span><b>${spec.no}/${spec.of}</b></div>
-        <div class="mn-vs">${crest(spec.club.kit, spec.club.name.slice(0, 2))}<div><b>${spec.club.name}</b><em>${spec.club.city} · ${spec.leagueName}</em></div></div>
-        <div class="mn-d"><span>${label}<small>рейтинг ${oAvg}</small></span><div class="pips">${pips}</div></div>
-        <div class="mn-r"><span>За перемогу</span><b>+${fmt(rew)}</b>${I.coin}</div>${spec.final ? `<div class="mn-cup">${I.trophy}<span>Фінал: кубок ліги +3 квитки</span></div>` : ''}${spec.note ? `<p>${spec.note}</p>` : ''}`;
-    }
-    if (force || !this.el.tick.innerHTML) {
-      const f = FACTS.map((t) => [Math.random(), t]).sort((a, b) => a[0] - b[0]).slice(0, 6).map((a) => `<span>${a[1]}</span>`).join('');
-      this.el.tick.innerHTML = f + f;
+        <div class="mn-vs">${crest(spec.club.kit, spec.club.name.slice(0, 2))}<div><b>${spec.club.name}</b><em>${spec.club.city}</em></div></div>
+        <div class="mn-d"><span>${label}</span><div class="pips">${pips}</div></div>
+        <div class="mn-r"><span>За перемогу</span><b>+${fmt(rew)}</b>${I.coin}</div>`;
     }
   }
 
