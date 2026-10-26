@@ -15,7 +15,7 @@ export class Hud {
       <div class="bug-c opp"><b id="h-opp-name">СУП</b><div class="crest-box" id="h-crest-opp"></div></div>
       <div class="bug-t"><b id="h-time" class="plate-time">00:00</b><small id="h-half">1-й тайм</small><i class="poss loose" id="h-sig" title="Зелений — м’яч у нас, червоний — у суперника"></i></div>
     </div>
-    <div class="mcoins"><b id="h-coins">0</b>${I.coin}</div>
+    <div class="mcoins" hidden><b id="h-coins">0</b></div>
   </div>
   <button class="sq pause-btn" data-act="pause" aria-label="Пауза">${I.pause}</button>
   <div class="warn" id="h-warn" hidden></div>
