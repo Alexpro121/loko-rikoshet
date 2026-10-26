@@ -71,7 +71,7 @@ export class Match {
     this.score = { me: 0, opp: 0 };
     this.clock = spec.time; this.golden = false; this.timeUp = false; this.timeUpWait = 0;
     this.coins = 0; this.stats = { goals: 0, combo: 1, saves: 0 };
-    this.phase = 'intro'; this.introT = 0; this.hitStop = 0; this.ts = 1; this.acc = 0;
+    this.phase = 'intro'; this.introT = 0; this.introCheer = false; this.hitStop = 0; this.ts = 1; this.acc = 0;
     this.aiming = false; this.endT = 0; this.goalT = 0; this.resultSent = false;
     this.lastClock = -1;
     this.holder = null; this.taker = null;
@@ -560,8 +560,9 @@ export class Match {
 
     if (this.phase === 'intro') {
       this.introT += rawDt;
-      this.game.setIntroCam(this.introT < 2.2, clamp(this.introT / 2.2, 0, 1));
-      if (this.introT > 2.2) { this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true); this.ui.hud.hint(S.tutorial ? null : (this.ui.useJoy() ? 'Час сповільнено: тягни джойстик у бік удару й відпусти' : 'Час сповільнено: відтягни від м’яча й відпусти')); }
+      if (!this.introCheer && this.introT > 1.1) { this.introCheer = true; for (const a of this.mine) if (a.p.cheer) a.p.cheer(1.5); audio.crowd(0.95); }
+      this.game.setIntroCam(this.introT < 3.4, clamp(this.introT / 3.4, 0, 1));
+      if (this.introT > 3.4) { audio.crowd(0.7); this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true); this.ui.hud.hint(S.tutorial ? null : (this.ui.useJoy() ? 'Час сповільнено: тягни джойстик у бік удару й відпусти' : 'Час сповільнено: відтягни від м’яча й відпусти')); }
       this.tick(dt, rawDt);
       return;
     }

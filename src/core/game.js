@@ -191,10 +191,12 @@ export class Game {
       b.gx = ball.x * 0.94 + Math.max(-7, Math.min(7, ball.vx * 0.22)) * lead; b.gz = ball.z * 0.55 + Math.max(-4, Math.min(4, ball.vz * 0.15)) * lead - 2.4;
     }
     if (b.gx === undefined) { b.gx = 0; b.gz = 0; }
-    const zoomT = (this.intro ? 1 + (1 - (1 - Math.pow(1 - this.introK, 3))) * 0.8 : 1) * (aiming ? 1.16 : (m && m.slow ? 0.94 : 1));
+    const ie = this.intro ? 1 - Math.pow(1 - this.introK, 3) : 1;
+    const zoomT = (this.intro ? 1 + (1 - ie) * 1.1 : 1) * (aiming ? 1.16 : (m && m.slow ? 0.94 : 1));
     const hx = b.dist * b.zoom * 2 * b.half * b.asp / 2, hz = 18 * b.zoom;
     const maxX = Math.max(0, L + 7 - hx), maxZ = Math.max(0, W + 3 - hz);
-    const tx = Math.max(-maxX, Math.min(maxX, b.gx)), tz = Math.max(-maxZ, Math.min(maxZ, b.gz));
+    const sweep = this.intro ? (1 - ie) * -26 : 0;
+    const tx = Math.max(-maxX, Math.min(maxX, b.gx + sweep)), tz = Math.max(-maxZ, Math.min(maxZ, b.gz));
     const kf = snap ? 1 : 1 - Math.exp(-dt * 3.4), kz = snap ? 1 : 1 - Math.exp(-dt * 4);
     b.tx += (tx - b.tx) * kf; b.tz += (tz - b.tz) * kf; b.zoom += (zoomT - b.zoom) * kz;
     const dist = b.dist * b.zoom;
