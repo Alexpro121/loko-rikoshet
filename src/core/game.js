@@ -17,7 +17,7 @@ export class Game {
   constructor(canvas, ui) {
     this.canvas = canvas; this.ui = ui; ui.game = this;
     const coarse = matchMedia('(pointer: coarse)').matches;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !(coarse && (window.devicePixelRatio || 1) >= 2), powerPreference: 'high-performance', stencil: false, alpha: false });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false, alpha: false });
     this.renderer.setClearColor(COL.skyMenu, 1);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.1;
     this.coarse = coarse;
@@ -127,7 +127,7 @@ export class Game {
 
   applyPixelRatio(force) {
     const q = S.settings.quality;
-    const pr = Math.max(0.5, this.basePixelRatio() * (q === 'auto' ? this.res : 1));
+    const pr = Math.max(0.6, this.basePixelRatio() * (q === 'auto' ? this.res : 1));
     if (!force && Math.abs(pr - this.pr) < 0.01) return;
     this.pr = pr;
     this.renderer.setPixelRatio(pr);
@@ -141,7 +141,7 @@ export class Game {
     this.evalT += dt;
     if (this.evalT < 1.4 || S.settings.quality !== 'auto') return;
     this.evalT = 0;
-    if (this.ema > 20.5 && this.res > 0.55) { this.res = Math.max(0.55, this.res - 0.12); this.goodRuns = 0; this.applyPixelRatio(false); }
+    if (this.ema > 20.5 && this.res > 0.7) { this.res = Math.max(0.7, this.res - 0.1); this.goodRuns = 0; this.applyPixelRatio(false); }
     else if (this.ema < 14.2 && this.res < 1) { if (++this.goodRuns >= 3) { this.res = Math.min(1, this.res + 0.06); this.goodRuns = 0; this.applyPixelRatio(false); } }
     else this.goodRuns = 0;
   }

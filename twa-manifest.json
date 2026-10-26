@@ -1,0 +1,22 @@
+{
+  "packageId": "com.lokorush.game",
+  "host": "ВАШ_ДОМЕН",
+  "name": "LOKO RUSH",
+  "launcherName": "LOKO RUSH",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "themeColor": "#0b3d2a",
+  "navigationColor": "#0b3d2a",
+  "backgroundColor": "#0b3d2a",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://ВАШ_ДОМЕН/icon-512.png",
+  "maskableIconUrl": "https://ВАШ_ДОМЕН/icon-maskable-512.png",
+  "webManifestUrl": "https://ВАШ_ДОМЕН/manifest.webmanifest",
+  "appVersionName": "1.2.0",
+  "appVersion": "3",
+  "signingKey": { "path": "./loko-rush.keystore", "alias": "loko" },
+  "fallbackType": "customtabs",
+  "isChromeOSOnly": false,
+  "minSdkVersion": 24
+}

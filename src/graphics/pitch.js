@@ -160,7 +160,7 @@ export function buildPitch() {
   // емблеми на газоні: справжня Локо на своїй половині й щит суперника на його половині; після свистка плавно зникають
   const mkDecal = (x) => {
     const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0.8, depthWrite: false }));
     m.rotation.x = -Math.PI / 2; m.position.set(x, 0.035, 0); m.renderOrder = 1; group.add(m);
     return { m, g, t };

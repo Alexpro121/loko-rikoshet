@@ -22,7 +22,7 @@ function bannerAtlas() {
     g.fillStyle = fg; g.fillText(t, x + BW / 2, y + BH / 2 + 3);
   });
   g.fillStyle = '#5a4630'; g.fillRect(0, (BR - 1) * BH, BC * BW, BH);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
   return t;
 }
 
@@ -174,7 +174,7 @@ export class Stands {
   /** Банери гостей: полотнища з назвою суперника в його кольорах; перемальовуються на кожен матч. */
   buildAway(spots) {
     const c = document.createElement('canvas'); c.width = 768; c.height = 384; this.awayCanvas = c;
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; this.awayTex = t;
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; this.awayTex = t;
     const mat = waveMat(new THREE.MeshLambertMaterial({ map: t, side: THREE.DoubleSide }));
     const BWW = 4.4, BHH = BWW * 128 / 384;
     this.away = [];

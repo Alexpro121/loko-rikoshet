@@ -8,7 +8,7 @@ function canvas(w, h) {
   return c;
 }
 
-function tex(c, { repeat = false, mip = true, aniso = 4 } = {}) {
+function tex(c, { repeat = false, mip = true, aniso = 16 } = {}) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) { t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping; }
@@ -18,14 +18,14 @@ function tex(c, { repeat = false, mip = true, aniso = 4 } = {}) {
 }
 
 // ---------------------------------------------------------------- атлас гравців: обличчя + номери
-const CELL = 32, COLS = 8, ROWS = 32, AW = COLS * CELL, AH = ROWS * CELL;
+const CELL = 64, COLS = 8, ROWS = 32, AW = COLS * CELL, AH = ROWS * CELL;
 export const ATLAS = { cell: CELL, cols: COLS, rows: ROWS, w: AW, h: AH };
 const FACES = ['neutral', 'happy', 'shock', 'angry'];
 const NUMS = 100;            // номери 0..99 у двох варіантах (темний/світлий напис)
 
 /** Комірка атласу -> [u0, v0, u1, v1] з відступом пів-текселя. */
 export function cellRect(cx, cy) {
-  const e = 0.6;
+  const e = CELL / 32 * 0.8;
   return [(cx * CELL + e) / AW, 1 - ((cy + 1) * CELL - e) / AH, ((cx + 1) * CELL - e) / AW, 1 - (cy * CELL + e) / AH];
 }
 export const WHITE_CELL = cellRect(0, 0);
@@ -89,10 +89,10 @@ export function playerAtlas() {
   for (let v = 0; v < 2; v++) for (let n = 0; n < NUMS; n++) {
     const i = n + v * NUMS, x = (i % COLS) * CELL, y = (1 + ((i / COLS) | 0)) * CELL;
     g.fillStyle = v ? '#23282d' : '#f1efe8'; g.fillRect(x, y, CELL, CELL);
-    g.fillStyle = v ? '#f1efe8' : '#13321f'; g.font = `800 ${n > 9 ? 21 : 25}px Rubik, "Arial Black", sans-serif`;
-    g.fillText(String(n), x + CELL / 2, y + CELL / 2 + 1);
+    g.fillStyle = v ? '#f1efe8' : '#13321f'; g.font = `800 ${(n > 9 ? 21 : 25) * CELL / 32}px Rubik, "Arial Black", sans-serif`;
+    g.fillText(String(n), x + CELL / 2, y + CELL / 2 + CELL / 32);
   }
-  _atlas = tex(c, { mip: true, aniso: 4 });
+  _atlas = tex(c, { mip: true, aniso: 16 });
   _atlas.magFilter = THREE.LinearFilter;
   return _atlas;
 }
@@ -100,7 +100,7 @@ export function playerAtlas() {
 // ---------------------------------------------------------------- газон
 /** Газон: смуги покосу, ледь помітний шум, витоптані місця. Одна текстура на весь майданчик. */
 export function grassTexture(L, W, G) {
-  const w = 1536, h = Math.round(1536 * (2 * W) / (2 * L)), c = canvas(w, h), g = c.getContext('2d');
+  const w = 2048, h = Math.round(2048 * (2 * W) / (2 * L)), c = canvas(w, h), g = c.getContext('2d');
   const r = rng(21);
   const stripes = 18, sw = w / stripes;
   for (let i = 0; i < stripes; i++) { g.fillStyle = i % 2 ? '#3f8a3c' : '#377f35'; g.fillRect(i * sw, 0, sw + 1, h); }
