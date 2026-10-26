@@ -36,7 +36,7 @@ export class Stands {
   constructor() {
     this.group = new THREE.Group();
     const b = new VoxelBuilder(0.2);
-    const fans = [], spots = [];          // x, y, z, фаза, колір тіла, колір голови
+    const fans = [], spots = [], awaySpots = [];          // x, y, z, фаза, колір тіла, колір голови
     const rnd = rng(7);
     const pickCloth = (home) => (home && rnd() > 0.35 ? (rnd() > 0.5 ? '#a8182b' : '#e8e4d8') : CLOTHES[(rnd() * CLOTHES.length) | 0]);
 
@@ -60,6 +60,9 @@ export class Stands {
         const k = homeFrom + 2 + Math.floor(((q + 0.5) / nb) * Math.max(1, homeTo - homeFrom - 4)), r = 1 + (q % 3);
         spots.push({ x: cx + dx * r * ROW_D + ax * (k - (cols - 1) / 2) * SP, z: cz + dz * r * ROW_D + az * (k - (cols - 1) / 2) * SP, y: 1.0 + r * ROW_H + 0.9, ry: Math.atan2(-dx, -dz) });
       }
+      const place = (k, r) => ({ x: cx + dx * r * ROW_D + ax * (k - (cols - 1) / 2) * SP, z: cz + dz * r * ROW_D + az * (k - (cols - 1) / 2) * SP, y: 1.0 + r * ROW_H + 0.9, ry: Math.atan2(-dx, -dz) });
+      if (dx !== 0) for (const [f, r] of [[0.26, 1], [0.38, 2], [0.5, 1]]) spots.push(place(Math.round(cols * f), r));   // плакати за воротами: добре видно при пенальті
+      for (const [f, r] of [[0.6, 1], [0.7, 2], [0.8, 1]]) awaySpots.push(place(Math.round(cols * f), r));            // сектор гостей
       const H = 1.0 + rows * ROW_H, bx = cx + dx * (rows * ROW_D + 0.3), bz = cz + dz * (rows * ROW_D + 0.3);
       b.box(bx, H / 2 + 0.3, bz, ax !== 0 ? width + 0.6 : 0.7, H + 0.6, ax !== 0 ? 0.7 : width + 0.6, '#6f797e');
     };
@@ -93,12 +96,13 @@ export class Stands {
     this.writeMatrices(0, 0);
     this.group.add(this.body, this.head);
     this.buildBanners(spots, rnd);
+    this.buildAway(awaySpots);
   }
 
   /** Банери на древках: кожен — окремий меш зі спільним атласом, гойдається та підстрибує під час радості. */
   buildBanners(spots, rnd) {
     const map = bannerAtlas(), mat = new THREE.MeshLambertMaterial({ map, side: THREE.DoubleSide });
-    const BWW = 3.4, BHH = BWW * BH / BW, order = TEXTS.map((_, i) => i).sort(() => rnd() - 0.5);
+    const BWW = 4.4, BHH = BWW * BH / BW, order = TEXTS.map((_, i) => i).sort(() => rnd() - 0.5);
     this.banners = [];
     spots.forEach((sp, n) => {
       const ti = order[n % order.length], u0 = (ti % BC) / BC, v1 = 1 - ((ti / BC) | 0) / BR, u1 = u0 + 1 / BC, v0 = v1 - 1 / BR;
@@ -115,6 +119,43 @@ export class Stands {
       const m = new THREE.Mesh(geo, mat); m.position.set(sp.x, sp.y - 0.9, sp.z); m.rotation.y = sp.ry; m.frustumCulled = false;
       this.group.add(m); this.banners.push({ m, ph: rnd() * 6.28, ry: sp.ry, y: m.position.y });
     });
+  }
+
+  /** Банери гостей: полотнища з назвою суперника в його кольорах; перемальовуються на кожен матч. */
+  buildAway(spots) {
+    const c = document.createElement('canvas'); c.width = 768; c.height = 384; this.awayCanvas = c;
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; this.awayTex = t;
+    const mat = new THREE.MeshLambertMaterial({ map: t, side: THREE.DoubleSide });
+    const BWW = 4.4, BHH = BWW * 128 / 384;
+    this.away = [];
+    spots.forEach((sp, n) => {
+      const ti = n % 6, u0 = (ti % 2) / 2, v1 = 1 - ((ti / 2) | 0) / 3, u1 = u0 + 0.5, v0 = v1 - 1 / 3;
+      const cloth = new THREE.PlaneGeometry(BWW, BHH, 6, 1); cloth.translate(0, BHH / 2 + 0.7, 0);
+      const uv = cloth.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), v0 + uv.getY(i) * (v1 - v0));
+      const parts = [cloth];
+      for (const sx of [-1, 1]) { const st = new THREE.BoxGeometry(0.07, BHH + 0.9, 0.07); st.translate(sx * (BWW / 2 - 0.1), (BHH + 0.9) / 2, 0); const su = st.attributes.uv; for (let i = 0; i < su.count; i++) su.setXY(i, 0.01, 0.01); parts.push(st); }
+      const m = new THREE.Mesh(mergeGeometries(parts), mat); m.position.set(sp.x, sp.y - 0.9, sp.z); m.rotation.y = sp.ry; m.frustumCulled = false;
+      this.group.add(m); this.banners.push({ m, ph: Math.random() * 6.28, ry: sp.ry, y: m.position.y });
+    });
+    this.setOpponent({ name: 'ГОСТІ', kit: { main: '#254e9c', second: '#e4e8ec' } });
+  }
+
+  setOpponent(club) {
+    const c = this.awayCanvas; if (!c) return;
+    const g = c.getContext('2d'), n = String(club.name).toUpperCase(), a = club.kit.main, b = club.kit.second;
+    const texts = [n, n + ' ВПЕРЕД!', 'ЗА ' + n, 'ГОСТІ · ' + n, n + ' З НАМИ', 'ТІЛЬКИ ' + n];
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    texts.forEach((t, i) => {
+      const x = (i % 2) * 384, y = ((i / 2) | 0) * 128, bg = i % 2 ? b : a, fg = i % 2 ? a : b;
+      g.fillStyle = bg; g.fillRect(x, y, 384, 128);
+      g.fillStyle = 'rgba(255,255,255,0.08)'; for (let k = 0; k < 6; k++) g.fillRect(x, y + k * 22, 384, 8);
+      g.strokeStyle = fg; g.lineWidth = 5; g.strokeRect(x + 7, y + 7, 370, 114);
+      let fs = 60; g.font = `800 ${fs}px Rubik, "Arial Black", sans-serif`;
+      while (g.measureText(t).width > 340 && fs > 16) { fs -= 2; g.font = `800 ${fs}px Rubik, "Arial Black", sans-serif`; }
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillText(t, x + 194, y + 69); g.fillStyle = fg; g.fillText(t, x + 192, y + 66);
+    });
+    this.awayTex.needsUpdate = true;
   }
 
   cheer(sec) { this.cheerT = sec; this.cheerMax = sec; }

@@ -353,6 +353,8 @@ export class Player {
         drop = 0.06 * plant * (1 - strike);
         break;
       }
+      case 'gkdive': this.diveP = mk < 0.62 ? mk / 0.62 : 1 + ((mk - 0.62) / 0.38) * 0.5;   // у матчі воротар стрибає тією ж детальною позою
+      // fallthrough
       case 'pdive': {
         const P = this.diveP || 0, sg = (Math.sign(Math.sin(this.bodyYaw)) || 1) * this.diveDir, high = this.diveKind === 0, maxTilt = high ? 1.45 : 1.28;
         const sm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -379,15 +381,6 @@ export class Player {
         } else {
           this.rise(clamp((P - 1) / 0.5, 0, 1), 0, sg * maxTilt); tiltZ = r.tz; leanX = r.leanX; legA = r.legs; legB = r.legs * 0.8; kneeA = r.legs * 1.15; kneeB = r.legs * 0.95; armA = armB = r.arms; spread = r.spread; drop = r.drop;
         }
-        break;
-      }
-      case 'gkdive': {
-        const sg = (Math.sign(Math.sin(this.bodyYaw)) || 1) * this.diveDir, high = this.diveKind === 0;
-        const maxTilt = high ? 1.5 : 1.3;
-        if (mk < 0.07) { const q = mk / 0.07; legA = legB = 0.8 * q; kneeA = kneeB = 0.95 * q; drop = THIGH * (1 - Math.cos(legA)); leanX = 0.3 * q; armA = armB = 0.8 * q; }
-        else if (mk < 0.28) { const q = (mk - 0.07) / 0.21; tiltZ = sg * maxTilt * easeOut(q); lift = (high ? 0.95 : 0.4) * Math.sin(q * Math.PI); armA = armB = 2.85; elbA = elbB = 0.1; spread = 0.18; legA = -0.45; legB = 0.5; kneeA = 0.3; kneeB = 0.9; }
-        else if (mk < 0.62) { tiltZ = sg * maxTilt; armA = armB = mk < 0.42 ? 2.5 : 0.5; elbA = elbB = 0.2; spread = 0.45; legA = -0.2; legB = 0.25; kneeA = kneeB = 0.3; }
-        else { this.rise((mk - 0.62) / 0.38, 0, sg * maxTilt); tiltZ = r.tz; leanX = r.leanX; legA = r.legs; legB = r.legs * 0.8; kneeA = r.legs * 1.15; kneeB = r.legs * 0.95; armA = armB = r.arms; spread = r.spread; drop = r.drop; }
         break;
       }
       case 'gkjump': {
