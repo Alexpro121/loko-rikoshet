@@ -45,17 +45,17 @@ export class UI {
   </header>
   <aside class="m-side m-left" id="m-club" data-act="nav-transfers"></aside>
   <aside class="m-side m-right" id="m-next"></aside>
-  <button class="cta" id="m-cta" data-act="play"><b>ТОРКНИСЬ, ЩОБ ГРАТИ</b><small id="m-cta-s"></small></button>
+  <button class="cta" id="m-cta" data-act="play"><span class="tk-main"><small>КВИТОК · ЛОКО</small><b>ВПЕРЕД!</b><i class="tk-bar"></i></span><span class="tk-stub"><em>РЕЙС</em><strong id="m-cta-n"></strong><small id="m-cta-s"></small></span></button>
   <footer class="bottom">
     <div class="cards">
       <button class="card" id="m-kick" data-act="up-kick"><span class="card-ic">${I.boot}</span><span class="card-t"><b>УДАР</b><em id="m-kick-v"></em></span><span class="card-p" id="m-kick-c"></span></button>
       <button class="card" id="m-stad" data-act="up-stadium"><span class="card-ic">${I.stadium}</span><span class="card-t"><b>СТАДІОН</b><em id="m-stad-v"></em></span><span class="card-p" id="m-stad-c"></span></button>
     </div>
     <nav class="nav" id="m-nav">
-      <button class="nb on" data-act="nav-match"><i>${I.ball}</i><span>МАТЧ</span></button>
-      <button class="nb" data-act="nav-transfers"><i>${I.shirt}</i><span>КОМАНДА</span></button>
-      <button class="nb" data-act="nav-academy"><i>${I.team}</i><span>АКАДЕМІЯ</span><u id="m-acad-dot" hidden></u></button>
-      <button class="nb" data-act="nav-stadium"><i>${I.stadium}</i><span>СТАДІОН</span></button>
+      <button class="nb on" data-act="nav-match"><i>${I.ball}</i><span>МАТЧ</span><s>1</s></button>
+      <button class="nb" data-act="nav-transfers"><i>${I.shirt}</i><span>КОМАНДА</span><s>2</s></button>
+      <button class="nb" data-act="nav-academy"><i>${I.team}</i><span>АКАДЕМІЯ</span><s>3</s><u id="m-acad-dot" hidden></u></button>
+      <button class="nb" data-act="nav-stadium"><i>${I.stadium}</i><span>СТАДІОН</span><s>4</s></button>
     </nav>
   </footer>
 </section>
@@ -219,7 +219,7 @@ export class UI {
   }
 
   menuTap() {
-    const g = this.game;
+    const g = this.game; this.el.cta.classList.remove('punch'); void this.el.cta.offsetWidth; this.el.cta.classList.add('punch');
     if (g.sm.name !== 'MENU' || this.panel || !this.el.splash.hidden || !this.el.settings.hidden || !this.el.reveal.hidden) return;
     audio.click(); audio.unlock();
     g.play();
@@ -261,7 +261,7 @@ export class UI {
     countTo(e.coins, Math.floor(S.coins), force ? 0 : 500, (v) => fmt(v));
     countTo(e.tickets, S.tickets, 0, (v) => String(Math.round(v)));
     const spec = matchSpec(S.fixture, S.season);
-    e.ctaS.textContent = spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of + ' · ' + spec.club.name;
+    e.ctaS.textContent = spec.club.name; document.getElementById('m-cta-n').textContent = '№' + spec.no;
     e.kickV.textContent = '+' + KICK_STEP + '% сила · рів. ' + (S.up.kick + 1);
     e.kickC.innerHTML = fmt(kickCost()) + I.coin;
     e.stadV.textContent = '+' + INCOME_STEP + '% дохід · рів. ' + (S.up.stadium + 1);
@@ -296,10 +296,14 @@ export class UI {
       const lvl = diff <= -8 ? 1 : diff <= 3 ? 2 : diff <= 14 ? 3 : 4, label = ['', 'Легко', 'Рівний бій', 'Складно', 'Дуже складно'][lvl];
       const rew = Math.round(120 * spec.scale * incomeMult());
       const pips = [1, 2, 3, 4].map((n) => `<i class="${n <= lvl ? 'on l' + lvl : ''}"></i>`).join('');
-      this.el.next.innerHTML = `<div class="mn-t"><span>Наступний матч</span><b>${spec.no}/${spec.of}</b></div>
-        <div class="mn-vs">${crest(spec.club.kit, spec.club.name.slice(0, 2))}<div><b>${spec.club.name}</b><em>${spec.club.city}</em></div></div>
-        <div class="mn-d"><span>${label}</span><div class="pips">${pips}</div></div>
-        <div class="mn-r"><span>За перемогу</span><b>+${fmt(rew)}</b>${I.coin}</div>`;
+      const flap = (t) => [...String(t).toUpperCase()].map((ch, i) => `<s style="--i:${i}">${ch === ' ' ? '&nbsp;' : ch}</s>`).join('');
+      const sig = [1, 2, 3, 4].map((n) => `<i class="${n <= lvl ? 'on l' + lvl : ''}"></i>`).join('');
+      this.el.next.innerHTML = `<div class="bd-h"><span>ВІДПРАВЛЕННЯ</span><b>${spec.no}/${spec.of}</b></div>
+        <div class="bd-r"><em>НА</em><div class="flap">${flap(spec.club.name)}</div></div>
+        <div class="bd-r"><em>З</em><div class="flap sm">${flap(spec.club.city)}</div></div>
+        <div class="bd-r"><em>ШЛЯХ</em><div class="flap sm">${flap(spec.leagueName)}</div></div>
+        <div class="bd-s"><div class="sig">${sig}</div><span>${label}</span></div>
+        <div class="bd-f"><span>ПРИЗ</span><b>+${fmt(rew)}</b>${I.coin}</div>`;
     }
   }
 
