@@ -55,7 +55,7 @@ export class Penalties {
   camOverride() {
     if (this.over) return null;
     const dir = this.dir || 1, gx = dir * L;
-    return { p: _v.set(gx - dir * (SPOT + 16), 7.6, 0).clone(), l: _d.set(gx, 1.5, 0).clone(), fov: 40 };
+    return { p: _v.set(gx - dir * (SPOT + 15), 7.4, 5.2).clone(), l: _d.set(gx, 1.6, -0.6).clone(), fov: 40 };
   }
 
   /** Екран → точка в площині воріт (z, y). */
@@ -134,7 +134,7 @@ export class Penalties {
 
   fire() {
     this.state = 'run'; this.t = 0; this.go.style.visibility = 'hidden';
-    this.kicked = this.struck = this.landed = this.gkGo = this.cel = false; this.net = null;
+    this.kicked = this.struck = this.landed = this.gkGo = this.cel = this.dust = false; this.net = null;
     this.m.ui.hud.hint(null); this.msg.textContent = '';
     this.decide();
   }
@@ -184,6 +184,8 @@ export class Penalties {
       if (this.out === 'goal' && this.t < 1.1) {
         kp2.x += kp2.vx * dt; kp2.z += kp2.vz * dt;
         const sp = Math.hypot(kp2.vx, kp2.vz); if (sp > 0.5) kp2.yaw = Math.atan2(kp2.vx, kp2.vz);
+      } else if (this.out !== 'goal' && this.t < 1.5) {
+        kp2.x += kp2.vx * dt; kp2.z += kp2.vz * dt;
       } else if (this.out === 'goal' && !this.cel) { this.cel = true; kp2.vx = kp2.vz = 0; kp2.cheer(2.2); }
       if (this.out === 'save' && this.t > 1.25 && !this.cel) { this.cel = true; this.keeper.p.cheer(2.2); }
       if (this.t > 2.4) {
@@ -214,6 +216,7 @@ export class Penalties {
       return;
     }
     this.kt += dt;
+    if (this.kt > 0.5) { const kq = kp.p; kq.vx = -dir * 2.4; kq.vz = 1.8; kq.x += kq.vx * dt; kq.z += kq.vz * dt; kq.yaw = Math.atan2(kq.vx, kq.vz); }   // виконавець відходить із кадру
     // 2) контакт: звук, стискання, частинки, поштовх камери — м'яч зривається з місця
     if (!this.struck && this.kt >= STRIKE) {
       this.struck = true; this.st = 0;
@@ -229,7 +232,7 @@ export class Penalties {
     // 3) стрибок воротаря: старт → ковзання до точки → приземлення
     if (!this.gkGo && this.st >= this.gkAt) {
       this.gkGo = true; this.gt = 0; this.gkZ0 = gk.p.z; this.gkX0 = gk.p.x;
-      this.gkTz = clamp(this.dive.z * 0.94, -G + 0.5, G - 0.5);
+      this.gkTz = clamp(this.dive.z, -G + 0.4, G - 0.4);
       const hi = this.dive.y > H * 0.42;
       gk.p.gkDive(Math.sign(this.gkTz - this.gkZ0 || 1) * (dir > 0 ? 1 : -1), hi ? 0 : 1);
       this.gkDur = 0.34 + 0.05 * Math.abs(this.gkTz - this.gkZ0);
@@ -241,12 +244,13 @@ export class Penalties {
       gk.p.z = this.gkZ0 + (this.gkTz - this.gkZ0) * e;
       gk.p.x = this.gkX0 - dir * 0.9 * Math.sin(q * Math.PI * 0.9);      // кидок трохи вперед
       gk.p.vz = 0; gk.p.vx = 0;
+      if (q >= 0.85 && !this.dust) { this.dust = true; v.particles.burst(gk.p.x, 0.2, gk.p.z, 10, 3.5, 0.6, 0.22, ['#8fb98a', '#cfd8c9', '#f2f5ee'], 10, 0.5); audio.thud(); }
     }
     // 4) політ м'яча
     const f = this.fly; f.t += dt;
     const q = clamp(f.t / f.D, 0, 1), a = this.act, b = m.ball;
     let tx = this.gx, tz = a.z, ty = Math.max(a.y, 0.12);
-    if (this.out === 'save') { tx = this.gx - dir * 0.7; tz = gk.p.z + (this.gkTz >= 0 ? -0.2 : 0.2); ty = clamp(this.dive.y, 0.3, H); }
+    if (this.out === 'save') { tx = this.gx - dir * 0.7; tz = gk.p.z + (this.gkTz >= this.gkZ0 ? 1.5 : -1.5); ty = clamp(this.dive.y, 0.3, H); }
     else if (this.out === 'miss') { tx = this.gx + dir * 6; ty = clamp(a.y, 0.12, 7); }
     else if (this.out === 'post') { tz = Math.sign(a.z || 1) * G; ty = a.y > H * 0.7 ? H : a.y; }
     const e2 = 1 - Math.pow(1 - q, 1.6);
