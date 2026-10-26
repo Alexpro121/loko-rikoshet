@@ -80,6 +80,7 @@ export class UI {
     <small class="club-line">Фан-гра за мотивами історії ФК Локомотив Київ · «${CLUB.slogan}»</small>
   </div>
 </section>
+<div class="joy-bar" id="joy-bar" hidden><span>Перетягни джойстик у зручне місце</span><button class="btn alt" data-act="joy-reset"><b>СКИНУТИ</b></button><button class="btn go" data-act="joy-done"><b>ГОТОВО</b></button></div>
 <div class="joy" id="joy" hidden><div class="joy-ring"><i class="joy-knob"></i></div></div>
 <div class="toast" id="toast" hidden></div>
 <div class="flash" id="flash"></div>
@@ -132,7 +133,10 @@ export class UI {
   }
   setMatchUi(on) { this.matchActive = on; this.applyControls(); }
   applyControls() {
-    this.el.joy.hidden = !(this.matchActive && this.useJoy());
+    this.el.joy.hidden = !((this.matchActive && this.useJoy()) || this.joyEdit);
+    const js = this.el.joy.style, st0 = S.settings, custom = st0.joyX >= 0 && st0.joyY >= 0;
+    js.left = custom ? st0.joyX * 100 + '%' : ''; js.top = custom ? st0.joyY * 100 + '%' : '';
+    js.right = js.bottom = custom ? 'auto' : ''; js.transform = custom ? 'translate(-50%, -50%)' : '';
     this.root.classList.toggle('hand-left', S.settings.hand === 'left');
     const st = this.root.style;
     st.setProperty('--joy-s', (S.settings.joySize / 100).toFixed(2));
@@ -148,14 +152,23 @@ export class UI {
       knob.style.transform = `translate(${dx * m * R * 0.62}px, ${dy * m * R * 0.62}px)`;
       if (this.game && this.game.match) this.game.match.joyMove(dx, dy, m);
     };
+    let drag = -1;
     el.addEventListener('pointerdown', (e) => {
+      if (this.joyEdit) { drag = e.pointerId; try { el.setPointerCapture(drag); } catch (_) { /* ignore */ } e.preventDefault(); return; }
       if (pid !== -1 || !this.game || !this.game.match) return;
       const r = ring.getBoundingClientRect();
       cx = r.left + r.width / 2; cy = r.top + r.height / 2; R = r.width / 2;
       pid = e.pointerId; try { el.setPointerCapture(pid); } catch (_) { /* ignore */ }
       this.game.match.joyStart(); set(e); e.preventDefault();
     });
-    el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) set(e); });
+    el.addEventListener('pointermove', (e) => {
+      if (this.joyEdit && e.pointerId === drag) {
+        const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+        S.settings.joyX = cl(e.clientX / innerWidth, 0.1, 0.9); S.settings.joyY = cl(e.clientY / innerHeight, 0.2, 0.88); this.applyControls(); return;
+      }
+      if (e.pointerId === pid) set(e);
+    });
+    el.addEventListener('pointerup', (e) => { if (e.pointerId === drag) { drag = -1; commit(); } });
     el.addEventListener('pointerup', (e) => { if (e.pointerId !== pid) return; pid = -1; knob.style.transform = ''; if (this.game.match) this.game.match.pointerUp(); });
     el.addEventListener('pointercancel', (e) => { if (e.pointerId !== pid) return; pid = -1; knob.style.transform = ''; if (this.game.match) this.game.match.cancelAim(); });
   }
@@ -186,6 +199,9 @@ export class UI {
       case 'result-menu': audio.click(); return g.toMenu();
       case 'result-next': audio.click(); return g.play();
       case 'result-retry': audio.click(); return g.play();
+      case 'joy-move': this.joyEdit = true; this.el.joy.classList.add('edit'); this.closeSettings(); this.root.querySelector('#joy-bar').hidden = false; this.applyControls(); return;
+      case 'joy-done': this.joyEdit = false; this.el.joy.classList.remove('edit'); this.root.querySelector('#joy-bar').hidden = true; this.applyControls(); commit(); this.openSettings(); return;
+      case 'joy-reset': S.settings.joyX = S.settings.joyY = -1; this.applyControls(); commit(); return;
       case 'ctl-auto': case 'ctl-joy': case 'ctl-drag': S.settings.control = a.slice(4); commit(); this.applyControls(); audio.click(); return this.renderSettings();
       case 'hand-right': case 'hand-left': S.settings.hand = a.slice(5); commit(); this.applyControls(); audio.click(); return this.renderSettings();
       case 'set-sfx': S.settings.sfx = !S.settings.sfx; audio.applySettings(); audio.click(); commit(); return this.renderSettings();
@@ -505,7 +521,7 @@ export class UI {
         <div class="tg q"><span>Графіка</span><div class="seg">${qb('auto', 'АВТО')}${qb('high', 'ВИСОКА')}${qb('low', 'ЕКОНОМНА')}</div></div>
         <div class="tg q"><span>Керування ударом</span><div class="seg">${cb('auto', 'АВТО')}${cb('joy', 'ДЖОЙСТИК')}${cb('drag', 'ВІДТЯГУВАННЯ')}</div></div>
         <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
-        <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>
+        <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><button class="btn alt joy-mv" data-act="joy-move"><b>ПЕРЕМІСТИТИ</b></button><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>
         <button class="tg" data-act="fs"><span>На весь екран</span>${I.full}</button>
         <button class="tg danger" data-act="reset"><span></span><b>СКИНУТИ ПРОГРЕС</b></button>
       </div></div>`;
