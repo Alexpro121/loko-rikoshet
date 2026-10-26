@@ -43,6 +43,7 @@ export class Match {
       body: (b, vn, nx, nz, speed) => this.onBody(b, vn, nx, nz, speed),
     };
     this.phase = 'idle';
+    this.joy = { dx: 0, dy: 0, m: 0 }; this.joyMode = false; this.scr = { x: 0, y: 0 };
     this.anchor = { x: 0, y: 0 }; this.ptr = { x: 0, y: 0 }; this.anchorW = { x: 0, z: 0 }; this.curW = { x: 0, z: 0 };
     this.shot = { vx: 0, vz: 0, power: 0, valid: false, dirx: 1, dirz: 0 };
     this.time = 0; this.acc = 0; this.ts = 1;
@@ -124,12 +125,24 @@ export class Match {
   // ------------------------------------------------------------------ керування
   pointerDown(x, y) {
     if (this.phase !== 'play' || this.bs !== 'ready') return;
+    if (this.ui.useJoy()) return;                         // на телефоні цілимось джойстиком
+    this.joyMode = false;
     this.anchor.x = x; this.anchor.y = y; this.ptr.x = x; this.ptr.y = y;
     this.glideT = 0;
     this.bs = 'aim'; this.aiming = true; this.shot.valid = false; this.aimDirty = true;
     this.ui.hud.hint(null);
     audio.click();
   }
+  /** Джойстик: штовхаєш у бік удару, величина відхилення задає силу, відпускаєш — удар. */
+  joyStart() {
+    if (this.phase !== 'play' || this.bs !== 'ready') return;
+    this.joyMode = true; this.joy.m = 0; this.glideT = 0;
+    this.bs = 'aim'; this.aiming = true; this.shot.valid = false; this.aimDirty = true;
+    this.ui.hud.hint(null);
+    audio.click(); vibrate(8);
+  }
+  joyMove(dx, dy, m) { if (this.bs !== 'aim' || !this.joyMode) return; this.joy.dx = dx; this.joy.dy = dy; this.joy.m = m; this.aimDirty = true; }
+
   pointerMove(x, y) { if (this.bs === 'aim') { this.ptr.x = x; this.ptr.y = y; this.aimDirty = true; } }
   pointerUp() {
     if (this.bs !== 'aim') return;
@@ -149,15 +162,27 @@ export class Match {
 
   updateAim() {
     const sh = this.shot, b = this.ball, g = this.game;
-    g.screenToGround(this.anchor.x, this.anchor.y, this.anchorW);
-    g.screenToGround(this.ptr.x, this.ptr.y, this.curW);
-    const px = this.anchorW.x - this.curW.x, pz = this.anchorW.z - this.curW.z, wl = Math.hypot(px, pz);
-    const pxl = Math.hypot(this.anchor.x - this.ptr.x, this.anchor.y - this.ptr.y), hh = g.h;
-    const minPx = hh * PHYS.pullMinFrac, maxPx = hh * PHYS.pullMaxFrac;
-    sh.valid = pxl > minPx && wl > 0.01;
-    if (!sh.valid) { this.hideAim(); sh.power = 0; return; }
-    sh.dirx = px / wl; sh.dirz = pz / wl;
-    sh.power = clamp((pxl - minPx) / (maxPx - minPx), 0, 1);
+    let dirx = 0, dirz = 0, power = 0, valid = false;
+    if (this.joyMode) {
+      const j = this.joy;
+      g.worldToScreen(b.x, b.z, this.scr);
+      g.screenToGround(this.scr.x, this.scr.y, this.anchorW);
+      g.screenToGround(this.scr.x + j.dx * 140, this.scr.y + j.dy * 140, this.curW);
+      const px = this.curW.x - this.anchorW.x, pz = this.curW.z - this.anchorW.z, wl = Math.hypot(px, pz);
+      valid = j.m > 0.14 && wl > 0.01;
+      if (valid) { dirx = px / wl; dirz = pz / wl; power = clamp((j.m - 0.14) / 0.86, 0, 1); }
+    } else {
+      g.screenToGround(this.anchor.x, this.anchor.y, this.anchorW);
+      g.screenToGround(this.ptr.x, this.ptr.y, this.curW);
+      const px = this.anchorW.x - this.curW.x, pz = this.anchorW.z - this.curW.z, wl = Math.hypot(px, pz);
+      const pxl = Math.hypot(this.anchor.x - this.ptr.x, this.anchor.y - this.ptr.y), hh = g.h;
+      const minPx = hh * PHYS.pullMinFrac, maxPx = hh * PHYS.pullMaxFrac;
+      valid = pxl > minPx && wl > 0.01;
+      if (valid) { dirx = px / wl; dirz = pz / wl; power = clamp((pxl - minPx) / (maxPx - minPx), 0, 1); }
+    }
+    sh.valid = valid;
+    if (!valid) { this.hideAim(); sh.power = 0; return; }
+    sh.dirx = dirx; sh.dirz = dirz; sh.power = power;
     const speed = Math.min(PHYS.maxSpeed, PHYS.baseShot * powerMult() * (0.28 + 0.72 * sh.power) * this.shotMul(sh.power));
     sh.vx = sh.dirx * speed; sh.vz = sh.dirz * speed;
     const v = this.view;
@@ -297,7 +322,6 @@ export class Match {
     if (speed > 11) a.p.chest(); else a.p.control();
     a.p.dribble = !a.isGK;
     this.ui.hud.warn('КОНТРАТАКА!');
-    audio.whistle(false);
     a.p.setExpr('angry', 1);
     if (a.isGK) { a.p.setMode('catch', 0.9); audio.save(); }
     this.aiming = false; this.hideAim();
@@ -537,7 +561,7 @@ export class Match {
     if (this.phase === 'intro') {
       this.introT += rawDt;
       this.game.setIntroCam(this.introT < 2.2, clamp(this.introT / 2.2, 0, 1));
-      if (this.introT > 2.2) { this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true); this.ui.hud.hint(S.tutorial ? null : 'Час сповільнено: відтягни від м’яча й відпусти'); }
+      if (this.introT > 2.2) { this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true); this.ui.hud.hint(S.tutorial ? null : (this.ui.useJoy() ? 'Час сповільнено: тягни джойстик у бік удару й відпусти' : 'Час сповільнено: відтягни від м’яча й відпусти')); }
       this.tick(dt, rawDt);
       return;
     }

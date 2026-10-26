@@ -22,7 +22,7 @@ svg { display: block; }
 #app { position: fixed; inset: 0; width: calc(var(--vw) * 100); height: calc(var(--vh) * 100); overflow: hidden; }
 #gl { position: absolute; inset: 0; display: block; touch-action: none; }
 #ui { position: absolute; inset: 0; pointer-events: none; }
-#ui button, .sheet, .card-box, .res, .scroller, .splash-in { pointer-events: auto; }
+#ui button, .sheet, .card-box, .res, .scroller, .splash-in, .joy { pointer-events: auto; }
 .otl { text-shadow: var(--o) 0 0 var(--ink), calc(var(--o) * -1) 0 0 var(--ink), 0 var(--o) 0 var(--ink), 0 calc(var(--o) * -1) 0 var(--ink), var(--o) var(--o) 0 var(--ink), calc(var(--o) * -1) var(--o) 0 var(--ink), var(--o) calc(var(--o) * -1) 0 var(--ink), calc(var(--o) * -1) calc(var(--o) * -1) 0 var(--ink); }
 .ic { width: 100%; height: 100%; }
 
@@ -148,6 +148,19 @@ svg { display: block; }
 .tiers li svg { width: calc(var(--u) * 3); height: calc(var(--u) * 3); flex: none; }
 .tiers li span { flex: 1; } .tiers li em { font-style: normal; font-size: max(9px, calc(var(--u) * 2)); }
 .tiers li.ok { background: #14754c; color: #fff; } .tiers li.ok svg { color: var(--gold); }
+
+/* ---------- джойстик і мобільна зручність ---------- */
+.joy { position: absolute; right: calc(var(--pad-r) + var(--u) * 1.2); bottom: calc(var(--pad-b) + var(--u) * 1.2); width: calc(var(--u) * 32); height: calc(var(--u) * 32); display: grid; place-items: center; touch-action: none; z-index: 1; }
+.hand-left .joy { right: auto; left: calc(var(--pad-l) + var(--u) * 1.2); }
+.hand-left .pcard { left: auto; right: var(--pad-r); }
+.joy-ring { position: relative; width: calc(var(--u) * 25); height: calc(var(--u) * 25); border-radius: 50%; border: var(--edge) solid rgba(255, 255, 255, 0.8); background: rgba(17, 60, 47, 0.5); display: grid; place-items: center; }
+.joy-ring::after { content: ''; position: absolute; inset: 31%; border-radius: 50%; border: max(1.5px, calc(var(--u) * 0.25)) dashed rgba(255, 255, 255, 0.35); }
+.joy-knob { position: relative; z-index: 1; width: calc(var(--u) * 11); height: calc(var(--u) * 11); border-radius: 50%; background: #f1efe8; border: var(--edge) solid #fff; box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.3); transition: transform 0.06s linear; }
+@media (pointer: coarse) {
+  .sq { width: max(44px, calc(var(--u) * 9.6)); height: max(44px, calc(var(--u) * 9.6)); }
+  .sheet-h .sq { width: max(44px, calc(var(--u) * 7.2)); height: max(44px, calc(var(--u) * 7.2)); }
+  .btn { min-height: max(40px, calc(var(--u) * 6.4)); } .tabs button { min-height: 40px; } .seg button { min-height: 38px; } .tg { min-height: max(44px, calc(var(--u) * 8)); }
+}
 
 /* ---------- символіка клубу ---------- */
 .splash-crest { width: calc(var(--u) * 13); height: calc(var(--u) * 15); margin: 0 auto calc(var(--u) * 1.2); filter: drop-shadow(0 calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.35)); }

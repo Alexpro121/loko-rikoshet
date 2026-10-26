@@ -78,12 +78,17 @@ export class UI {
     <small class="club-line">Фан-гра за мотивами історії ФК Локомотив Київ · «${CLUB.slogan}»</small>
   </div>
 </section>
+<div class="joy" id="joy" hidden><div class="joy-ring"><i class="joy-knob"></i></div></div>
 <div class="toast" id="toast" hidden></div>
 <div class="flash" id="flash"></div>
 <div class="slowfx" id="slowfx"></div>`);
     const q = (id) => root.querySelector('#' + id);
-    this.el = { menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), kick: q('m-kick'), kickV: q('m-kick-v'), kickC: q('m-kick-c'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
+    this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), kick: q('m-kick'), kickV: q('m-kick-v'), kickC: q('m-kick-c'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
     root.addEventListener('click', (e) => { const t = e.target.closest('[data-act]'); if (t) this.act(t.dataset.act, t); });
+    this.hud.onShow = () => this.setMatchUi(true);
+    this.hud.onHide = () => this.setMatchUi(false);
+    this.initJoy();
+    this.applyControls();
     subscribe(() => this.refresh());
     addEventListener('keydown', (e) => this.key(e));
     setInterval(() => this.tickCash(), 1000);
@@ -111,11 +116,44 @@ export class UI {
     else if ((e.key === ' ' || e.key === 'Enter') && g.sm.name === 'MENU' && !this.panel && this.el.splash.hidden && this.el.settings.hidden) this.menuTap();
   }
 
+  // ---------------------------------------------------------------- керування
+  /** Джойстик: на телефоні за замовчуванням, інакше за налаштуванням. */
+  useJoy() {
+    const c = S.settings.control;
+    return c === 'joy' || (c === 'auto' && !!(this.game && this.game.coarse));
+  }
+  setMatchUi(on) { this.matchActive = on; this.applyControls(); }
+  applyControls() {
+    this.el.joy.hidden = !(this.matchActive && this.useJoy());
+    this.root.classList.toggle('hand-left', S.settings.hand === 'left');
+  }
+  initJoy() {
+    const el = this.el.joy, ring = el.querySelector('.joy-ring'), knob = el.querySelector('.joy-knob');
+    let pid = -1, cx = 0, cy = 0, R = 1;
+    const set = (e) => {
+      let dx = (e.clientX - cx) / R, dy = (e.clientY - cy) / R;
+      const l = Math.hypot(dx, dy) || 1, m = Math.min(1, l);
+      dx /= l; dy /= l;
+      knob.style.transform = `translate(${dx * m * R * 0.62}px, ${dy * m * R * 0.62}px)`;
+      if (this.game && this.game.match) this.game.match.joyMove(dx, dy, m);
+    };
+    el.addEventListener('pointerdown', (e) => {
+      if (pid !== -1 || !this.game || !this.game.match) return;
+      const r = ring.getBoundingClientRect();
+      cx = r.left + r.width / 2; cy = r.top + r.height / 2; R = r.width / 2;
+      pid = e.pointerId; try { el.setPointerCapture(pid); } catch (_) { /* ignore */ }
+      this.game.match.joyStart(); set(e); e.preventDefault();
+    });
+    el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) set(e); });
+    el.addEventListener('pointerup', (e) => { if (e.pointerId !== pid) return; pid = -1; knob.style.transform = ''; if (this.game.match) this.game.match.pointerUp(); });
+    el.addEventListener('pointercancel', (e) => { if (e.pointerId !== pid) return; pid = -1; knob.style.transform = ''; if (this.game.match) this.game.match.cancelAim(); });
+  }
+
   // ---------------------------------------------------------------- дії
   act(a, el) {
     const g = this.game;
     switch (a) {
-      case 'start': this.started = true; audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.music('menu'); this.showMenu(); audio.click(); g.ensureMatch(); return;
+      case 'start': this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.music('menu'); this.showMenu(); audio.click(); g.ensureMatch(); return;
       case 'play': return this.menuTap();
       case 'fs': audio.click(); return g.toggleFullscreen();
       case 'settings': audio.click(); return this.openSettings();
@@ -137,6 +175,8 @@ export class UI {
       case 'result-menu': audio.click(); return g.toMenu();
       case 'result-next': audio.click(); return g.play();
       case 'result-retry': audio.click(); return g.play();
+      case 'ctl-auto': case 'ctl-joy': case 'ctl-drag': S.settings.control = a.slice(4); commit(); this.applyControls(); audio.click(); return this.renderSettings();
+      case 'hand-right': case 'hand-left': S.settings.hand = a.slice(5); commit(); this.applyControls(); audio.click(); return this.renderSettings();
       case 'set-sfx': S.settings.sfx = !S.settings.sfx; audio.applySettings(); audio.click(); commit(); return this.renderSettings();
       case 'set-music': S.settings.music = !S.settings.music; audio.applySettings(); commit(); return this.renderSettings();
       case 'set-haptics': S.settings.haptics = !S.settings.haptics; commit(); if (S.settings.haptics && navigator.vibrate) navigator.vibrate(30); return this.renderSettings();
@@ -411,12 +451,16 @@ export class UI {
   closeSettings() { this.el.settings.hidden = true; }
   renderSettings() {
     const s = S.settings, row = (a, label, on) => `<button class="tg ${on ? 'on' : ''}" data-act="${a}"><span>${label}</span><i><u></u></i></button>`;
+    const cb = (k, t) => `<button class="${s.control === k ? 'on' : ''}" data-act="ctl-${k}">${t}</button>`;
+    const hb = (k, t) => `<button class="${s.hand === k ? 'on' : ''}" data-act="hand-${k}">${t}</button>`;
     const qb = (k, t) => `<button class="${s.quality === k ? 'on' : ''}" data-act="q-${k}">${t}</button>`;
     this.el.settings.innerHTML = `<div class="card-box wide">
       <header class="sheet-h"><h2>Налаштування</h2><button class="sq btn-red" data-act="close-settings" aria-label="Закрити">${I.close}</button></header>
       <div class="set-grid">
         ${row('set-sfx', 'Звуки', s.sfx)}${row('set-music', 'Музика', s.music)}${row('set-haptics', 'Вібрація', s.haptics)}
         <div class="tg q"><span>Графіка</span><div class="seg">${qb('auto', 'АВТО')}${qb('high', 'ВИСОКА')}${qb('low', 'ЕКОНОМНА')}</div></div>
+        <div class="tg q"><span>Керування ударом</span><div class="seg">${cb('auto', 'АВТО')}${cb('joy', 'ДЖОЙСТИК')}${cb('drag', 'ВІДТЯГУВАННЯ')}</div></div>
+        <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
         <button class="tg" data-act="fs"><span>На весь екран</span>${I.full}</button>
         <button class="tg danger" data-act="reset"><span></span><b>СКИНУТИ ПРОГРЕС</b></button>
       </div></div>`;

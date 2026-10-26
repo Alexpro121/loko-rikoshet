@@ -148,7 +148,7 @@ export class Game {
 
   onVisibility() {
     if (document.hidden) { audio.suspend(); if (this.match && this.match.isPlaying()) this.ui.pause(); }
-    else { audio.resume(); this.last = performance.now(); }
+    else { audio.resume(); this.last = performance.now(); if (this.ui.started) this.acquireWake(); }
   }
 
   // ---------------------------------------------------------------- камери
@@ -215,6 +215,23 @@ export class Game {
     const t = -cam.position.y / _d.y;
     out.x = cam.position.x + _d.x * t; out.z = cam.position.z + _d.z * t;
     return out;
+  }
+
+  /** Світова точка → піксель екрана (для прицілу джойстиком). */
+  worldToScreen(x, z, out) {
+    _v.set(x, 0.5, z).project(this.matchCam);
+    out.x = (_v.x * 0.5 + 0.5) * this.w; out.y = (-_v.y * 0.5 + 0.5) * this.h;
+    return out;
+  }
+
+  /** Не даємо телефону гасити екран під час гри. */
+  async acquireWake() {
+    try {
+      if ('wakeLock' in navigator && !this.wake) {
+        this.wake = await navigator.wakeLock.request('screen');
+        this.wake.addEventListener('release', () => { this.wake = null; });
+      }
+    } catch (_) { /* не підтримується */ }
   }
 
   floatWorld(x, y, z, text, kind) {

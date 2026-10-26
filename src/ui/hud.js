@@ -34,12 +34,13 @@ export class Hud {
 
   show(spec) {
     this.el.hidden = false;
+    if (this.onShow) this.onShow();
     this.t.title.textContent = spec.leagueName + ' · ' + spec.no + '/' + spec.of;
     this.t.oppName.textContent = spec.club.name;
     this.t.crestOpp.innerHTML = crest(spec.club.kit, spec.club.name.slice(0, 2));
     this.last = { time: '', me: -1, opp: -1, coins: -1 };
   }
-  hide() { this.el.hidden = true; this.clearGoal(); this.warn(null); this.hint(null); this.t.banner.hidden = true; }
+  hide() { if (this.onHide) this.onHide(); this.el.hidden = true; this.clearGoal(); this.warn(null); this.hint(null); this.t.banner.hidden = true; }
 
   setScore(me, opp) {
     if (me !== this.last.me) { this.t.me.textContent = me; this.last.me = me; this.bump(this.t.me); }
