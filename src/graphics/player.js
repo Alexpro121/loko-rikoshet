@@ -77,6 +77,64 @@ const foreGeo = (gk, skin) => cached('fo' + gk + skin, () => {
   return b.build();
 });
 
+/** Зачіски: кілька шарів і відтінків (темний «андеркат», світлі блики), виголені боки, чубчики, щетина на лисині. */
+const mixc = (a, c, t) => '#' + new THREE.Color(a).lerp(new THREE.Color(c), t).getHexString();
+function hairBlock(b, look, kit, hy, skin) {
+  const hc = look.hairCol, dk = mixc(hc, '#000000', 0.38), lt = mixc(hc, '#ffffff', 0.2), st = mixc(skin, hc, 0.5), fade = mixc(hc, skin, 0.55);
+  const top = (h = 0.22, y = 0.48) => b.box(0, hy + y, -0.03, 1.13, h, 1.1, hc);
+  const sides = (c, y = 0.22, h = 0.5) => { for (const sx of [-1, 1]) b.box(sx * 0.545, hy + y, -0.1, 0.1, h, 0.78, c); };
+  const back = (h = 0.78, y = 0.12, c = hc) => b.box(0, hy + y, -0.52, 1.13, h, 0.14, c);
+  const sideburn = () => { for (const sx of [-1, 1]) b.box(sx * 0.545, hy + 0.02, 0.28, 0.1, 0.26, 0.12, dk); };
+  switch (look.hair) {
+    case 'bald':
+      b.box(0, hy + 0.08, -0.52, 1.1, 0.42, 0.05, st); for (const sx of [-1, 1]) b.box(sx * 0.535, hy + 0.1, -0.05, 0.05, 0.4, 0.9, st);
+      break;
+    case 'buzz':
+      b.box(0, hy + 0.55, -0.02, 1.1, 0.1, 1.08, dk); b.box(0, hy + 0.5, -0.02, 1.08, 0.06, 1.06, fade);
+      sides(fade, 0.3, 0.32); back(0.5, 0.3, fade);
+      break;
+    case 'slick':
+      top(0.2, 0.5); b.box(0, hy + 0.66, -0.1, 0.9, 0.12, 0.62, hc); b.box(0.05, hy + 0.72, 0.18, 0.85, 0.12, 0.45, lt); b.box(0.0, hy + 0.62, 0.42, 0.9, 0.12, 0.16, lt);
+      b.box(-0.3, hy + 0.7, 0.1, 0.04, 0.06, 0.95, dk);                        // проділ
+      sides(fade, 0.26, 0.46); back(0.72, 0.1, dk);
+      break;
+    case 'curly': {
+      const pts = [[0, 0.7, 0, 0.5], [-0.34, 0.66, 0.1, 0.42], [0.34, 0.66, 0.1, 0.42], [-0.3, 0.64, -0.3, 0.4], [0.3, 0.64, -0.3, 0.4], [0, 0.66, -0.36, 0.44], [-0.36, 0.62, 0.38, 0.36], [0.36, 0.62, 0.38, 0.36], [0, 0.62, 0.42, 0.36],
+        [-0.5, 0.36, -0.1, 0.34], [0.5, 0.36, -0.1, 0.34], [-0.48, 0.18, -0.34, 0.34], [0.48, 0.18, -0.34, 0.34], [0, 0.22, -0.5, 0.4], [-0.26, 0.1, -0.52, 0.32], [0.26, 0.1, -0.52, 0.32]];
+      pts.forEach(([x, y, z, sz], i) => b.box(x, hy + y, z, sz, sz * 0.9, sz, i % 3 === 0 ? dk : i % 3 === 1 ? hc : lt));
+      sideburn();
+      break;
+    }
+    case 'pony':
+      top(0.22, 0.48); b.box(0, hy + 0.55, 0.0, 0.9, 0.06, 0.9, lt); sides(hc, 0.3, 0.4); back(0.8, 0.1);
+      b.box(0, hy + 0.18, -0.64, 0.36, 0.12, 0.2, kit.second);                       // резинка
+      b.box(0, hy - 0.05, -0.78, 0.3, 0.46, 0.28, hc); b.box(0, hy - 0.42, -0.8, 0.24, 0.34, 0.22, dk); b.box(0, hy - 0.66, -0.8, 0.16, 0.16, 0.16, dk);
+      b.box(-0.2, hy + 0.4, 0.54, 0.5, 0.14, 0.08, hc); b.box(0.28, hy + 0.42, 0.54, 0.4, 0.12, 0.08, dk);
+      break;
+    case 'long':
+      top(0.24, 0.48); b.box(0, hy + 0.58, 0, 0.9, 0.06, 0.9, lt);
+      b.box(0, hy - 0.05, -0.54, 1.18, 1.1, 0.18, hc); b.box(0, hy - 0.52, -0.56, 1.0, 0.36, 0.14, dk);
+      for (const sx of [-1, 1]) { b.box(sx * 0.57, hy - 0.05, -0.1, 0.12, 0.95, 0.7, hc); b.box(sx * 0.58, hy - 0.5, -0.12, 0.1, 0.3, 0.5, dk); }
+      b.box(-0.3, hy + 0.4, 0.54, 0.46, 0.2, 0.08, hc); b.box(0.3, hy + 0.4, 0.54, 0.46, 0.2, 0.08, hc); b.box(0, hy + 0.46, 0.55, 0.08, 0.1, 0.06, dk);   // проділ по центру
+      break;
+    case 'mohawk': {
+      const hts = [0.32, 0.42, 0.52, 0.42, 0.32];
+      hts.forEach((h, i) => b.box(0, hy + 0.52 + h * 0.5, -0.42 + i * 0.21, 0.24, h, 0.2, i % 2 ? hc : lt));
+      b.box(0, hy + 0.52, 0, 0.9, 0.06, 1.0, st); sides(st, 0.28, 0.36); back(0.4, 0.28, st);
+      break;
+    }
+    case 'band':
+      top(0.22, 0.48); sides(hc, 0.2, 0.5); back(0.7, 0.14); sideburn();
+      b.box(0, hy + 0.26, 0, 1.15, 0.14, 1.14, kit.second); b.box(0, hy + 0.26, -0.6, 0.3, 0.12, 0.14, kit.second);
+      b.box(-0.2, hy + 0.42, 0.54, 0.5, 0.12, 0.08, hc);
+      break;
+    default:                                           // 'crop': класична коротка з виголеними боками й нерівним чубчиком
+      top(0.22, 0.48); b.box(0.1, hy + 0.6, 0.0, 0.7, 0.05, 0.7, lt);
+      sides(hc, 0.3, 0.38); sides(fade, 0.0, 0.2); back(0.7, 0.18); b.box(0, hy - 0.16, -0.52, 1.08, 0.2, 0.12, fade); sideburn();
+      b.box(-0.24, hy + 0.4, 0.54, 0.62, 0.16, 0.08, hc); b.box(0.3, hy + 0.44, 0.54, 0.5, 0.12, 0.08, dk); b.box(0.04, hy + 0.34, 0.55, 0.2, 0.07, 0.06, dk);
+  }
+}
+
 /** Тулуб + голова в одному мешеві: обличчя й номер лежать в UV-атласі. */
 function bodyGeo(look) {
   const { kit, skin } = look, light = kit.ink === 'light';
@@ -93,15 +151,7 @@ function bodyGeo(look) {
   const headY = 1.25 + 0.55, hc = look.hairCol;
   const faceStart = b.n;
   b.box(0, headY, 0, 1.05, 1.05, 1.05, skin, 0, 0, 0, [null, null, null, null, faceCell('neutral', look.beard || 0), null]);
-  if (look.hair !== 'bald' && look.hair !== 'buzz') b.box(0, headY + 0.47, -0.04, 1.12, 0.24, 1.08, hc);
-  if (look.hair === 'crop' || look.hair === 'band') { b.box(0, headY + 0.2, -0.5, 1.12, 0.56, 0.16, hc); b.box(0, headY + 0.4, 0.5, 1.12, 0.1, 0.1, hc); }
-  if (look.hair === 'long') { b.box(0, headY - 0.05, -0.52, 1.14, 1.0, 0.2, hc); b.box(-0.56, headY, -0.1, 0.1, 0.8, 0.7, hc); b.box(0.56, headY, -0.1, 0.1, 0.8, 0.7, hc); }
-  if (look.hair === 'buzz') b.box(0, headY + 0.5, -0.02, 1.08, 0.12, 1.06, hc);
-  if (look.hair === 'slick') { b.box(0, headY + 0.5, 0, 1.12, 0.2, 1.1, hc); b.box(0.2, headY + 0.62, 0.08, 0.7, 0.16, 0.7, hc); b.box(0, headY + 0.1, -0.52, 1.1, 0.7, 0.14, hc); }
-  if (look.hair === 'curly') { for (const [cx, cz] of [[-0.35, -0.3], [0.35, -0.3], [-0.35, 0.28], [0.35, 0.28], [0, 0], [0, -0.4]]) b.box(cx, headY + 0.62, cz, 0.42, 0.28, 0.42, hc); b.box(0, headY + 0.1, -0.54, 1.14, 0.8, 0.16, hc); b.box(-0.56, headY + 0.1, -0.1, 0.1, 0.55, 0.6, hc); b.box(0.56, headY + 0.1, -0.1, 0.1, 0.55, 0.6, hc); }
-  if (look.hair === 'pony') { b.box(0, headY + 0.1, -0.54, 1.1, 0.8, 0.14, hc); b.box(0, headY - 0.2, -0.78, 0.3, 0.7, 0.3, hc); b.box(0, headY + 0.2, -0.64, 0.4, 0.2, 0.2, hc); }
-  if (look.hair === 'mohawk') b.box(0, headY + 0.72, -0.02, 0.26, 0.4, 0.9, hc);
-  if (look.hair === 'band') b.box(0, headY + 0.26, 0, 1.12, 0.14, 1.12, kit.second);
+  hairBlock(b, look, kit, headY, skin);
   b.box(-0.55, headY - 0.05, 0, 0.1, 0.22, 0.2, skin); b.box(0.55, headY - 0.05, 0, 0.1, 0.22, 0.2, skin);
   const g = b.build();
   g.userData.faceStart = faceStart + 16;

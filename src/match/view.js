@@ -37,6 +37,17 @@ export class MatchView {
     const gtex = new THREE.CanvasTexture(gc); this.glow = new THREE.Group();
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: gtex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); sp.scale.set(26, 26, 1); sp.position.set(sx * (PITCH.L + 9), 16.6, sz * (PITCH.W + 9)); this.glow.add(sp); }
     this.glow.visible = false; scene.add(this.glow);
+    // прожектори: 4 SpotLight з кутів, що освітлюють газон і створюють «басейни» світла; плюс прозорі конуси променів і зорі
+    this.spots = [];
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const sl = new THREE.SpotLight(0xfff1d6, 0, 0, 1.05, 1.0, 0); sl.position.set(sx * (PITCH.L + 9), 16.4, sz * (PITCH.W + 9));
+      sl.target.position.set(-sx * PITCH.L * 0.28, 0, -sz * PITCH.W * 0.25); scene.add(sl, sl.target); this.spots.push(sl);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(11, 36, 18, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff1d6, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      cone.position.copy(sl.position).lerp(sl.target.position, 0.5); cone.lookAt(sl.target.position); cone.rotateX(-Math.PI / 2); cone.scale.y = sl.position.distanceTo(sl.target.position) / 36; cone.visible = false; this.glow.add(cone);
+    }
+    const sg = new THREE.BufferGeometry(), sp = []; for (let i = 0; i < 260; i++) { const a = Math.random() * 6.283, r = 220 + Math.random() * 40, y = 40 + Math.random() * 150; sp.push(Math.cos(a) * r, y, Math.sin(a) * r); }
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+    this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, fog: false, transparent: true, opacity: 0.9 })); this.stars.visible = false; scene.add(this.stars);
 
     const mk = (kit, gk, i) => new Player({ kit, num: i + 1, skin: SKIN[i % 4], hair: HAIR[i % 5], hairCol: HCOL[i % 6], gk, scale: SCALE });
     this.mine = Array.from({ length: 11 }, (_, i) => mk(i === 0 ? KIT_GK_LOKO : KIT_LOKO, i === 0, i));
@@ -68,7 +79,7 @@ export class MatchView {
     const T = {
       day: { sky: '#bfd3da', hs: '#d3e4ff', hg: '#7b6d5c', h: 1.05, sun: '#fff0d6', si: 2.0, pos: [-24, 40, 22], glow: 0, exp: 1.1 },
       dusk: { sky: '#e9a07a', hs: '#ffc9a0', hg: '#6b4a5a', h: 0.9, sun: '#ffb070', si: 1.7, pos: [-52, 13, 12], glow: 0.55, exp: 1.0 },
-      night: { sky: '#0c1430', hs: '#6a7fc0', hg: '#2c3a54', h: 1.1, sun: '#eaf1ff', si: 1.9, pos: [-14, 48, 12], glow: 1, exp: 1.2 },
+      night: { sky: '#070b1c', hs: '#5568a8', hg: '#1a2336', h: 0.55, sun: '#b8c8ff', si: 0.28, pos: [-14, 48, 12], glow: 1, exp: 1.15 },
     };
     const t = T[time] || T.day, g = new THREE.Color();
     let sky = new THREE.Color(t.sky), si = t.si, h = t.h, near = 150, far = 340, tint = null;
@@ -80,7 +91,12 @@ export class MatchView {
     this.scene.background = sky; this.scene.fog = new THREE.Fog(sky.getHex(), near, far);
     this.hemi.color.set(t.hs); this.hemi.groundColor.set(t.hg); this.hemi.intensity = h;
     this.sun.color.set(t.sun); this.sun.intensity = si; this.sun.position.set(...t.pos);
-    this.glow.visible = t.glow > 0; for (const sp of this.glow.children) sp.material.opacity = t.glow * (weather === 'fog' ? 0.6 : 1);
+    this.glow.visible = t.glow > 0;
+    const wf = weather === 'fog' ? 0.6 : weather === 'rain' ? 0.8 : 1;
+    for (const sp of this.glow.children) { if (sp.isSprite) sp.material.opacity = t.glow * wf; else { sp.visible = time === 'night'; sp.material.opacity = 0.055 * wf * (weather === 'fog' || weather === 'rain' ? 1.8 : 1); } }
+    const spotI = time === 'night' ? 0.8 : time === 'dusk' ? 0.3 : 0;
+    for (const sl of this.spots) sl.intensity = spotI;
+    this.stars.visible = time === 'night' && (weather === 'clear' || weather === 'snow');
     this.weather.set(weather === 'rain' || weather === 'snow' ? weather : 'clear');
     this.exposure = t.exp;
     // газон світліє під снігом, а в дощ трохи темніє
