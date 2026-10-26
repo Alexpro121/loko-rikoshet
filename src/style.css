@@ -562,3 +562,20 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 @keyframes print { 0% { opacity: 1; clip-path: inset(0 100% 0 0); } 100% { opacity: 1; clip-path: inset(0 0 0 0); } }
 .in-skip { right: calc(var(--pad-r) + var(--u) * 1); top: calc(var(--pad-t) + var(--u) * 1); padding: calc(var(--u) * 1) calc(var(--u) * 2); border-radius: 99px; border: var(--edge) solid rgba(255, 255, 255, 0.5); background: rgba(0, 0, 0, 0.35); color: #fff; font-weight: 800; font-size: var(--fs-s); letter-spacing: 0.1em; z-index: 4; }
 @media (prefers-reduced-motion: reduce) { .in-sleepers, .in-wheelset, .in-wh, .puff, .in-stars i { animation: none !important; } }
+
+/* потяг УЗ: заїжджає, зупиняється біля платформи, дає зелений і відправляється */
+.in-station { left: 0; right: 0; bottom: 24%; width: 100%; height: 34%; opacity: 0; animation: fadein 1s 0.1s forwards; }
+.in-run { --W: calc(var(--u) * 150); width: var(--W); bottom: calc(26% - var(--u) * 1.2); transform: translateX(-105%); }
+.go .in-run { animation: arrive 5.4s 0.3s linear forwards; }
+@keyframes arrive { 0% { transform: translateX(-105%); animation-timing-function: cubic-bezier(0.1, 0.6, 0.3, 1); } 40% { transform: translateX(calc((100vw - var(--W)) / 2)); } 66% { transform: translateX(calc((100vw - var(--W)) / 2)); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.6); } 100% { transform: translateX(105vw); } }
+.go .in-sleepers { animation: sleep 0.4s 0.3s linear 5, sleep 0.35s 3.9s linear 5; }
+.in-head { animation: headlight 1.6s ease-in-out infinite; } @keyframes headlight { 50% { opacity: 0.6; } }
+.go .in-sem { animation: semin 0.4s 1.4s forwards, semout 0.4s 5s forwards; }
+.in-lamp .r { animation: lampR 1.8s 1.5s forwards; } .in-lamp .g { animation: lampG 2s 3.3s forwards; }
+.in-say .s1 { animation: say 1.8s 1.5s forwards; } .in-say .s2 { animation: say 1.4s 3.3s forwards; }
+.in-sem { z-index: 1; }
+.in-run { --W: calc(var(--u) * 108); }
+.in-sem { right: calc(var(--u) * 6); }
+.in-say { position: absolute; bottom: calc(100% + var(--u) * 1); margin: 0; left: 50%; transform: translateX(-50%); }
+.in-sem { z-index: 2; }
+.in-run { --W: calc(var(--u) * 122); }
