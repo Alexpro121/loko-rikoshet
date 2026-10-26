@@ -135,7 +135,7 @@ export function buildPitch() {
   // --- ворота: білі стійки й перекладина, окремо сітка
   const gb = new VoxelBuilder(0.1);
   for (const sd of [-1, 1]) {
-    const x0 = sd * L, x1 = sd * (L + GOAL_D), th = 0.3, H = 2.4, H2 = 1.8;
+    const x0 = sd * L, x1 = sd * (L + GOAL_D), th = 0.3, H = PITCH.GOAL_H, H2 = PITCH.GOAL_H * 0.75;
     for (const zz of [-G, G]) {
       gb.box(x0, H / 2, zz, th, H, th, '#eceeea'); gb.box(x1, H2 / 2, zz, th, H2, th, '#d9dcd8');
       gb.box((x0 + x1) / 2, (H + H2) / 2, zz, Math.hypot(GOAL_D, H - H2) + th, th, th, '#e4e6e2', 0, 0, sd * Math.atan2(H2 - H, GOAL_D));
@@ -148,9 +148,9 @@ export function buildPitch() {
   const nets = [];
   for (const sd of [-1, 1]) {
     const ng = new THREE.Group();
-    const back = new THREE.Mesh(netPlane(2 * G, 1.8), netMat); back.position.set(sd * (L + GOAL_D), 0.9, 0); back.rotation.y = Math.PI / 2;
-    const roof = new THREE.Mesh(netPlane(GOAL_D, 2 * G), netMat); roof.position.set(sd * (L + GOAL_D / 2), 2.1, 0); roof.rotation.x = -Math.PI / 2;
-    const sideA = new THREE.Mesh(netPlane(GOAL_D, 2.1), netMat); sideA.position.set(sd * (L + GOAL_D / 2), 1.05, G);
+    const back = new THREE.Mesh(netPlane(2 * G, PITCH.GOAL_H * 0.75), netMat); back.position.set(sd * (L + GOAL_D), PITCH.GOAL_H * 0.375, 0); back.rotation.y = Math.PI / 2;
+    const roof = new THREE.Mesh(netPlane(GOAL_D, 2 * G), netMat); roof.position.set(sd * (L + GOAL_D / 2), PITCH.GOAL_H * 0.875, 0); roof.rotation.x = -Math.PI / 2;
+    const sideA = new THREE.Mesh(netPlane(GOAL_D, PITCH.GOAL_H * 0.875), netMat); sideA.position.set(sd * (L + GOAL_D / 2), PITCH.GOAL_H * 0.4375, G);
     const sideB = sideA.clone(); sideB.position.z = -G;
     ng.add(back, roof, sideA, sideB);
     group.add(ng); nets.push(ng);

@@ -4,7 +4,7 @@ import { audio } from '../core/audio.js';
 import { ovr } from '../state/squad.js';
 
 const { L, G, R } = PITCH;
-const H = 2.4, SPOT = 12, RUN = 3.6;            // висота воріт, відстань крапки до лінії, розбіг
+const H = PITCH.GOAL_H, SPOT = 12, RUN = 3.6;            // висота воріт, відстань крапки до лінії, розбіг
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.9;
 const _v = new THREE.Vector3(), _d = new THREE.Vector3();
@@ -18,7 +18,7 @@ export class Penalties {
 
   start() {
     const m = this.m, ui = m.ui;
-    m.phase = 'pens'; m.cancelAim(); m.hideAim && m.hideAim();
+    m.phase = 'pens'; m.ts = 1; m.slow = false; m.slowT = 0; if (ui.setSlow) ui.setSlow(false); m.cancelAim(); m.hideAim && m.hideAim();
     ui.setMatchUi(false); ui.hud.warn(null); ui.hud.hint(null); ui.hud.setCard(null);
     this.k = 0; this.res = { me: [], opp: [] }; this.state = 'intro'; this.t = 0; this.mark = null; this.by = 0; this.over = false;
     const order = (arr) => arr.slice(1).map((a, i) => ({ a, i })).sort((x, y) => ovr(y.a.info) - ovr(x.a.info)).map((o) => o.a);
@@ -55,7 +55,7 @@ export class Penalties {
   camOverride() {
     if (this.over) return null;
     const dir = this.dir || 1, gx = dir * L;
-    return { p: _v.set(gx - dir * (SPOT + 16), 7.6, 0).clone(), l: _d.set(gx, 1.0, 0).clone(), fov: 40 };
+    return { p: _v.set(gx - dir * (SPOT + 16), 7.6, 0).clone(), l: _d.set(gx, 1.5, 0).clone(), fov: 40 };
   }
 
   /** Екран → точка в площині воріт (z, y). */
@@ -65,7 +65,7 @@ export class Penalties {
     _v.set(((px - r.left) / r.width) * 2 - 1, -((py - r.top) / r.height) * 2 + 1, 0.5).unproject(cam).sub(cam.position).normalize();
     const t = (gx - cam.position.x) / _v.x;
     if (!(t > 0)) return;
-    this.mark = { z: clamp(cam.position.z + _v.z * t, -G - 3, G + 3), y: clamp(cam.position.y + _v.y * t, 0.1, H + 1.2) };
+    this.mark = { z: clamp(cam.position.z + _v.z * t, -G - 3, G + 3), y: clamp(cam.position.y + _v.y * t, 0.1, H + 1.6) };
     this.go.disabled = false; this.placeMark(); audio.click();
   }
   placeMark() {
@@ -107,7 +107,7 @@ export class Penalties {
     // куди б'є: мій кружечок або вибір суперника
     let aim;
     if (aimMe) aim = { z: this.mark.z, y: this.mark.y };
-    else { const side = Math.random() < 0.5 ? -1 : 1, hi = Math.random() < 0.45; aim = { z: Math.random() < 0.18 ? 0 : side * G * (0.5 + 0.4 * Math.random()), y: hi ? 1.7 + 0.5 * Math.random() : 0.4 + 0.4 * Math.random() }; }
+    else { const side = Math.random() < 0.5 ? -1 : 1, hi = Math.random() < 0.45; aim = { z: Math.random() < 0.18 ? 0 : side * G * (0.5 + 0.4 * Math.random()), y: hi ? H * 0.62 + H * 0.22 * Math.random() : 0.4 + 0.6 * Math.random() }; }
     const sig = 2.0 - 1.5 * sh;
     const act = { z: aim.z + gauss() * sig, y: Math.max(0.12, aim.y + gauss() * sig * 0.5) };
     // куди стрибає воротар
@@ -116,7 +116,7 @@ export class Penalties {
     else {
       const read = Math.random() < 0.28 + 0.3 * gk.sk.iq;                       // «прочитав» удар
       if (read) dive = { z: aim.z + gauss() * 1.6, y: aim.y + gauss() * 0.5 };
-      else { const side = Math.random() < 0.5 ? -1 : 1; dive = { z: Math.random() < 0.2 ? 0 : side * G * 0.6, y: Math.random() < 0.5 ? 0.7 : 1.7 }; }
+      else { const side = Math.random() < 0.5 ? -1 : 1; dive = { z: Math.random() < 0.2 ? 0 : side * G * 0.6, y: Math.random() < 0.5 ? 0.8 : H * 0.65 }; }
     }
     this.act = act; this.dive = { z: clamp(dive.z, -G, G), y: clamp(dive.y, 0.3, H) };
     let out;
@@ -125,7 +125,7 @@ export class Penalties {
     else out = 'goal';
     if (out === 'goal') {
       const reach = 0.5 * gk.sk.reach + 0.5 * gk.sk.react, rr = 1.5 + 1.6 * reach;
-      const d = Math.hypot(act.z - this.dive.z, (act.y - this.dive.y) * 1.1);
+      const d = Math.hypot(act.z - this.dive.z, (act.y - this.dive.y) * 0.9);
       if (d < rr && Math.random() < 0.92) out = 'save';
       else if (d < rr + 0.9 && Math.random() < 0.25) out = 'save';
     }
@@ -177,11 +177,14 @@ export class Penalties {
       } else if (!this.kicked) {
         this.kicked = true; kp.p.vx = kp.p.vz = 0; kp.p.x = sx - this.dir * 0.3; kp.p.kick(1);
         audio.kick(1); v.ball.squash(this.dir, 0, 0.25);
-        const hi = this.dive.y > 1.1;
+        const hi = this.dive.y > H * 0.42;
         gk.p.gkDive(Math.sign(this.dive.z || 1) * (this.dir > 0 ? 1 : -1) * 1, hi ? 0 : 1);
+        this.gkT = 0; this.gkZ0 = gk.p.z; this.gkTz = clamp(this.dive.z * 0.92, -G + 0.6, G - 0.6);
         this.fly = { t: 0, from: { x: sx, z: 0 } };
       }
       if (this.kicked) {
+        this.gkT += dt; const gq = clamp(this.gkT / 0.42, 0, 1), ge = 1 - Math.pow(1 - gq, 3);
+        gk.p.z = this.gkZ0 + (this.gkTz - this.gkZ0) * ge;
         const f = this.fly; f.t += dt;
         const D = 0.62, q = clamp(f.t / D, 0, 1), a = this.act;
         let tx = this.gx, tz = a.z, ty = Math.max(a.y, 0.1);
