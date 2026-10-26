@@ -147,11 +147,8 @@ export function playIntro(root, done) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     const t = (now - t0) / 1000, vw = innerWidth, Wpx = run.getBoundingClientRect().width || 1;
-    const x0 = -0.12 * vw - Wpx, x1 = 0.9 * vw - Wpx, x2 = x1 + 0.8 * vw;
-    let x;
-    if (t < 2.8) { const q = t / 2.8; x = x0 + (x1 - x0) * (1 - Math.pow(1 - q, 3)); }
-    else if (t < 4.0) x = x1;
-    else { const q = Math.min(1, (t - 4.0) / 3.6); x = x1 + (x2 - x1) * Math.pow(q, 2.3); }
+    const T = 8.2, x0 = -0.08 * vw - Wpx, x2 = 1.03 * vw;
+    const q = Math.min(1, t / T), x = x0 + (x2 - x0) * (0.5 - 0.5 * Math.cos(Math.PI * q));   // плавний розгін і гальмування, поїзд проходить увесь
     run.style.transform = `translateX(${x.toFixed(2)}px)`;
     if (xPrev === null || dt <= 0) { xPrev = x; return; }
     const v = (x - xPrev) / dt, upx = Wpx / VB, a = (v - vPrev) / dt / upx;
@@ -177,11 +174,10 @@ export function playIntro(root, done) {
   at(150, () => audio.horn());
   at(400, () => audio.rumble());
   at(2500, () => audio.thud());
-  at(3900, () => audio.horn());
-  at(4000, () => audio.rumble());
+  at(3300, () => audio.horn());
   at(3300, () => audio.click());
   at(4200, () => { audio.click(); audio.bell(); });
   at(5200, () => { audio.horn(); audio.thud(); });
-  at(7600, end);
+  at(10200, end);
   el.classList.add('go');
 }

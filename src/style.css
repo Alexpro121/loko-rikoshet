@@ -654,3 +654,5 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .in-run { --W: calc(var(--u) * 1113); }
 .in-wh { animation-duration: var(--ws, 0.5s); animation-play-state: var(--wp, running); }
 .in-rod, #not_found_bracefront, #not_found_braceback, #not_found_car-layers { animation-play-state: var(--wp, running); }
+.in-run { --W: calc(var(--u) * 640); }
+.in-run { --W: calc(var(--u) * 1113); }
