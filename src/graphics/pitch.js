@@ -95,7 +95,7 @@ export function buildPitch() {
 
   // --- борти: корпус + шапка; рекламні панелі нижче окремим мешем
   const wallPlanes = [];
-  const bt = boardTexture(), texW = bt.width * 0.0099;
+  const bt = boardTexture(), texW = bt.width * 0.0049;
   let cum = 0;
   for (let i = 0; i < 8; i++) {
     const [x1, z1] = OUTLINE[i], [x2, z2] = OUTLINE[(i + 1) % 8];
@@ -118,18 +118,18 @@ export function buildPitch() {
       // рекламна панель: на внутрішній (side=1) і на зовнішній стороні
       const u0 = cum / texW, u1 = (cum + len) / texW;
       for (const side of [1, -1]) {
-        const g2 = new THREE.PlaneGeometry(len, 0.92), uv2 = g2.attributes.uv;
+        const g2 = new THREE.PlaneGeometry(len, 1.02), uv2 = g2.attributes.uv;
         uv2.setXY(0, u0, 1); uv2.setXY(1, u1, 1); uv2.setXY(2, u0, 0); uv2.setXY(3, u1, 0);
         g2.rotateY(Math.atan2(-nx * side, -nz * side));
         const off = side > 0 ? -0.02 : WALL + 0.02;
-        g2.translate(mx + nx * off, 0.62, mz + nz * off);
+        g2.translate(mx + nx * off, 0.6, mz + nz * off);
         wallPlanes.push(g2);
       }
       cum += len;
     }
   }
   group.add(b.mesh());
-  const boards = new THREE.Mesh(mergeGeometries(wallPlanes), new THREE.MeshLambertMaterial({ map: bt.texture }));
+  const boards = new THREE.Mesh(mergeGeometries(wallPlanes), new THREE.MeshBasicMaterial({ map: bt.texture, color: 0xf2f2f2 }));       // LED-борти світяться самі
   boards.matrixAutoUpdate = false;
   group.add(boards);
 
@@ -156,5 +156,5 @@ export function buildPitch() {
     ng.add(back, roof, sideA, sideB);
     group.add(ng); nets.push(ng);
   }
-  return { group, nets, grassMat: group.userData.grassMat };
+  return { group, nets, grassMat: group.userData.grassMat, boards: bt };
 }

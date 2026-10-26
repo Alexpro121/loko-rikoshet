@@ -127,24 +127,47 @@ export function grassTexture(L, W, G) {
 
 // ---------------------------------------------------------------- рекламні борти
 export function boardTexture() {
-  const w = 2048, h = 96, c = canvas(w, h), g = c.getContext('2d');
-  const blocks = [
-    ['ЛОКО', '#8f1220', '#f1efe8'], ['ЗАЛІЗНИЧНИКИ', '#0e5a38', '#f1efe8'], ['КИЇВ · 1919', '#1c2328', '#e8b923'], ['СТОП', '#a3182a', '#f1efe8'],
-    ['ВПЕРЕД', '#157a46', '#f1efe8'], ['СТАДІОН ЛОКОМОТИВ · 1925', '#e8e4d8', '#1c2328'], ['ЛОКО РУХАЄТЬСЯ ВПЕРЕД', '#1c2328', '#f1efe8'],
+  const w = 4096, h = 160, c = canvas(w, h), g = c.getContext('2d');
+  const FONT = (px) => `800 ${px}px Rubik, "Arial Black", sans-serif`;
+  let opp = { name: 'ГОСТІ', kit: { main: '#254e9c', second: '#e4e8ec' } };
+  const icon = {
+    ball: (x, y, r) => { g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill(); g.fillStyle = '#1c1c1e'; g.beginPath(); for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + k * 1.2566; g.lineTo(x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.5); } g.closePath(); g.fill(); },
+    semaphore: (x, y, r) => { g.fillStyle = '#0b0f12'; g.fillRect(x - r * 0.9, y - r * 1.5, r * 1.8, r * 3); g.fillStyle = '#ff3b4a'; g.beginPath(); g.arc(x, y - r * 0.7, r * 0.5, 0, 6.283); g.fill(); g.fillStyle = '#3fe08f'; g.beginPath(); g.arc(x, y + r * 0.7, r * 0.5, 0, 6.283); g.fill(); },
+    rail: (x, y, r, col) => { g.strokeStyle = col; g.lineWidth = 4; g.beginPath(); g.moveTo(x - r * 1.6, y - r * 0.6); g.lineTo(x + r * 1.6, y - r * 0.6); g.moveTo(x - r * 1.6, y + r * 0.6); g.lineTo(x + r * 1.6, y + r * 0.6); g.stroke(); g.lineWidth = 6; for (let k = -3; k <= 3; k++) { g.beginPath(); g.moveTo(x + k * r * 0.5, y - r * 0.95); g.lineTo(x + k * r * 0.5 - 6, y + r * 0.95); g.stroke(); } },
+    chev: (x, y, r, col) => { g.fillStyle = col; for (let k = 0; k < 3; k++) { g.beginPath(); g.moveTo(x + k * r * 0.7, y - r); g.lineTo(x + k * r * 0.7 + r * 0.6, y); g.lineTo(x + k * r * 0.7, y + r); g.lineTo(x + k * r * 0.7 - r * 0.25, y + r); g.lineTo(x + k * r * 0.7 + r * 0.35, y); g.lineTo(x + k * r * 0.7 - r * 0.25, y - r); g.closePath(); g.fill(); } },
+  };
+  /** Кожен блок: [ширина, малюнок]. Усе малюється на LED-панелі: градієнти, смуги, значки. */
+  const blocks = () => [
+    [700, (x, bw) => { const gr = g.createLinearGradient(x, 0, x + bw, 0); gr.addColorStop(0, '#d4202c'); gr.addColorStop(1, '#8f1220'); g.fillStyle = gr; g.fillRect(x, 0, bw, h); g.fillStyle = '#1f8f3f'; g.beginPath(); g.moveTo(x + bw * 0.62, 0); g.lineTo(x + bw * 0.78, 0); g.lineTo(x + bw * 0.62, h); g.lineTo(x + bw * 0.46, h); g.fill(); g.save(); g.transform(1, 0, -0.2, 1, 0, 0); g.fillStyle = '#fff'; g.font = FONT(88); g.textBaseline = 'middle'; g.fillText('LOKO RUSH', x + 70, h / 2 + 18); g.restore(); }],
+    [620, (x, bw) => { g.fillStyle = '#0e5a38'; g.fillRect(x, 0, bw, h); g.fillStyle = '#157a46'; g.fillRect(x, h * 0.62, bw, h * 0.38); icon.rail(x + 150, h * 0.5, 38, '#f1efe8'); g.fillStyle = '#f1efe8'; g.font = FONT(58); g.textBaseline = 'middle'; g.fillText('УЗ ЕКСПРЕС', x + 250, h * 0.4); g.font = FONT(26); g.fillStyle = '#bfe9d2'; g.fillText('ЛОКО ЇДЕ ВПЕРЕД', x + 252, h * 0.76); }],
+    [560, (x, bw) => { g.fillStyle = '#1c2328'; g.fillRect(x, 0, bw, h); g.fillStyle = '#e8b923'; g.fillRect(x, h - 14, bw, 14); icon.ball(x + 90, h * 0.46, 42); g.fillStyle = '#e8b923'; g.font = FONT(64); g.textBaseline = 'middle'; g.fillText('КИЇВ · 1919', x + 160, h * 0.46); }],
+    [520, (x, bw) => { g.fillStyle = '#f1efe8'; g.fillRect(x, 0, bw, h); icon.semaphore(x + 80, h * 0.5, 34); g.fillStyle = '#c8202b'; g.font = FONT(78); g.textBaseline = 'middle'; g.fillText('СТОП', x + 150, h * 0.5 + 4); g.fillStyle = '#157a46'; g.fillText('›', x + bw - 70, h * 0.5 + 2); }],
+    [640, (x, bw) => { const gr = g.createLinearGradient(x, 0, x, h); gr.addColorStop(0, opp.kit.main); gr.addColorStop(1, opp.kit.main); g.fillStyle = gr; g.fillRect(x, 0, bw, h); g.fillStyle = opp.kit.second; g.fillRect(x, 0, 18, h); g.fillRect(x + bw - 18, 0, 18, h); g.font = FONT(26); g.textBaseline = 'middle'; g.fillText('ГОСТІ', x + 50, h * 0.2); let fs = 78; g.font = FONT(fs); while (g.measureText(opp.name).width > bw - 120 && fs > 24) { fs -= 4; g.font = FONT(fs); } g.fillStyle = opp.kit.second; g.fillText(opp.name, x + 60, h * 0.58); }],
+    [680, (x, bw) => { g.fillStyle = '#e8e4d8'; g.fillRect(x, 0, bw, h); g.fillStyle = '#c8202b'; g.fillRect(x, 0, bw, 12); g.fillStyle = '#157a46'; g.fillRect(x, h - 12, bw, 12); g.fillStyle = '#1c2328'; g.font = FONT(54); g.textBaseline = 'middle'; g.fillText('СТАДІОН ЛОКОМОТИВ', x + 40, h * 0.42); g.font = FONT(34); g.fillText('З 1925 РОКУ · ЗАЛІЗНИЧНИКИ', x + 42, h * 0.74); }],
+    [480, (x, bw) => { g.fillStyle = '#0b1114'; g.fillRect(x, 0, bw, h); icon.chev(x + 70, h * 0.5, 44, '#e02a38'); g.fillStyle = '#f1efe8'; g.font = FONT(64); g.textBaseline = 'middle'; g.fillText('ВПЕРЕД!', x + 240, h * 0.52); }],
+    [520, (x, bw) => { g.fillStyle = '#157a46'; g.fillRect(x, 0, bw, h); icon.ball(x + 90, h * 0.5, 44); g.fillStyle = '#fff'; g.font = FONT(56); g.textBaseline = 'middle'; g.fillText('FAIR PLAY', x + 160, h * 0.5 + 2); }],
   ];
-  g.textBaseline = 'middle';
-  let x = 0, i = 0;
-  while (x < w) {
-    const [t, bg, fg] = blocks[i % blocks.length];
-    g.font = '800 46px Rubik, "Arial Black", sans-serif';
-    const bw = g.measureText(t).width + 90;
-    g.fillStyle = bg; g.fillRect(x, 0, bw, h);
-    g.fillStyle = fg; g.fillText(t, x + 45, h / 2 + 3);
-    g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x + bw - 3, 0, 3, h);
-    x += bw; i++;
-  }
   const t = tex(c, { repeat: true, aniso: 8 });
-  return { texture: t, width: x };
+  let total = 0;
+  const redraw = () => {
+    g.clearRect(0, 0, w, h);
+    let x = 0, i = 0; const list = blocks();
+    while (x < w - 1) {
+      const [bw0, draw] = list[i % list.length];
+      const bw = Math.min(bw0, w - x);
+      draw(x, bw0);
+      g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(x + bw - 4, 0, 4, h);
+      x += bw; i++;
+    }
+    total = x;
+    // LED-ефект: світлий верх, темніший низ і ледь помітна сітка пікселів
+    const sh = g.createLinearGradient(0, 0, 0, h); sh.addColorStop(0, 'rgba(255,255,255,0.14)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.28)');
+    g.fillStyle = sh; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(0,0,0,0.12)'; for (let yy = 0; yy < h; yy += 5) g.fillRect(0, yy, w, 1.2);
+    t.needsUpdate = true;
+  };
+  redraw();
+  return { texture: t, get width() { return w; }, redraw: (club) => { if (club) opp = { name: String(club.name).toUpperCase(), kit: { main: club.kit.main, second: club.kit.second } }; redraw(); } };
 }
 
 // ---------------------------------------------------------------- сітка воріт, тінь

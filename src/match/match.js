@@ -1018,7 +1018,7 @@ export class Match {
     for (let i = 0; i < v.players.length; i++) v.players[i].animate(dt);
     const h = v.ball.update(dt, b.x, b.z, b.vx, b.vz);
     v.updateShadows(b.x, b.z, h);
-    v.stands.update(dt, this.time); v.weather.update(dt);
+    v.stands.update(dt, this.time); v.weather.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
     v.particles.update(dt);
     if (this.bs === 'ready') {
       const pr = this.danger;
