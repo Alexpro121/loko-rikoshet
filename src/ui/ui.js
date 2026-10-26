@@ -79,6 +79,7 @@ export class UI {
   <div class="splash-in">
     <div class="brand"><div class="splash-crest">${lokoCrest()}</div><h1><span>ЛОКОМОТИВ</span><span class="r">РИКОШЕТ</span></h1><p>Залізничники з 1919 року: від Другої ліги до Ліги чемпіонів</p></div>
     <button class="big go" data-act="start">${I.play}<b>ГРАТИ</b></button>
+    <div class="ios-hint" id="ios-hint" hidden><b>Для повного екрана на iPhone</b><ol><li>Натисни <i class="shr">⬆︎</i> «Поділитись» у Safari</li><li>Обери «На початковий екран»</li><li>Відкрий гру з нової іконки</li></ol><button class="btn alt" data-act="ios-ok"><b>ЗРОЗУМІЛО</b></button></div>
     <small>Для найкращого вигляду грай на весь екран, телефон тримай горизонтально</small>
     <small class="club-line">Фан-гра за мотивами історії ФК Локомотив Київ · «${CLUB.slogan}»</small>
   </div>
@@ -107,6 +108,7 @@ export class UI {
     this.hud.onHide = () => this.setMatchUi(false);
     this.initJoy();
     this.applyControls();
+    this.iosHint();
     subscribe(() => this.refresh());
     addEventListener('keydown', (e) => this.key(e));
     setInterval(() => this.tickCash(), 1000);
@@ -132,6 +134,15 @@ export class UI {
       else if (this.panel) this.closePanel();
     } else if (e.key === 'f' || e.key === 'F') g.toggleFullscreen();
     else if ((e.key === ' ' || e.key === 'Enter') && g.sm.name === 'MENU' && !this.panel && this.el.splash.hidden && this.el.settings.hidden) this.menuTap();
+  }
+
+  /** iPhone не вміє fullscreen API: пропонуємо встановити гру на початковий екран (тоді вона відкривається без рядка Safari). */
+  isIOS() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+  isStandalone() { return !!navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches); }
+  iosHint(force) {
+    const el = this.el.splash && this.el.splash.querySelector('#ios-hint'); if (!el) return;
+    let seen = false; try { seen = localStorage.getItem('loko-ios-hint') === '1'; } catch (_) { /* ignore */ }
+    el.hidden = !(this.isIOS() && !this.isStandalone() && (force || !seen));
   }
 
   // ---------------------------------------------------------------- керування
@@ -189,7 +200,8 @@ export class UI {
       case 'start': this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.click(); g.ensureMatch(); playIntro(this.root, () => { audio.music('menu'); this.showMenu(); }); return;
       case 'play': return this.menuTap();
       case 'pens': { const mm = g.match; if (!mm) return; audio.click(); this.el.pause.hidden = true; if (mm.phase === 'paused') mm.resume(); mm.startPens(); return; }
-      case 'fs': audio.click(); return g.toggleFullscreen();
+      case 'ios-ok': try { localStorage.setItem('loko-ios-hint', '1'); } catch (_) { /* ignore */ } this.iosHint(); return;
+      case 'fs': audio.click(); if (this.isIOS() && !this.isStandalone()) { this.closeSettings(); this.el.splash.hidden = false; this.el.splash.classList.remove('out'); this.iosHint(true); return; } return g.toggleFullscreen();
       case 'settings': audio.click(); return this.openSettings();
       case 'close-settings': audio.back(); return this.closeSettings();
       case 'cash': return this.claimCash();

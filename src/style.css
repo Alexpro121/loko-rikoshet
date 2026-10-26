@@ -790,3 +790,8 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .pc-bar { grid-template-columns: calc(var(--u) * 7) calc(var(--u) * 9) calc(var(--u) * 2); font-size: max(7px, calc(var(--u) * 1.4)); gap: calc(var(--u) * 0.4); }
 .pc-bar i { height: calc(var(--u) * 0.6); }
 .pc-info { gap: calc(var(--u) * 0.15); }
+
+/* підказка для iPhone: встановити на початковий екран */
+.ios-hint { max-width: calc(var(--u) * 64); padding: calc(var(--u) * 1.6) calc(var(--u) * 2.4); background: rgba(8, 40, 30, 0.9); border: var(--edge) solid #ffcf3a; border-radius: calc(var(--u) * 1.8); text-align: left; font-size: var(--fs-s); }
+.ios-hint b { color: #ffcf3a; font-size: var(--fs-m); } .ios-hint ol { margin: calc(var(--u) * 0.8) 0 calc(var(--u) * 1.2) calc(var(--u) * 2.6); line-height: 1.45; } .ios-hint .shr { font-style: normal; display: inline-grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: 0.3em; background: #fff; color: #0b3d2a; font-weight: 800; }
+.ios-hint .btn { min-height: 36px; }
