@@ -607,3 +607,17 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .go .in-run { animation: cruise 5.6s 0.2s linear forwards; }
 @keyframes cruise { 0% { transform: translateX(-105%); animation-timing-function: cubic-bezier(0.1, 0.6, 0.3, 1); } 30% { transform: translateX(calc((100vw - var(--W)) / 2)); } 62% { transform: translateX(calc((100vw - var(--W)) / 2 + var(--u) * 3)); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); } 100% { transform: translateX(110vw); } }
 @media (prefers-reduced-motion: reduce) { .in-clouds i, .in-hills, .in-train, .in-rod { animation: none !important; } }
+
+/* потяг із прикладу Uiverse (rohit_4476), один в один */
+.not_found_st2 { fill: #5d89af; }
+.not_found_st6 { fill: #fff; stroke: #5d89af; stroke-width: 2; stroke-miterlimit: 10; }
+.not_found_st7, .not_found_st8, .not_found_st9 { stroke: #709abf; stroke-miterlimit: 10; }
+.not_found_st7 { stroke-width: 5; stroke-linecap: round; fill: none; }
+.not_found_st8 { fill: #fff; } .not_found_st9 { fill: none; }
+#not_found_car-layers { animation: not_found_jig 0.35s linear infinite; }
+@keyframes not_found_jig { 0% { transform: translateY(0); } 50% { transform: translateY(1px); } 100% { transform: translateY(0); } }
+#not_found_bracefront, #not_found_braceback { animation: not_found_braces 1s linear infinite; }
+@keyframes not_found_braces { 0% { transform: translateX(-2px); } 25% { transform: translateX(3px); } 50% { transform: translateX(-2px); } 75% { transform: translateX(3px); } 100% { transform: translateX(-2px); } }
+.in-train { animation: none; filter: none; }
+.in-run { --W: min(calc(var(--u) * 120), 84vw); bottom: calc(26% - var(--u) * 1.4); }
+.in-run { --W: min(calc(var(--u) * 104), 80vw); }
