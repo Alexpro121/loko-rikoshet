@@ -37,17 +37,22 @@ const shinGeo = (kit) => cached('sh' + kit.socks, () => {
 });
 /** Плече (рукав) і передпліччя (шкіра або рукавиця воротаря): між ними лікоть. */
 const upperGeo = (kit, gk) => cached('up' + kit.second + kit.main + gk, () => {
-  const b = new VoxelBuilder(0.22, true);
-  b.box(0, -0.22, 0, 0.4, 0.44, 0.4, gk ? kit.main : kit.second);
-  b.box(0, -0.45, 0, 0.44, 0.07, 0.44, kit.main);     // манжета рукава
+  const b = new VoxelBuilder(0.22, true), c = gk ? kit.main : kit.second;
+  b.box(0, 0.0, 0, 0.46, 0.2, 0.44, c);               // дельта (плече)
+  b.box(0, -0.2, 0, 0.4, 0.28, 0.38, c);              // біцепс/трицепс, звужується до ліктя
+  b.box(0, -0.36, 0, 0.34, 0.1, 0.34, c);
+  b.box(0, -0.43, 0, 0.38, 0.06, 0.38, kit.main);     // манжета рукава
   return b.build();
 });
 const foreGeo = (gk, skin) => cached('fo' + gk + skin, () => {
   const b = new VoxelBuilder(0.22, true);
-  b.box(0, -0.04, 0, 0.3, 0.12, 0.3, skin);           // лікоть
-  b.box(0, -0.22, 0, 0.3, 0.3, 0.3, skin);            // передпліччя
-  b.box(0, -0.43, 0.02, 0.36, 0.17, 0.36, skin);      // кисть
-  if (gk) b.box(0, -0.38, 0, 0.5, 0.3, 0.5, '#d9772a');
+  b.box(0, -0.03, 0, 0.3, 0.12, 0.3, skin);           // лікоть
+  b.box(0, -0.16, 0, 0.3, 0.16, 0.3, skin);           // м'яз передпліччя (товщий угорі)
+  b.box(0, -0.31, 0, 0.24, 0.16, 0.24, skin);         // зап'ясток вужчий
+  b.box(0, -0.46, 0.02, 0.32, 0.16, 0.26, skin);      // долоня
+  b.box(0.17, -0.42, 0.06, 0.08, 0.12, 0.1, skin);    // великий палець
+  b.box(0, -0.57, 0.04, 0.3, 0.07, 0.22, skin);       // пальці
+  if (gk) { b.box(0, -0.44, 0.02, 0.5, 0.3, 0.42, '#d9772a'); b.box(0, -0.6, 0.04, 0.46, 0.08, 0.36, '#f0a050'); }
   return b.build();
 });
 
@@ -366,7 +371,9 @@ export class Player {
     this.legL.rotation.x = -S.legA; this.legR.rotation.x = -S.legB;
     this.shinL.rotation.x = S.kneeA; this.shinR.rotation.x = S.kneeB;
     this.armL.rotation.x = -S.armA; this.armR.rotation.x = -S.armB;
-    this.foreL.rotation.x = -S.elbA; this.foreR.rotation.x = -S.elbB;
+    const lagA = clamp((S.armA - (S.pArmA || 0)) / Math.max(dt, 1e-3) * 0.03, -0.35, 0.35), lagB = clamp((S.armB - (S.pArmB || 0)) / Math.max(dt, 1e-3) * 0.03, -0.35, 0.35);
+    S.pArmA = S.armA; S.pArmB = S.armB;
+    this.foreL.rotation.x = -(S.elbA + lagA); this.foreR.rotation.x = -(S.elbB + lagB);
     this.armL.rotation.z = -S.spread; this.armR.rotation.z = S.spread;
     this.lean.rotation.set(S.leanX, S.leanY, S.leanZ);
     // висота стегон з нахилу всього тіла: лежачи — на траві, а не в ній
