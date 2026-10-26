@@ -20,6 +20,7 @@ export class Penalties {
 
   start() {
     const m = this.m, ui = m.ui;
+    document.querySelectorAll('#pen').forEach((e) => e.remove());
     m.phase = 'pens'; m.ts = 1; m.slow = false; m.slowT = 0; if (ui.setSlow) ui.setSlow(false); m.cancelAim();
     ui.setMatchUi(false); ui.hud.warn(null); ui.hud.hint(null); ui.hud.setCard(null);
     this.k = 0; this.res = { me: [], opp: [] }; this.state = 'wait'; this.t = -1.6; this.mark = null; this.by = 0; this.bvy = 0; this.over = false; this.ts = 1; this.live = false;
@@ -128,7 +129,7 @@ export class Penalties {
     this.m.ui.hud.hint(null); this.msg.textContent = ''; this.go.style.visibility = 'hidden';
     this.decide();
     this.state = 'live'; this.t = 0; this.live = true;
-    Object.assign(this, { kicked: false, struck: false, arrived: false, announced: false, dust: false, cel: false, gkGo: false, gkDone: false, slowUntil: 0, tArr: 0 });
+    Object.assign(this, { kmode: false, kicked: false, struck: false, arrived: false, announced: false, dust: false, cel: false, gkGo: false, gkDone: false, slowUntil: 0, tArr: 0 });
   }
 
   announce() {
@@ -172,33 +173,50 @@ export class Penalties {
 
   liveStep(dt) {
     const m = this.m, v = m.view, kp = this.kicker, gk = this.keeper, dir = this.dir, t = this.t;
-    const sx = this.gx - dir * SPOT, TK = 1.0, STRIKE = 0.17;
+    const sx = this.gx - dir * SPOT, TK = 1.0;
     const ease = (q) => (q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2);
 
-    // --- виконавець
+    // --- виконавець: розбіг із розгоном → замах → контакт → проводка
     if (!this.kicked) {
       const q = clamp(t / TK, 0, 1), e = ease(q), x0 = sx - dir * (RUN + 0.7), x1 = sx - dir * 0.95;
       const px = kp.p.x, pz = kp.p.z;
       kp.p.x = x0 + (x1 - x0) * e; kp.p.z = -1.4 * (1 - e);
       if (dt > 0) { kp.p.vx = (kp.p.x - px) / dt; kp.p.vz = (kp.p.z - pz) / dt; }
       const sp = Math.hypot(kp.p.vx, kp.p.vz); if (sp > 0.4) kp.p.yaw = Math.atan2(kp.p.vx, kp.p.vz);
-      if (t >= TK) { this.kicked = true; this.kt = 0; kp.p.vx = kp.p.vz = 0; kp.p.yaw = dir > 0 ? Math.PI / 2 : -Math.PI / 2; kp.p.kick(1); }
+      if (t >= TK - 0.1 && !this.kmode) { this.kmode = true; kp.p.startPKick(); }
+      if (this.kmode) kp.p.kickP = (t - (TK - 0.1)) / 0.9;
+      if (t >= TK) { this.kicked = true; this.kt = 0; kp.p.vx = kp.p.vz = 0; kp.p.yaw = dir > 0 ? Math.PI / 2 : -Math.PI / 2; }
     } else {
       this.kt += dt;
+      if (this.kmode) { kp.p.kickP = (t - (TK - 0.1)) / 0.9; if (kp.p.kickP >= 1.1) { this.kmode = false; kp.p.setMode('idle'); } }
       if (this.out === 'goal' && this.announced) {
         if (t < this.tArr + 1.2) { kp.p.x += kp.p.vx * dt; kp.p.z += kp.p.vz * dt; const sp = Math.hypot(kp.p.vx, kp.p.vz); if (sp > 0.5) kp.p.yaw = Math.atan2(kp.p.vx, kp.p.vz); }
         else if (!this.cel) { this.cel = true; kp.p.vx = kp.p.vz = 0; kp.p.cheer(2.4); }
-      } else if (this.kt > 0.55) { const q = kp.p; q.vx = -dir * 2.4; q.vz = 1.8; q.x += q.vx * dt; q.z += q.vz * dt; q.yaw = Math.atan2(q.vx, q.vz); }
+      } else if (!this.kmode && this.kt > 0.55) { const q = kp.p; q.vx = -dir * 2.4; q.vz = 1.8; q.x += q.vx * dt; q.z += q.vz * dt; q.yaw = Math.atan2(q.vx, q.vz); }
     }
 
-    // --- контакт: м'яч зривається з місця
-    if (this.kicked && !this.struck && this.kt >= STRIKE) {
+    // --- контакт: фізика м'яча — початкова швидкість, щоб влучити у вибрану точку з тяжінням і закрутом
+    if (this.kicked && !this.struck && this.kmode && kp.p.kickP >= 0.36) {
       this.struck = true; this.st = 0;
       audio.kick(1); v.ball.squash(dir, 0, 0.3); m.game.addTrauma(0.18); m.game.fovKick(2.5);
       v.particles.burst(m.ball.x, 0.3, m.ball.z, 8, 4, 0.5, 0.2, ['#8fb98a', '#f2f5ee'], 10, 0.6);
-      const dist = Math.hypot(this.gx - m.ball.x, this.act.z), spd = 24 + 12 * kp.sk.shoot;
-      this.fly = { t: 0, D: clamp(dist / spd, 0.4, 0.62), from: { x: m.ball.x, z: m.ball.z }, curve: gauss() * 0.5 };
+      const dist = Math.hypot(this.gx - m.ball.x, this.act.z), spd = 24 + 12 * kp.sk.shoot, Tf = clamp(dist / spd, 0.4, 0.62);
+      const a = this.act, plane = this.gx;
+      let tz = a.z, ty = Math.max(a.y, 0.12);
       this.gkAt = clamp(0.2 - 0.13 * gk.sk.react, 0.06, 0.2) - (this.read ? 0.14 : 0);
+      this.Tf = Tf;
+      if (this.out === 'save') {
+        // воротар зустрічає м'яч руками: рахуємо його положення у момент влучання
+        const gt = Math.max(0, Tf - this.gkAt), gTz = clamp(this.dive.z, -G + 0.4, G - 0.4), z0 = 0.2;
+        const gF = clamp(0.5 + 0.035 * Math.abs(gTz - z0), 0.5, 0.78), qq = clamp((gt - 0.05) / (gF * 0.9), 0, 1);
+        const gz = z0 + (gTz - z0) * (1 - Math.pow(1 - qq, 2));
+        tz = gz + Math.sign(gTz - z0 || 1) * 1.5; ty = clamp(this.dive.y, 0.3, H);
+      } else if (this.out === 'post') { tz = Math.sign(a.z || 1) * G; ty = a.y > H * 0.7 ? H : a.y; }
+      this.az = gauss() * 5;                                                   // закрут: бічне прискорення
+      const GR = 26;
+      this.bv = { x: (plane - m.ball.x) / Tf, z: (tz - m.ball.z - 0.5 * this.az * Tf * Tf) / Tf, y: (ty - 0.15 + 0.5 * GR * Tf * Tf) / Tf };
+      this.bt = 0; this.bp = { x: m.ball.x, z: m.ball.z, y: 0.15 }; this.tgt = { z: tz, y: ty };
+      this.by = 0.15;
     }
 
     // --- воротар: чекає, потім виконує безперервний стрибок (триває до кінця, навіть після влучання)
@@ -229,35 +247,43 @@ export class Penalties {
       }
     }
 
-    // --- м'яч: політ → влучання → вільний рух
+    // --- м'яч: політ по параболі з закрутом → влучання → вільна фізика
     if (this.struck && !this.arrived) {
-      const f = this.fly; f.t += dt;
-      const q = clamp(f.t / f.D, 0, 1), a = this.act, b = m.ball;
-      let tx = this.gx, tz = a.z, ty = Math.max(a.y, 0.12);
-      if (this.out === 'save') { tx = this.gx - dir * 0.7; tz = gk.p.z + this.gSgn * 1.5; ty = clamp(this.dive.y, 0.3, H); }
-      else if (this.out === 'miss') { tx = this.gx + dir * 6; ty = clamp(a.y, 0.12, 7); }
-      else if (this.out === 'post') { tz = Math.sign(a.z || 1) * G; ty = a.y > H * 0.7 ? H : a.y; }
-      const e2 = 1 - Math.pow(1 - q, 1.5);
-      b.x = f.from.x + (tx - f.from.x) * e2; b.z = f.from.z + (tz - f.from.z) * e2 + Math.sin(q * Math.PI) * f.curve;
-      this.by = 0.15 + (ty - 0.15) * e2 + Math.sin(q * Math.PI) * (this.out === 'miss' ? 0.9 : 0.35);
-      b.vx = dir * 34; b.vz = 0;
-      if (q >= 1) {
+      const GR = 26, b = m.ball, T = this.bt += dt, Tf = this.Tf, q = Math.min(T, Tf);
+      b.x = this.bp.x + this.bv.x * q; b.z = this.bp.z + this.bv.z * q + 0.5 * this.az * q * q;
+      this.by = this.bp.y + this.bv.y * q - 0.5 * GR * q * q;
+      b.vx = this.bv.x; b.vz = this.bv.z + this.az * q;
+      this.bvy = this.bv.y - GR * q;
+      if (T >= Tf) {
         this.arrived = true; this.tArr = this.t; this.slowUntil = this.t + 0.5;
-        if (this.out === 'goal') { this.bvx = dir * 11; this.bvz = (tz - f.from.z) * 0.2; this.bvy = 1.5; v.ball.squash(dir, 0, 0.32); audio.wall(0, 12); v.particles.burst(this.gx + dir * 1.5, ty, tz, 10, 4, 0.6, 0.18, ['#ffffff', '#cde'], 10, 0.5); }
-        else if (this.out === 'save') { gk.p.parry(); audio.save(); v.ball.squash(dir, 0, 0.3); this.bvx = -dir * 8; this.bvz = this.gSgn * (-2 - Math.random() * 4); this.bvy = 5; }
-        else if (this.out === 'post') { audio.wall(0, 26); v.ball.squash(dir, 0, 0.3); m.game.addTrauma(0.25); v.particles.burst(this.gx, ty, tz, 10, 5, 0.4, 0.2, ['#fff', '#ddd'], 10, 0.6); this.bvx = -dir * 9; this.bvz = -Math.sign(tz) * 4; this.bvy = 4; }
-        else { this.bvx = dir * 14; this.bvz = 0; this.bvy = 2; }
+        this.bvx = this.bv.x; this.bvz = this.bv.z + this.az * Tf;
+        const tz = b.z, ty = this.by;
+        if (this.out === 'goal') { this.bvx *= 0.45; this.bvz *= 0.5; v.ball.squash(dir, 0, 0.32); audio.wall(0, 12); v.particles.burst(this.gx + dir * 1.5, ty, tz, 10, 4, 0.6, 0.18, ['#ffffff', '#cde'], 10, 0.5); }
+        else if (this.out === 'save') { gk.p.parry(); audio.save(); v.ball.squash(dir, 0, 0.3); this.bvx = -dir * (6 + Math.random() * 3); this.bvz = this.gSgn * (-1.5 - Math.random() * 4); this.bvy = 4 + Math.random() * 3; }
+        else if (this.out === 'post') { audio.wall(0, 26); v.ball.squash(dir, 0, 0.3); m.game.addTrauma(0.25); v.particles.burst(this.gx, ty, tz, 10, 5, 0.4, 0.2, ['#fff', '#ddd'], 10, 0.6); this.bvx = -this.bvx * 0.45; this.bvz = -Math.sign(tz) * (3 + Math.random() * 2); this.bvy = Math.abs(this.bvy) * 0.5 + 3; }
+        else { /* мимо: м'яч летить далі за інерцією */ }
         if (!this.announced) { this.announced = true; this.announce(); }
       }
     } else if (this.arrived) {
-      const b = m.ball;
-      this.bvy -= 22 * dt; this.by += this.bvy * dt;
-      if (this.by <= 0) { this.by = 0; if (Math.abs(this.bvy) > 1.2) { this.bvy *= -0.42; v.ball.hop = 0.2; } else this.bvy = 0; const fr = 1 - Math.min(1, dt * 2.2); this.bvx *= fr; this.bvz *= fr; }
+      const b = m.ball, GR = 26;
+      this.bvy -= GR * dt; this.by += this.bvy * dt;
+      const air = 1 - Math.min(1, dt * 0.12);
+      this.bvx *= air; this.bvz *= air;
+      if (this.by <= 0) {                                          // відскок від газону з втратою енергії й тертям
+        this.by = 0;
+        if (this.bvy < -1.4) { this.bvy *= -0.5; v.ball.hop = 0.18; audio.wall && audio.wall(0, 3); } else this.bvy = 0;
+        const fr = 1 - Math.min(1, dt * 1.6); this.bvx *= fr; this.bvz *= fr;
+      }
       b.x += this.bvx * dt; b.z += this.bvz * dt; b.vx = this.bvx; b.vz = this.bvz;
       if (this.out === 'goal') {
         const back = this.gx + dir * (PITCH.GOAL_D - 0.5);
-        if ((b.x - back) * dir > 0) { b.x = back; this.bvx *= -0.18; this.bvz *= 0.5; v.ball.squash(dir, 0, 0.2); }
-        if (Math.abs(b.z) > G - 0.5) { b.z = Math.sign(b.z) * (G - 0.5); this.bvz *= -0.2; }
+        if ((b.x - back) * dir > 0) { b.x = back; this.bvx *= -0.12; this.bvz *= 0.5; v.ball.squash(dir, 0, 0.2); }
+        if (Math.abs(b.z) > G - 0.45) { b.z = Math.sign(b.z) * (G - 0.45); this.bvz *= -0.15; }
+        if (this.by > H * 0.78) { this.by = H * 0.78; this.bvy = -Math.abs(this.bvy) * 0.2; }
+      } else {
+        // поза воротами: рекламні борти за ними не пускають м'яч далі
+        const lim = this.gx + dir * (PITCH.GOAL_D + 5);
+        if ((b.x - lim) * dir > 0) { b.x = lim; this.bvx *= -0.3; this.bvz *= 0.6; }
       }
       if (t > this.tArr + 2.6 && (this.gkDone || !this.gkGo)) this.endKick();
     }

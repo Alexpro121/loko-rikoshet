@@ -177,6 +177,8 @@ export class Player {
   gkDive(dir, kind = 0) { this.diveDir = dir; this.diveKind = kind; this.setMode('gkdive', 1.7); this.setExpr('shock', 1.0); }
   /** Керований стрибок воротаря (пенальті): прогрес diveP задає зовнішній код, поза будується безперервно. */
   startPDive(dir, high) { this.mode = 'pdive'; this.modeT = 999; this.modeD = 999; this.diveDir = dir; this.diveKind = high ? 0 : 1; this.diveP = 0; this.setExpr('shock', 2); }
+  /** Керований удар (пенальті): прогрес kickP задає зовнішній код (0..1): замах → контакт ≈0.35 → проводка. */
+  startPKick() { this.mode = 'pkick'; this.modeT = 999; this.modeD = 999; this.kickP = 0; this.setExpr('angry', 1.4); }
   gkJump() { this.setMode('gkjump', 0.7); this.setExpr('shock', 0.6); }
   parry() { if (this.mode === 'gkdive' || this.mode === 'gkjump') return; this.setMode('parry', 0.45); }
   throwBall() { this.setMode('throw', 0.7); }
@@ -330,6 +332,19 @@ export class Player {
       case 'kneel': {
         const e = easeOut(Math.min(1, mk * 2.4)), up = mk > 0.8 ? (mk - 0.8) / 0.2 : 0, k = e * (1 - up);
         slide = 2.4 * e * (1 - up * 0.5); tiltX = -0.32 * k; legA = legB = 0.05 * k; kneeA = kneeB = 1.6 * k + 0.06; drop = THIGH * k; leanX = -0.3 * k; armA = armB = 2.6 * k + 0.4 * up; spread = 0.5;
+        break;
+      }
+      case 'pkick': {
+        const P = this.kickP || 0, sm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+        const back = sm(P / 0.3), strike = sm((P - 0.28) / 0.1), follow = sm((P - 0.4) / 0.55);
+        legB = -1.15 * back * (1 - strike) + 2.15 * strike * (1 - 0.4 * follow);
+        kneeB = 1.55 * back * (1 - strike) + 0.12 * strike + 0.55 * follow;
+        legA = 0.12 + 0.12 * back; kneeA = 0.2 + 0.4 * back * (1 - 0.6 * follow);
+        leanX = -0.3 * back * (1 - strike) + 0.55 * strike * (1 - 0.5 * follow);
+        leanY = 0.28 * strike * (1 - follow * 0.5) - 0.12 * back * (1 - strike);
+        armA = -0.5 * back + 1.0 * strike; armB = 0.7 * back - 0.8 * strike; elbA = elbB = 0.5; spread = 0.4 + 0.3 * strike;
+        lift = 0.26 * Math.sin(clamp((P - 0.3) / 0.35, 0, 1) * Math.PI);
+        drop = 0.04 * back;
         break;
       }
       case 'pdive': {

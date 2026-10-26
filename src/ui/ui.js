@@ -68,6 +68,7 @@ export class UI {
   <div class="card-box">
     <h2>ПАУЗА</h2><p class="fact" id="p-fact"></p>
     <button class="big go" data-act="resume">${I.play}<b>ПРОДОВЖИТИ</b></button>
+    <button class="big alt" data-act="pens">${I.ball}<b>ПЕНАЛЬТІ</b></button>
     <div class="row2"><button class="big alt" data-act="settings">${I.gear}<b>НАЛАШТУВАННЯ</b></button><button class="big red" data-act="quit">${I.close}<b>В МЕНЮ</b></button></div>
   </div>
 </section>
@@ -183,6 +184,7 @@ export class UI {
     switch (a) {
       case 'start': this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.click(); g.ensureMatch(); playIntro(this.root, () => { audio.music('menu'); this.showMenu(); }); return;
       case 'play': return this.menuTap();
+      case 'pens': { const mm = g.match; if (!mm) return; audio.click(); this.el.pause.hidden = true; if (mm.phase === 'paused') mm.resume(); mm.startPens(); return; }
       case 'fs': audio.click(); return g.toggleFullscreen();
       case 'settings': audio.click(); return this.openSettings();
       case 'close-settings': audio.back(); return this.closeSettings();

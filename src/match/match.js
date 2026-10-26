@@ -589,11 +589,18 @@ export class Match {
   }
 
   timeOver() {
+    if (this.phase === 'pens') return;
     if (this.score.me === this.score.opp && !this.penRes) {
       this.pens = new Penalties(this); this.pens.start();
       return;
     }
     this.end();
+  }
+  /** Запуск серії пенальті достроково (з паузи). */
+  startPens() {
+    if (this.phase === 'pens' || this.phase === 'end' || this.phase === 'idle') return;
+    this.cancelAim(); this.penRes = null; this.timeUp = false;
+    this.pens = new Penalties(this); this.pens.start();
   }
   camOverride() { return this.phase === 'pens' && this.pens ? this.pens.camOverride() : null; }
 
