@@ -189,7 +189,7 @@ export class Player {
     const speed = Math.hypot(this.vx, this.vz);
     const sp = clamp(speed / 8.5, 0, 1);
     const prevYaw = this.bodyYaw;
-    this.bodyYaw += angDiff(this.bodyYaw, this.yaw * 0.66) * Math.min(1, dt * 11);
+    this.bodyYaw += angDiff(this.bodyYaw, this.yaw) * Math.min(1, dt * 14);
     this.body.rotation.y = this.bodyYaw;
     const turn = dt > 0 ? angDiff(prevYaw, this.bodyYaw) / dt : 0;
     const acc = dt > 0 ? (speed - (this.pSpeed || 0)) / dt : 0; this.pSpeed = speed;
