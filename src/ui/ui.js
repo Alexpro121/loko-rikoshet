@@ -45,12 +45,12 @@ export class UI {
   </header>
   <aside class="m-side m-left" id="m-club" data-act="nav-transfers"></aside>
   <aside class="m-side m-right" id="m-next"></aside>
-  <button class="cta" id="m-cta" data-act="play"><span class="tk-main"><small>КВИТОК · ЛОКО</small><b>ВПЕРЕД!</b><i class="tk-bar"></i></span><span class="tk-stub"><em>РЕЙС</em><strong id="m-cta-n"></strong><small id="m-cta-s"></small></span></button>
   <footer class="bottom">
     <div class="cards">
       <button class="card" id="m-kick" data-act="up-kick"><span class="card-ic">${I.boot}</span><span class="card-t"><b>УДАР</b><em id="m-kick-v"></em></span><span class="card-p" id="m-kick-c"></span></button>
       <button class="card" id="m-stad" data-act="up-stadium"><span class="card-ic">${I.stadium}</span><span class="card-t"><b>СТАДІОН</b><em id="m-stad-v"></em></span><span class="card-p" id="m-stad-c"></span></button>
     </div>
+    <button class="cta" id="m-cta" data-act="play"><span class="tk-main"><small>КВИТОК · ЛОКО</small><b>ВПЕРЕД!</b><i class="tk-bar"></i></span><span class="tk-stub"><em>РЕЙС</em><strong id="m-cta-n"></strong><small id="m-cta-s"></small></span></button>
     <nav class="nav" id="m-nav">
       <button class="nb on" data-act="nav-match"><i>${I.ball}</i><span>МАТЧ</span><s>1</s></button>
       <button class="nb" data-act="nav-transfers"><i>${I.shirt}</i><span>КОМАНДА</span><s>2</s></button>
