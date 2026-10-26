@@ -262,9 +262,9 @@ export class UI {
     countTo(e.tickets, S.tickets, 0, (v) => String(Math.round(v)));
     const spec = matchSpec(S.fixture, S.season);
     e.ctaS.textContent = spec.club.name; document.getElementById('m-cta-n').textContent = '№' + spec.no;
-    e.kickV.textContent = '+' + KICK_STEP + '% сила · рів. ' + (S.up.kick + 1);
+    e.kickV.textContent = '+' + KICK_STEP + '% · рів. ' + (S.up.kick + 1);
     e.kickC.innerHTML = fmt(kickCost()) + I.coin;
-    e.stadV.textContent = '+' + INCOME_STEP + '% дохід · рів. ' + (S.up.stadium + 1);
+    e.stadV.textContent = '+' + INCOME_STEP + '% · рів. ' + (S.up.stadium + 1);
     e.stadC.innerHTML = fmt(stadiumCost()) + I.coin;
     e.kick.classList.toggle('can', S.coins >= kickCost()); e.stad.classList.toggle('can', S.coins >= stadiumCost());
     e.acadDot.hidden = !S.academy.ready;

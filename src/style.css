@@ -475,3 +475,24 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 @media (max-aspect-ratio: 8/5) { .m-side { width: calc(var(--u) * 20); } .m-right { width: calc(var(--u) * 22); } .cards .card { width: calc(var(--u) * 21); } .tk-stub { min-width: calc(var(--u) * 10); } .cta .tk-main b { font-size: calc(var(--u) * 5.4); } .nb { width: calc(var(--u) * 10.4); } }
 @media (max-height: 340px) { .m-left .mc-form { display: none; } }
 .cards .card-t { min-width: 0; } .cards .card-t em { font-size: max(8px, calc(var(--u) * 1.7)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .cards .card-t b { font-size: var(--fs-s); }
+/* без накладань тексту */
+.cards .card { align-items: center; }
+.cards .card-p { position: static; margin-left: auto; flex: none; align-self: center; }
+.cards .card-t { flex: 1; }
+.cards .card-t em { white-space: normal; line-height: 1.1; }
+.m-left { width: calc(var(--u) * 30); }
+.m-left .mc-stats span { white-space: nowrap; font-size: max(7px, calc(var(--u) * 1.5)); }
+.m-left .mc-form > span { display: none; } .m-left .mc-form { justify-content: center; }
+.m-left .mc-form i { width: calc(var(--u) * 3.6); height: calc(var(--u) * 3.6); }
+.bd-r em { width: calc(var(--u) * 7.4); white-space: nowrap; }
+.m-right { width: calc(var(--u) * 31); }
+.flap s { flex: none; }
+.m-right { width: calc(var(--u) * 35); }
+.flap s { min-width: 0; padding: 0 calc(var(--u) * 0.45); }
+.flap.sm s { font-size: max(8px, calc(var(--u) * 1.9)); }
+.cards .card-t em { white-space: nowrap; }
+.cards .card { width: calc(var(--u) * 34); gap: calc(var(--u) * 0.8); }
+.cards .card-ic { width: calc(var(--u) * 5.2); height: calc(var(--u) * 5.2); padding: calc(var(--u) * 0.7); }
+.cards .card-t b { font-size: max(10px, calc(var(--u) * 2.3)); } .cards .card-t em { font-size: max(8px, calc(var(--u) * 1.6)); }
+.cards .card-p { font-size: var(--fs-s); }
+.flap.sm { gap: 0; } .flap.sm s { font-size: max(8px, calc(var(--u) * 1.65)); padding: 0 calc(var(--u) * 0.3); }
