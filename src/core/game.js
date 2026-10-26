@@ -21,7 +21,7 @@ export class Game {
     this.renderer.setClearColor(COL.skyMenu, 1);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.1;
     this.coarse = coarse;
-    this.res = 1; this.ema = 16; this.evalT = 0; this.goodRuns = 0; this.pr = 0;
+    this.res = coarse ? 0.85 : 1; this.ema = 16; this.evalT = 0; this.goodRuns = 0; this.pr = 0;
     this.trauma = 0; this.fov = 0; this.time = 0; this.introK = 1; this.intro = false; this.celebK = 0; this.celebAng = 0;
     this.w = 1; this.h = 1;
 

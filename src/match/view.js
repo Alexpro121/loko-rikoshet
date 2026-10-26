@@ -97,7 +97,7 @@ export class MatchView {
     const wf = weather === 'fog' ? 0.6 : weather === 'rain' ? 0.8 : 1;
     for (const sp of this.glow.children) { if (sp.isSprite) sp.material.opacity = t.glow * wf; else { sp.visible = time === 'night'; sp.material.opacity = 0.055 * wf * (weather === 'fog' || weather === 'rain' ? 1.8 : 1); } }
     const spotI = time === 'night' ? 0.8 : time === 'dusk' ? 0.3 : 0;
-    for (const sl of this.spots) sl.intensity = spotI;
+    for (const sl of this.spots) { sl.intensity = spotI; sl.visible = spotI > 0; }       // вимкнений прожектор не рахується у шейдері
     this.stars.visible = time === 'night' && (weather === 'clear' || weather === 'snow');
     this.weather.set(weather === 'rain' || weather === 'snow' ? weather : 'clear');
     this.exposure = t.exp;

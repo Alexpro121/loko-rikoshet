@@ -99,9 +99,10 @@ export class Stands {
 
     const n = fans.length / 6;
     this.n = n;
+    const noBottom = (geo) => { const ix = geo.index.array, keep = []; for (let f = 0; f < ix.length; f += 3) { if (f < 18 || f >= 24) keep.push(ix[f], ix[f + 1], ix[f + 2]); } geo.setIndex(keep); return geo; };   // BoxGeometry: грані +x,-x,+y,-y,+z,-z по 6 індексів; -y (18..23) ніколи не видно з камери зверху
     const mk = (geo) => new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ flatShading: true }), n);
-    this.body = mk(new THREE.BoxGeometry(0.72, 0.84, 0.56));
-    this.head = mk(new THREE.BoxGeometry(0.44, 0.44, 0.44));
+    this.body = mk(noBottom(new THREE.BoxGeometry(0.72, 0.84, 0.56)));
+    this.head = mk(noBottom(new THREE.BoxGeometry(0.44, 0.44, 0.44)));
     this.body.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.head.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.body.frustumCulled = this.head.frustumCulled = false;
     this.bx = new Float32Array(n); this.by = new Float32Array(n); this.bz = new Float32Array(n); this.ph = new Float32Array(n);
@@ -114,14 +115,14 @@ export class Stands {
     this.side = Int8Array.from(sides);
     // руки: дві планки на фана (піднімаються під час радості), спалахи телефонів
     const am = new THREE.MeshLambertMaterial({ flatShading: true });
-    this.arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.17, 0.62, 0.17), am, n * 2);
+    this.arms = new THREE.InstancedMesh(noBottom(new THREE.BoxGeometry(0.17, 0.62, 0.17)), am, n * 2);
     this.arms.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.arms.frustumCulled = false;
     for (let i = 0; i < n; i++) { c.set(fans[i * 6 + 5]); this.arms.setColorAt(i * 2, c); this.arms.setColorAt(i * 2 + 1, c); }
     this.flashN = 140;
     this.flash = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.34, 0.1), new THREE.MeshBasicMaterial({ color: '#ffffff' }), this.flashN);
     this.flash.frustumCulled = false; this.flashT = new Float32Array(this.flashN); this.flashI = new Int32Array(this.flashN);
     const scm = new THREE.MeshLambertMaterial({ flatShading: true });
-    this.scarf = new THREE.InstancedMesh(new THREE.BoxGeometry(0.62, 0.09, 0.14), scm, n);
+    this.scarf = new THREE.InstancedMesh(noBottom(new THREE.BoxGeometry(0.62, 0.09, 0.14)), scm, n);
     this.scarf.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.scarf.frustumCulled = false;
     const SC = ['#c8213a', '#f1efe8', '#157a46', '#c8213a'];
     for (let i = 0; i < n; i++) this.scarf.setColorAt(i, c.set(SC[(rnd() * SC.length) | 0]));
@@ -223,7 +224,8 @@ export class Stands {
     return sm((c - 2) / 1.5) * (1 - sm((c - 10.5) / 1.5));
   }
 
-  writeMatrices(t) {
+  /** light: спокійний фон — рухаються лише тулуби й голови; руки та шарфи лежать згорнутими. */
+  writeMatrices(t, light) {
     const rx = this.rx, mb = this.body.instanceMatrix.array, mh = this.head.instanceMatrix.array, ma = this.arms.instanceMatrix.array, msc = this.scarf.instanceMatrix.array;
     const n = this.n, ch = this.chant || 0, beat = t * 4.6;
     let env = 0, ty = '', mine = true;
@@ -249,6 +251,7 @@ export class Stands {
       mb[o + 8] = 0; mb[o + 9] = 0; mb[o + 10] = 1; mb[o + 11] = 0; mb[o + 12] = this.bx[i]; mb[o + 13] = y; mb[o + 14] = this.bz[i]; mb[o + 15] = 1;
       mh[o] = 1; mh[o + 1] = 0; mh[o + 2] = 0; mh[o + 3] = 0; mh[o + 4] = 0; mh[o + 5] = 1; mh[o + 6] = 0; mh[o + 7] = 0;
       mh[o + 8] = 0; mh[o + 9] = 0; mh[o + 10] = 1; mh[o + 11] = 0; mh[o + 12] = this.bx[i] + headZ; mh[o + 13] = y + 0.66 + headY; mh[o + 14] = this.bz[i] + lean; mh[o + 15] = 1;
+      if (light) continue;
       const sc = arm > 0.04 ? arm : 0.0001, ay = y + 0.4 + 0.31 * sc;
       for (let k = 0; k < 2; k++) {
         const oa = (i * 2 + k) * 16, sx = k ? 0.43 : -0.43;
@@ -260,7 +263,8 @@ export class Stands {
       msc[o] = cr * ss; msc[o + 1] = sr * ss; msc[o + 2] = 0; msc[o + 3] = 0; msc[o + 4] = -sr * ss; msc[o + 5] = cr * ss; msc[o + 6] = 0; msc[o + 7] = 0;
       msc[o + 8] = 0; msc[o + 9] = 0; msc[o + 10] = ss; msc[o + 11] = 0; msc[o + 12] = this.bx[i] + 0.43; msc[o + 13] = ty2; msc[o + 14] = this.bz[i]; msc[o + 15] = 1;
     }
-    this.body.instanceMatrix.needsUpdate = true; this.head.instanceMatrix.needsUpdate = true; this.arms.instanceMatrix.needsUpdate = true; this.scarf.instanceMatrix.needsUpdate = true;
+    this.body.instanceMatrix.needsUpdate = true; this.head.instanceMatrix.needsUpdate = true;
+    if (!light) { this.arms.instanceMatrix.needsUpdate = true; this.scarf.instanceMatrix.needsUpdate = true; }
   }
 
   update(dt, t) {
@@ -282,8 +286,11 @@ export class Stands {
       rx.t += dt;
       this.writeMatrices(t);
       if (rx.type === 'flash') this.runFlashes(dt);
+      this.wasActive = true;
       if (rx.t >= rx.dur) { this.rx = null; this.writeMatrices(t); this.flash.count = 0; }
-    } else if ((this.frame & 1) === 0) this.writeMatrices(t);
+    } else if (ch > 0.01) { if ((this.frame & 1) === 0) this.writeMatrices(t); this.wasActive = true; }
+    else if (this.wasActive) { this.wasActive = false; this.writeMatrices(t); }
+    else if ((this.frame & 3) === 0) this.writeMatrices(t, true);
     // димові шашки в домашньому секторі під час співів
     if (ch > 0.5 && this.particles && this.flagSmoke) {
       this.smokeT = (this.smokeT || 0) - dt;
