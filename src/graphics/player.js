@@ -70,10 +70,14 @@ function bodyGeo(look) {
   b.ao = 0.18;
   const headY = 1.25 + 0.55, hc = look.hairCol;
   const faceStart = b.n;
-  b.box(0, headY, 0, 1.05, 1.05, 1.05, skin, 0, 0, 0, [null, null, null, null, faceCell('neutral'), null]);
-  if (look.hair !== 'bald') b.box(0, headY + 0.47, -0.04, 1.12, 0.24, 1.08, hc);
+  b.box(0, headY, 0, 1.05, 1.05, 1.05, skin, 0, 0, 0, [null, null, null, null, faceCell('neutral', look.beard || 0), null]);
+  if (look.hair !== 'bald' && look.hair !== 'buzz') b.box(0, headY + 0.47, -0.04, 1.12, 0.24, 1.08, hc);
   if (look.hair === 'crop' || look.hair === 'band') { b.box(0, headY + 0.2, -0.5, 1.12, 0.56, 0.16, hc); b.box(0, headY + 0.4, 0.5, 1.12, 0.1, 0.1, hc); }
   if (look.hair === 'long') { b.box(0, headY - 0.05, -0.52, 1.14, 1.0, 0.2, hc); b.box(-0.56, headY, -0.1, 0.1, 0.8, 0.7, hc); b.box(0.56, headY, -0.1, 0.1, 0.8, 0.7, hc); }
+  if (look.hair === 'buzz') b.box(0, headY + 0.5, -0.02, 1.08, 0.12, 1.06, hc);
+  if (look.hair === 'slick') { b.box(0, headY + 0.5, 0, 1.12, 0.2, 1.1, hc); b.box(0.2, headY + 0.62, 0.08, 0.7, 0.16, 0.7, hc); b.box(0, headY + 0.1, -0.52, 1.1, 0.7, 0.14, hc); }
+  if (look.hair === 'curly') { for (const [cx, cz] of [[-0.35, -0.3], [0.35, -0.3], [-0.35, 0.28], [0.35, 0.28], [0, 0], [0, -0.4]]) b.box(cx, headY + 0.62, cz, 0.42, 0.28, 0.42, hc); b.box(0, headY + 0.1, -0.54, 1.14, 0.8, 0.16, hc); b.box(-0.56, headY + 0.1, -0.1, 0.1, 0.55, 0.6, hc); b.box(0.56, headY + 0.1, -0.1, 0.1, 0.55, 0.6, hc); }
+  if (look.hair === 'pony') { b.box(0, headY + 0.1, -0.54, 1.1, 0.8, 0.14, hc); b.box(0, headY - 0.2, -0.78, 0.3, 0.7, 0.3, hc); b.box(0, headY + 0.2, -0.64, 0.4, 0.2, 0.2, hc); }
   if (look.hair === 'mohawk') b.box(0, headY + 0.72, -0.02, 0.26, 0.4, 0.9, hc);
   if (look.hair === 'band') b.box(0, headY + 0.26, 0, 1.12, 0.14, 1.12, kit.second);
   b.box(-0.55, headY - 0.05, 0, 0.1, 0.22, 0.2, skin); b.box(0.55, headY - 0.05, 0, 0.1, 0.22, 0.2, skin);
@@ -147,7 +151,7 @@ export class Player {
     this.exprT = hold;
     if (this.expr === e) return;
     this.expr = e;
-    const uv = this.torso.geometry.attributes.uv, s = this.torso.geometry.userData.faceStart, r = faceCell(e);
+    const uv = this.torso.geometry.attributes.uv, s = this.torso.geometry.userData.faceStart, r = faceCell(e, (this.look && this.look.beard) || 0);
     for (let k = 0; k < 4; k++) uv.setXY(s + k, r[0] + FACE_UV[k][0] * (r[2] - r[0]), r[1] + FACE_UV[k][1] * (r[3] - r[1]));
     uv.needsUpdate = true;
   }

@@ -33,6 +33,12 @@ export const COL = {
 };
 
 export const KIT_LOKO = { stripe: '#18884f', main: '#c8213a', second: '#18884f', shorts: '#10613c', socks: '#c8213a', plate: '#f1efe8', numInk: '#13321f', ink: 'dark' };
+/** Комплекти форми клубу на вибір: домашня (червоно-зелена), виїзна (біла) і третя (чорно-золота). */
+export const KITS = {
+  home: { name: 'Домашня', kit: KIT_LOKO },
+  away: { name: 'Виїзна', kit: { stripe: '#c8213a', main: '#f1efe8', second: '#c8213a', shorts: '#157a46', socks: '#f1efe8', plate: '#14231e', numInk: '#13321f', ink: 'dark' } },
+  third: { name: 'Третя', kit: { stripe: '#e8b923', main: '#1c2328', second: '#e8b923', shorts: '#1c2328', socks: '#1c2328', plate: '#f1efe8', numInk: '#13321f', ink: 'dark' } },
+};
 export const KIT_GK_LOKO = { main: '#e0a81c', second: '#23272b', shorts: '#23272b', socks: '#e0a81c', plate: '#23272b', numInk: '#f1efe8', ink: 'light' };
 
 const club = (name, city, a, b, gk) => ({
@@ -121,6 +127,10 @@ export const ACADEMY = {
   hairs: ['crop', 'mohawk', 'long', 'band', 'bald'],
   hairCols: ['#4a2c17', '#1f2933', '#8a6a1c', '#9c2a1c', '#6b4423', '#111827'],
   skins: ['#e8bf9b', '#d4a074', '#b07a52', '#8a5a3c'],
+  // для редактора вигляду: ширший вибір
+  allHairs: ['crop', 'buzz', 'slick', 'curly', 'pony', 'long', 'mohawk', 'band', 'bald'],
+  allHairCols: ['#111827', '#1f2933', '#4a2c17', '#6b4423', '#8a6a1c', '#d8b25a', '#9c2a1c', '#cfcfcf'],
+  allSkins: ['#f3d2b3', '#e8bf9b', '#d4a074', '#b07a52', '#8a5a3c', '#5f3d29'],
 };
 
 // Стадіон: ярус за рівнем прокачки

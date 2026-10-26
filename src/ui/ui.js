@@ -1,5 +1,5 @@
 import { S, commit, resetAll, subscribe } from '../state/save.js';
-import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, matchSpec } from '../config.js';
+import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, KITS, matchSpec } from '../config.js';
 import { kickCost, stadiumCost, KICK_STEP, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
 import { audio } from '../core/audio.js';
 import { I, crest, lokoCrest } from './icons.js';
@@ -7,7 +7,7 @@ import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact }
 import { Hud } from './hud.js';
 import { playIntro } from './intro.js';
 import { portrait } from './portrait.js';
-import { ensureSquad, oppSquad, allPlayers, swapTargets, swapPlayers, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook } from '../state/squad.js';
+import { ensureSquad, oppSquad, allPlayers, swapTargets, swapPlayers, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook, myKit, lookSig } from '../state/squad.js';
 import { striker } from '../state/economy.js';
 
 const rarCol = (id) => ACADEMY.rarities.find((r) => r.id === id) || ACADEMY.rarities[0];
@@ -72,6 +72,7 @@ export class UI {
   </div>
 </section>
 <section class="overlay settings" id="settings" hidden></section>
+<section class="overlay custom" id="custom" hidden></section>
 <section class="overlay reveal" id="reveal" hidden></section>
 <section class="splash" id="splash">
   <div class="splash-in">
@@ -87,8 +88,10 @@ export class UI {
 <div class="flash" id="flash"></div>
 <div class="slowfx" id="slowfx"></div>`);
     const q = (id) => root.querySelector('#' + id);
-    this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), club: q('m-club'), next: q('m-next'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), kick: q('m-kick'), kickV: q('m-kick-v'), kickC: q('m-kick-c'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
+    this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), custom: q('custom'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), club: q('m-club'), next: q('m-next'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), kick: q('m-kick'), kickV: q('m-kick-v'), kickC: q('m-kick-c'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
     root.addEventListener('input', (e) => {
+      const nm = e.target.closest('[data-cname]');
+      if (nm && this.cu != null) { const pl = allPlayers()[this.cu]; if (pl) { pl.name = nm.value.slice(0, 22) || pl.name; pl.custom = true; commit(); } return; }
       const t = e.target.closest('[data-range]'); if (!t) return;
       const k = t.dataset.range, v = +t.value;
       S.settings[k] = v; this.applyControls(); commit();
@@ -212,6 +215,8 @@ export class UI {
       case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
       default:
         if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); return this.renderPanel(); }
+        if (a.startsWith('cust:')) return this.openCustom(+a.slice(5));
+        if (a.startsWith('cu-')) return this.customAct(a, el);
         if (a.startsWith('train:')) return this.train(a);
         if (a.startsWith('swap:')) { const [, bi, slot] = a.split(':'); if (swapPlayers(+slot, +bi - 11)) { this.sel = +slot; audio.buy(); this.toast('Заміна проведена'); } else audio.deny(); return this.renderPanel(); }
         if (a.startsWith('buy:')) return this.buy(a.slice(4));
@@ -377,7 +382,7 @@ export class UI {
     const all = allPlayers();
     const cards = all.map((e, i) => {
       const L = squadLook(e), gk = e.line === 'G', o = ovr(e);
-      const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : KIT_LOKO, num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, gk, scale: 0.9 }, 'sq-' + e.id + (e.role === 'ST' ? striker().id : ''));
+      const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : myKit(), num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, beard: L.beard, gk, scale: 0.9 }, 'sq-' + e.id + e.num + lookSig(e) + (e.role === 'ST' && !e.custom ? striker().id : ''));
       return `<button class="sq-card ${i === this.sel ? 'on' : ''} ${i >= 11 ? 'sub' : ''}" data-act="sel:${i}"><i class="ovr ${tierOf(o)}">${o}</i><img src="${img}" alt=""/><b>${e.name.split(' ').slice(-1)[0]}</b><em>№${e.num} · ${i >= 11 ? 'запас' : e.role}</em></button>`;
     }).join('');
     const e = all[this.sel], o = ovr(e), need = xpNeed(e.lvl), isSub = this.sel >= 11;
@@ -386,7 +391,7 @@ export class UI {
       const v = e.stats[k], c = trainCost(v), can = S.coins >= c && v < 99;
       return `<div class="st"><div class="st-t"><span>${STAT_NAMES[k]}</span><b>${v}</b></div><i><u style="width:${v}%"></u></i><button class="btn buy ${can ? 'can' : ''}" data-act="train:${this.sel}:${k}" ${v >= 99 ? 'disabled' : ''}><b>+1 · ${fmt(c)}</b>${I.coin}</button><small>${STAT_HINT[k]}</small></div>`;
     }).join('');
-    const detail = `<div class="sq-d"><div class="sq-h"><i class="ovr big ${tierOf(o)}">${o}</i><div><h3>${e.name}</h3><p>№${e.num} · ${ROLE_UA[isSub ? (e.pos || e.role) : e.role]}${isSub ? ' · запасний' : ''}</p><div class="xp"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></div><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small></div></div>${swaps}<div class="st-grid">${tiles}</div></div>`;
+    const detail = `<div class="sq-d"><div class="sq-h"><i class="ovr big ${tierOf(o)}">${o}</i><div><h3>${e.name}</h3><button class="btn alt cust" data-act="cust:${this.sel}"><b>ВИГЛЯД</b></button><p>№${e.num} · ${ROLE_UA[isSub ? (e.pos || e.role) : e.role]}${isSub ? ' · запасний' : ''}</p><div class="xp"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></div><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small></div></div>${swaps}<div class="st-grid">${tiles}</div></div>`;
     return sheet('Команда · рейтинг ' + squadRating(), this.teamTabs() + `<div class="sq-wrap"><div class="sq-list scroller">${cards}</div>${detail}</div>`, 'wide');
   }
 
@@ -402,7 +407,7 @@ export class UI {
     const g = this.game, st = this.tab === 'strikers';
     const list = st ? STRIKERS : KEEPERS, owned = st ? S.strikers : S.keepers, cur = st ? S.striker : S.keeper;
     const cards = list.map((c) => {
-      const kit = st ? KIT_LOKO : KIT_GK_LOKO;
+      const kit = st ? myKit() : KIT_GK_LOKO;
       const img = portrait(g.renderer, { kit, num: st ? 9 : 1, skin: c.skin, hair: c.hair, hairCol: c.hairCol, gk: !st, scale: 0.9 }, 'tr-' + c.id);
       const has = owned.includes(c.id), eq = cur === c.id;
       const stats = st
@@ -421,7 +426,7 @@ export class UI {
     const slots = Array.from({ length: A.slots }, (_, i) => {
       const p = S.academy.players[i];
       if (!p) return `<div class="slot empty"><span>${I.lock}</span><em>вільне місце</em></div>`;
-      const img = portrait(g.renderer, { kit: KIT_LOKO, num: p.num, skin: p.skin, hair: p.hair, hairCol: p.hairCol, gk: false, scale: 0.9 }, 'ac-' + p.id);
+      const img = portrait(g.renderer, { kit: myKit(), num: p.num, skin: p.skin, hair: p.hair, hairCol: p.hairCol, gk: false, scale: 0.9 }, 'ac-' + p.id);
       return `<div class="slot" style="--rc:${rarCol(p.rar).col}"><img src="${img}" alt=""/><b>${p.name}</b><em>№${p.num} · +${p.bonus}% дохід</em></div>`;
     }).join('');
     const act = ready ? `<button class="btn go big" data-act="acad-collect"><b>ЗАБРАТИ ВИПУСКНИКА</b></button>` : `<button class="btn buy ${S.tickets > 0 ? 'can' : ''}" data-act="acad-boost"><b>Прискорити: 1</b>${I.ticket}</button>`;
@@ -497,7 +502,7 @@ export class UI {
     S.academy.progress = 0; S.academy.ready = false;
     commit(); audio.win();
     const r = rarCol(gr.rar);
-    const img = portrait(this.game.renderer, { kit: KIT_LOKO, num: gr.num, skin: gr.skin, hair: gr.hair, hairCol: gr.hairCol, gk: false, scale: 0.9 }, 'ac-' + gr.id);
+    const img = portrait(this.game.renderer, { kit: myKit(), num: gr.num, skin: gr.skin, hair: gr.hair, hairCol: gr.hairCol, gk: false, scale: 0.9 }, 'ac-' + gr.id);
     this.el.reveal.innerHTML = `<div class="reveal-in" style="--rc:${r.col}" data-act="close-reveal"><div class="rays"></div><img src="${img}" alt=""/><small>${r.name}</small><h2>${gr.name}</h2><p>№${gr.num} · +${gr.bonus}% до доходу ${note ? '· ' + note : ''}</p><button class="btn go"><b>ВІТАЮ</b></button></div>`;
     this.el.reveal.hidden = false;
   }
@@ -510,6 +515,51 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- налаштування
+  // ---------------------------------------------------------------- редактор вигляду гравця й форми
+  openCustom(idx) {
+    this.cu = idx; this.el.custom.hidden = false; this.renderCustom(); audio.click();
+  }
+  closeCustom() { this.el.custom.hidden = true; this.cu = null; if (this.panel) this.renderPanel(); }
+  customAct(a, el) {
+    const e = allPlayers()[this.cu]; if (!e && a !== 'cu-done') return;
+    const [k, v] = [a.slice(3, a.indexOf(':') < 0 ? a.length : a.indexOf(':')), a.indexOf(':') < 0 ? '' : a.slice(a.indexOf(':') + 1)];
+    if (k === 'done') { audio.back(); return this.closeCustom(); }
+    if (k === 'kit') { S.kitId = v; commit(); audio.click(); return this.renderCustom(); }
+    if (k === 'skin') e.skin = v;
+    else if (k === 'hair') e.hair = v;
+    else if (k === 'col') e.hairCol = v;
+    else if (k === 'beard') e.beard = +v;
+    else if (k === 'num') {
+      const used = new Set(allPlayers().filter((p) => p !== e).map((p) => p.num));
+      let n = e.num; for (let i = 0; i < 99; i++) { n = ((n - 1 + (v === '+' ? 1 : -1) + 99) % 99) + 1; if (!used.has(n)) break; }
+      e.num = n;
+    } else if (k === 'reset') { e.custom = false; }
+    if (k !== 'reset') e.custom = true;
+    commit(); audio.click(); this.renderCustom();
+  }
+  renderCustom() {
+    const g = this.game, e = allPlayers()[this.cu]; if (!e) return;
+    const L = squadLook(e), gk = e.line === 'G';
+    const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : myKit(), num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, beard: L.beard, gk, scale: 1.0 }, 'cu-' + e.id + e.num + lookSig(e));
+    const sw = (arr, cur, act) => arr.map((c) => `<button class="sw ${c === cur ? 'on' : ''}" style="background:${c}" data-act="${act}:${c}" aria-label="${c}"></button>`).join('');
+    const opt = (arr, cur, act, names) => arr.map((c, i) => `<button class="chip-b ${c === cur ? 'on' : ''}" data-act="${act}:${c}">${names ? names[i] : c}</button>`).join('');
+    const HN = { crop: 'Класика', buzz: 'Під нуль', slick: 'Зачіс', curly: 'Кучері', pony: 'Хвіст', long: 'Довге', mohawk: 'Мохавк', band: 'Пов’язка', bald: 'Лисий' };
+    const kits = Object.entries(KITS).map(([id, v]) => `<button class="kit-b ${S.kitId === id ? 'on' : ''}" data-act="cu-kit:${id}"><i style="background:linear-gradient(90deg,${v.kit.main} 0 60%,${v.kit.second} 60% 100%)"></i><span>${v.name}</span></button>`).join('');
+    this.el.custom.innerHTML = `<div class="card-box wide cu-box">
+      <header class="sheet-h"><h2>Вигляд · №${e.num}</h2><button class="sq btn-red" data-act="cu-done" aria-label="Готово">${I.check}</button></header>
+      <div class="cu-wrap">
+        <div class="cu-prev"><img src="${img}" alt=""/><input class="cu-name" data-cname maxlength="22" value="${e.name.replace(/"/g, '&quot;')}" aria-label="Ім’я"/>
+          <div class="cu-num"><button class="btn alt" data-act="cu-num:-"><b>−</b></button><span>№${e.num}</span><button class="btn alt" data-act="cu-num:+"><b>+</b></button></div>
+          <button class="btn alt" data-act="cu-reset"><b>ЗАЛИШИТИ ЗА ЗАМОВЧУВАННЯМ</b></button></div>
+        <div class="cu-opts scroller">
+          <div class="cu-r"><small>Форма клубу</small><div class="kits">${kits}</div></div>
+          <div class="cu-r"><small>Шкіра</small><div class="sws">${sw(ACADEMY.allSkins, L.skin, 'cu-skin')}</div></div>
+          <div class="cu-r"><small>Зачіска</small><div class="chips">${opt(ACADEMY.allHairs, L.hair, 'cu-hair', ACADEMY.allHairs.map((h) => HN[h]))}</div></div>
+          <div class="cu-r"><small>Колір волосся</small><div class="sws">${sw(ACADEMY.allHairCols, L.hairCol, 'cu-col')}</div></div>
+          <div class="cu-r"><small>Борода</small><div class="chips">${['Нема', 'Щетина', 'Вуса', 'Борода'].map((n, i) => `<button class="chip-b ${(L.beard || 0) === i ? 'on' : ''}" data-act="cu-beard:${i}">${n}</button>`).join('')}</div></div>
+        </div></div></div>`;
+  }
+
   openSettings() {
     this.el.settings.hidden = false; this.renderSettings();
   }

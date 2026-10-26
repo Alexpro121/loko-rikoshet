@@ -1,5 +1,5 @@
 import { S, commit } from './save.js';
-import { ACADEMY, FORMATIONS } from '../config.js';
+import { ACADEMY, FORMATIONS, KITS } from '../config.js';
 import { striker, keeper, keeperTier } from './economy.js';
 import { rng } from '../graphics/voxel.js';
 
@@ -28,6 +28,9 @@ const WEIGHT = {
   F: { pace: 0.2, shoot: 0.36, pass: 0.06, drib: 0.2, tack: 0.02, iq: 0.16 },
   G: { react: 0.34, reach: 0.2, hands: 0.26, pass: 0.05, iq: 0.15 },
 };
+/** Борода: 0 нема, 1 щетина, 2 вуса, 3 повна. */
+const pickBeard = (rnd) => { const r = rnd(); return r < 0.58 ? 0 : r < 0.76 ? 1 : r < 0.86 ? 2 : 3; };
+export const myKit = () => (KITS[S.kitId] || KITS.home).kit;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 export function makeStats(line, base, rnd = Math.random, spread = 7) {
@@ -55,7 +58,7 @@ export function newEntry(role, idx, rnd, base, names = 'ua') {
     id: 'p' + idx + Math.floor(rnd() * 1e6), role: role.name, line, num: role.num,
     name: names === 'ua' ? pick(FIRST_UA) + ' ' + pick(LAST_UA) : pick(FIRST_INT) + ' ' + pick(LAST_INT),
     stats: makeStats(line, base, rnd), xp: 0, lvl: 1, apps: 0, goals: 0,
-    skin: pick(ACADEMY.skins), hair: pick(ACADEMY.hairs), hairCol: pick(ACADEMY.hairCols),
+    skin: pick(ACADEMY.skins), hair: pick(ACADEMY.hairs), hairCol: pick(ACADEMY.hairCols), beard: pickBeard(rnd),
   };
 }
 
@@ -84,7 +87,7 @@ function rosterEntry(r, idx, rnd, base, slot) {
   return {
     id: 'r' + num, role: slot ? slot.name : pos, pos, line: slot ? (slot.name === 'GK' ? 'G' : slot.line) : line, num, name, real: true,
     stats: makeStats(slot ? (slot.name === 'GK' ? 'G' : slot.line) : line, base, rnd), xp: 0, lvl: 1, apps: 0, goals: 0,
-    skin: pick(ACADEMY.skins), hair: pick(ACADEMY.hairs), hairCol: pick(ACADEMY.hairCols),
+    skin: pick(ACADEMY.skins), hair: pick(ACADEMY.hairs), hairCol: pick(ACADEMY.hairCols), beard: pickBeard(rnd),
   };
 }
 
@@ -151,10 +154,13 @@ export const gkBonus = () => keeperTier() * 0.05;
 
 /** Вигляд гравця: збережене обличчя; нападник-трансфер замінює зовнішність центрального нападника. */
 export function squadLook(e) {
-  if (e.role === 'GK') { const k = keeper(); return { skin: k.skin, hair: k.hair, hairCol: k.hairCol, num: e.num }; }
-  if (e.role === 'ST') { const s = striker(); return { skin: s.skin, hair: s.hair, hairCol: s.hairCol, num: e.num }; }
-  return { skin: e.skin, hair: e.hair, hairCol: e.hairCol, num: e.num };
+  if (e.custom) return { skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, num: e.num };
+  if (e.role === 'GK') { const k = keeper(); return { skin: k.skin, hair: k.hair, hairCol: k.hairCol, beard: e.beard || 0, num: e.num }; }
+  if (e.role === 'ST') { const s = striker(); return { skin: s.skin, hair: s.hair, hairCol: s.hairCol, beard: e.beard || 0, num: e.num }; }
+  return { skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, num: e.num };
 }
+/** Підпис вигляду для кешу портретів. */
+export const lookSig = (e) => [e.skin, e.hair, e.hairCol, e.beard || 0, e.custom ? 'c' : '', S.kitId || 'home'].join('');
 
 /** Досвід: підвищення рівня дає +1 до двох навичок, що найбільше пасують ролі. */
 export function gainXp(e, amount, events) {

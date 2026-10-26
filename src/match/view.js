@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { COL, KIT_LOKO, KIT_GK_LOKO, ACADEMY, FORMATIONS } from '../config.js';
 import { S } from '../state/save.js';
 import { keeper } from '../state/economy.js';
-import { squadLook } from '../state/squad.js';
+import { squadLook, myKit } from '../state/squad.js';
 import { buildPitch } from '../graphics/pitch.js';
 import { Stands } from '../graphics/stands.js';
 import { Particles } from '../graphics/particles.js';
@@ -50,13 +50,13 @@ export class MatchView {
     this.particles = new Particles(520, 1); scene.add(this.particles.mesh);
   }
 
-  look(kit, gk, who, num, scale = SCALE) { return { kit, num, skin: who.skin, hair: who.hair, hairCol: who.hairCol, gk, scale }; }
+  look(kit, gk, who, num, scale = SCALE) { return { kit, num, skin: who.skin, hair: who.hair, hairCol: who.hairCol, beard: who.beard || 0, gk, scale }; }
 
   /** Склади під матч: обличчя, номери й форма з персональних записів гравців (мій склад і суперник). */
   setup(spec, myFormation, mySquad, oppSq) {
     const k = keeper();
-    this.mine[0].setLook(this.look(KIT_GK_LOKO, true, k, 1));
-    this.mine.forEach((p, i) => { if (i === 0) return; const e = mySquad[i], L = squadLook(e); p.setLook(this.look(KIT_LOKO, false, L, L.num)); });
+    this.mine[0].setLook(this.look(KIT_GK_LOKO, true, squadLook(mySquad[0]), 1));
+    this.mine.forEach((p, i) => { if (i === 0) return; const e = mySquad[i], L = squadLook(e); p.setLook(this.look(myKit(), false, L, L.num)); });
     const c = spec.club;
     this.opp[0].setLook(this.look(c.gk, true, oppSq[0], 1));
     this.opp.forEach((p, i) => { if (i === 0) return; const e = oppSq[i]; p.setLook(this.look(c.kit, false, e, e.num)); });

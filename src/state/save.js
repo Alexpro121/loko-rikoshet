@@ -19,6 +19,7 @@ const defaults = () => ({
   tutorial: false,
   squad: null,
   bench: null,
+  kitId: 'home',
   form: [],
 });
 
