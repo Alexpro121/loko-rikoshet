@@ -130,7 +130,8 @@ export function playIntro(root, done) {
     <div class="in-run">${TRAIN}</div>
     <div class="in-sem red"><div class="in-lamp"><i class="r"></i><i class="g"></i></div><b class="in-say"><span class="s1">СТОП</span><span class="s2">ВПЕРЕД!</span></b></div>
     <div class="in-chant" data-s=""><b class="q">ХТО МИ?</b><b class="a">ЛОКО!</b></div>
-    <div class="in-year"><small>КИЇВСЬКІ ЗАЛІЗНИЧНИКИ З</small><div class="in-flap">${year}</div></div>
+    <div class="in-cards" id="in-cards"></div>
+    <div class="in-year" hidden><small>КИЇВСЬКІ ЗАЛІЗНИЧНИКИ З</small><div class="in-flap">${year}</div></div>
     <div class="in-crest">${lokoCrest()}</div>
     <h1 class="in-title"><div class="t1">${word('ЛОКОМОТИВ', 'a')}</div><div class="t2">${word('РИКОШЕТ', 'b')}</div></h1>
     <div class="in-slip"><span>РЕЙС №1</span><b>КИЇВ → ЛІГА ЧЕМПІОНІВ</b><i></i></div>
@@ -190,6 +191,24 @@ export function playIntro(root, done) {
   raf = requestAnimationFrame(frame);
 
   // звук і сценарій: гудок, зупинка, зелений, відправлення, фінал із чантом «Хто ми? — ЛОКО!»
+  const CARDS = [
+    ['ФК ЛОКОМОТИВ', 'КИЇВ · ЗАЛІЗНИЧНИКИ', 0],
+    ['1919', 'РІК ЗАСНУВАННЯ · НАЙСТАРІШИЙ КЛУБ КИЄВА', 1],
+    ['ЗАЛІЗНИЧНИКИ', 'КЛУБ ПІВДЕННО-ЗАХІДНОЇ ЗАЛІЗНИЦІ', 0],
+    ['СТОП → ВПЕРЕД', 'ЧЕРВОНИЙ І ЗЕЛЕНИЙ — СИГНАЛИ ЗАЛІЗНИЦІ', 0],
+    ['5× ЧЕМПІОН КИЄВА', 'ПЕРЕМОГИ, ЯКІ ВАРТО ПАМ’ЯТАТИ', 0],
+    ['СТАДІОН «ЛОКОМОТИВ»', 'З 1925 РОКУ · 1631 МІСЦЕ', 0],
+    ['ДАВАЙ, ЛОКО!', 'ВІД ДРУГОЇ ЛІГИ ДО ЛІГИ ЧЕМПІОНІВ', 0],
+  ];
+  const box = el.querySelector('#in-cards');
+  CARDS.forEach(([big, sub, flap], i) => {
+    const c = document.createElement('div'); c.className = 'in-card';
+    const head = flap ? `<div class="in-cf">${[...big].map((ch, k) => `<s style="--i:${k}">${ch}</s>`).join('')}</div>` : `<b>${big}</b>`;
+    c.innerHTML = `<i class="in-ci">${lokoCrest()}</i><div>${head}<small>${sub}</small></div>`;
+    box.appendChild(c);
+    at(500 + i * 1150, () => c.classList.add('on'));
+    at(500 + i * 1150 + 1000, () => c.classList.remove('on'));
+  });
   const chant = el.querySelector('.in-chant');
   const shout = (kind) => { chant.dataset.s = ''; void chant.offsetWidth; chant.dataset.s = kind; };
   at(150, () => audio.horn());
