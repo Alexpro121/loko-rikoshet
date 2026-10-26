@@ -157,11 +157,36 @@ export function buildPitch() {
     ng.add(back, roof, sideA, sideB);
     group.add(ng); nets.push(ng);
   }
-  // справжня емблема клубу в центрі поля
-  const lc = document.createElement('canvas'); lc.width = lc.height = 256; const lgc = lc.getContext('2d');
-  const ltex = new THREE.CanvasTexture(lc); ltex.colorSpace = THREE.SRGBColorSpace; ltex.anisotropy = 8;
-  whenLogo((img) => { lgc.clearRect(0, 0, 256, 256); const lh = 244, lw = lh * 166 / 180; lgc.drawImage(img, 128 - lw / 2, 6, lw, lh); ltex.needsUpdate = true; });
-  const decal = new THREE.Mesh(new THREE.PlaneGeometry(9.5, 9.5), new THREE.MeshBasicMaterial({ map: ltex, transparent: true, opacity: 0.78, depthWrite: false }));
-  decal.rotation.x = -Math.PI / 2; decal.position.y = 0.035; decal.renderOrder = 1; group.add(decal);
-  return { group, nets, grassMat: group.userData.grassMat, boards: bt };
+  // емблеми на газоні: справжня Локо на своїй половині й щит суперника на його половині; після свистка плавно зникають
+  const mkDecal = (x) => {
+    const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0.8, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.set(x, 0.035, 0); m.renderOrder = 1; group.add(m);
+    return { m, g, t };
+  };
+  const dMine = mkDecal(-L * 0.5), dOpp = mkDecal(L * 0.5);
+  whenLogo((img) => { dMine.g.clearRect(0, 0, 256, 256); const lh = 244, lw = lh * 166 / 180; dMine.g.drawImage(img, 128 - lw / 2, 6, lw, lh); dMine.t.needsUpdate = true; });
+  const drawOpp = (club) => {
+    const g = dOpp.g, a = club ? club.kit.main : '#254e9c', b2 = club ? club.kit.second : '#e4e8ec', name = club ? String(club.name).slice(0, 2).toUpperCase() : 'ГО';
+    g.clearRect(0, 0, 256, 256); g.save(); g.translate(14, 6); g.scale(5.5, 5.5);
+    const p = new Path2D('M3 3h34v22c0 9-9 16-17 19C12 41 3 34 3 25z');
+    g.fillStyle = a; g.fill(p); g.save(); g.clip(p); g.fillStyle = b2; g.fillRect(20, 0, 20, 46); g.restore(); g.lineWidth = 2.2; g.strokeStyle = '#fff'; g.stroke(p);
+    g.restore(); g.fillStyle = '#fff'; g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 8; g.font = '800 86px Rubik, "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.strokeText(name, 128, 118); g.fillText(name, 128, 118); dOpp.t.needsUpdate = true;
+  };
+  drawOpp(null);
+  let fade = 1, fading = false;
+  const decals = {
+    setOpponent: drawOpp,
+    show() { fade = 1; fading = false; dMine.m.material.opacity = dOpp.m.material.opacity = 0.8; dMine.m.visible = dOpp.m.visible = true; },
+    fadeOut() { fading = true; },
+    update(dt) {
+      if (!fading) return;
+      fade = Math.max(0, fade - dt * 0.7);
+      dMine.m.material.opacity = dOpp.m.material.opacity = 0.8 * fade;
+      if (fade <= 0) { dMine.m.visible = dOpp.m.visible = false; fading = false; }
+    },
+  };
+  return { group, nets, grassMat: group.userData.grassMat, boards: bt, decals };
 }

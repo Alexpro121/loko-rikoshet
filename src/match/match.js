@@ -645,6 +645,7 @@ export class Match {
     });
   }
   endIntro() {
+    this.view.pitch.decals.fadeOut();
     this.formation();
     for (const a of [...this.mine, ...this.opp]) { a._ix = undefined; a._iz = undefined; }
     audio.crowd(0.7); this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true);
@@ -1018,7 +1019,7 @@ export class Match {
     for (let i = 0; i < v.players.length; i++) v.players[i].animate(dt);
     const h = v.ball.update(dt, b.x, b.z, b.vx, b.vz);
     v.updateShadows(b.x, b.z, h);
-    v.stands.update(dt, this.time); v.weather.update(dt); v.surround.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
+    v.stands.update(dt, this.time); v.weather.update(dt); v.surround.update(dt); v.pitch.decals.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
     v.particles.update(dt);
     if (this.bs === 'ready') {
       const pr = this.danger;

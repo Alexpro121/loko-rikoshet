@@ -112,7 +112,7 @@ export class MatchView {
     this.mine[0].setLook(this.look(KIT_GK_LOKO, true, squadLook(mySquad[0]), 1));
     this.mine.forEach((p, i) => { if (i === 0) return; const e = mySquad[i], L = squadLook(e); p.setLook(this.look(myKit(), false, L, L.num)); });
     const c = spec.club;
-    this.stands.setOpponent(c); this.stands.particles = this.particles; this.pitch.boards.redraw(c);
+    this.stands.setOpponent(c); this.stands.particles = this.particles; this.pitch.boards.redraw(c); this.pitch.decals.setOpponent(c); this.pitch.decals.show();
     this.opp[0].setLook(this.look(c.gk, true, oppSq[0], 1));
     this.opp.forEach((p, i) => { if (i === 0) return; const e = oppSq[i]; p.setLook(this.look(c.kit, false, e, e.num)); });
     this.particles.clear();
