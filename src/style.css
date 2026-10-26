@@ -656,3 +656,28 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .in-rod, #not_found_bracefront, #not_found_braceback, #not_found_car-layers { animation-play-state: var(--wp, running); }
 .in-run { --W: calc(var(--u) * 640); }
 .in-run { --W: calc(var(--u) * 1113); }
+
+/* ===== світлофор керується потягом; фінал стартує за сигналом; чант ===== */
+.go .in-sem { animation: semin 0.4s 0.6s forwards; z-index: 3; }
+.in-lamp .r, .in-lamp .g { animation: none; background: #1f2528; box-shadow: none; transition: background 0.15s, box-shadow 0.15s; }
+.in-sem.red .r { background: #ff3b4a; box-shadow: 0 0 calc(var(--u) * 3) #ff3b4a; }
+.in-sem.green .g { background: #3fe08f; box-shadow: 0 0 calc(var(--u) * 4) #3fe08f; }
+.in-say span { animation: none !important; opacity: 0; transition: opacity 0.2s; }
+.in-sem.red .s1, .in-sem.green .s2 { opacity: 1; }
+.go:not(.fin) .in-flash, .go:not(.fin) .in-rays, .go:not(.fin) .in-crest, .go:not(.fin) .in-title s, .go:not(.fin) .in-slip { animation: none; }
+.fin .in-flash { animation: flashin 0.7s ease-out; }
+.fin .in-rays { animation: raysin 3s ease-out forwards, spinr 20s linear infinite; }
+.fin .in-crest { animation: stamp 0.55s cubic-bezier(0.2, 1.5, 0.4, 1) forwards; }
+.fin .in-title .a { animation: drop 0.5s calc(0.5s + var(--i) * 0.045s) cubic-bezier(0.3, 1.6, 0.5, 1) forwards; }
+.fin .in-title .b { animation: drop 0.5s calc(0.95s + var(--i) * 0.05s) cubic-bezier(0.3, 1.6, 0.5, 1) forwards; }
+.fin .in-slip { animation: print 0.9s 1.6s steps(18) forwards; }
+.in-chant { left: 0; right: 0; top: 7%; height: calc(var(--u) * 20); text-align: center; pointer-events: none; z-index: 2; }
+.in-chant b { position: absolute; left: 0; right: 0; top: 0; opacity: 0; font-weight: 800; line-height: 1; -webkit-text-stroke: calc(var(--u) * 0.7) var(--ink); paint-order: stroke fill; text-shadow: 0 calc(var(--u) * 0.8) 0 rgba(0, 0, 0, 0.3); }
+.in-chant .q { font-size: calc(var(--u) * 9); color: #fff; letter-spacing: 0.06em; }
+.in-chant .a { font-size: calc(var(--u) * 15); color: #ff3b4a; letter-spacing: 0.08em; }
+.in-chant[data-s="q"] .q { animation: chq 1s forwards; }
+.in-chant[data-s="a"] .a { animation: cha 1s forwards; }
+.in-chant[data-s="b"] .a { animation: cha 1.6s forwards; color: #3fe08f; font-size: calc(var(--u) * 18); }
+@keyframes chq { 0% { opacity: 0; transform: translateY(calc(var(--u) * 3)) scale(0.8); } 20%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes cha { 0% { opacity: 0; transform: scale(2.2) rotate(-4deg); } 18% { opacity: 1; transform: scale(0.94) rotate(1deg); } 30% { transform: scale(1.06); } 40%, 78% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .in-chant b { animation-duration: 0.01s !important; } }

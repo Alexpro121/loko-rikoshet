@@ -1,5 +1,18 @@
 import { audio } from '../core/audio.js';
 import { lokoCrest } from './icons.js';
+import { S } from '../state/save.js';
+
+/** Голос: «Хто ми?» низько, «ЛОКО!» голосно (мовний синтез браузера, якщо є). */
+function say(text, pitch, rate, vol) {
+  try {
+    if (!S.settings.sfx || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'uk-UA'; u.pitch = pitch; u.rate = rate; u.volume = vol;
+    const v = speechSynthesis.getVoices().find((x) => /^uk/i.test(x.lang));
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  } catch (e) { /* без голосу */ }
+}
 
 /** Потяг у стилі клубного автобуса й УЗ: червоний корпус, зелені шеврони, білий фірмовий пояс, силует носорога. Рухається вправо, кабіна праворуч. */
 const rhino = (x, y, k) => `<g transform="translate(${x} ${y}) scale(${k})"><path fill="#15191c" d="M0 78 C-4 50 10 22 40 14 C58 8 74 12 88 24 L112 6 L104 34 C120 42 122 62 108 76 C100 86 86 88 76 82 C70 94 52 96 44 86 C34 92 12 94 0 78Z"/><path fill="#d6282f" d="M30 40 C46 30 66 32 78 44 C70 52 52 56 38 54Z"/><path fill="#15191c" d="M38 36 L70 40 L60 48Z"/><circle cx="62" cy="43" r="3.2" fill="#46e06a"/><path fill="none" stroke="#15191c" stroke-width="5" d="M6 70 C16 84 34 90 52 82"/></g>`;
@@ -115,7 +128,8 @@ export function playIntro(root, done) {
     <div class="in-flash"></div><div class="in-rays"></div>
     <div class="in-ground"><div class="in-sleepers"></div><div class="in-rail"></div></div>
     <div class="in-run">${TRAIN}</div>
-    <div class="in-sem"><div class="in-lamp"><i class="r"></i><i class="g"></i></div><b class="in-say"><span class="s1">СТОП</span><span class="s2">ВПЕРЕД!</span></b></div>
+    <div class="in-sem red"><div class="in-lamp"><i class="r"></i><i class="g"></i></div><b class="in-say"><span class="s1">СТОП</span><span class="s2">ВПЕРЕД!</span></b></div>
+    <div class="in-chant" data-s=""><b class="q">ХТО МИ?</b><b class="a">ЛОКО!</b></div>
     <div class="in-year"><small>КИЇВСЬКІ ЗАЛІЗНИЧНИКИ З</small><div class="in-flap">${year}</div></div>
     <div class="in-crest">${lokoCrest()}</div>
     <h1 class="in-title"><div class="t1">${word('ЛОКОМОТИВ', 'a')}</div><div class="t2">${word('РИКОШЕТ', 'b')}</div></h1>
@@ -128,6 +142,7 @@ export function playIntro(root, done) {
   const at = (ms, fn) => T.push(setTimeout(fn, ms));
   const end = () => {
     if (finished) return; finished = true; T.forEach(clearTimeout); cancelAnimationFrame(raf);
+    try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) { /* ignore */ }
     el.classList.add('out');
     setTimeout(() => { el.remove(); }, 700);
     done();
@@ -135,7 +150,7 @@ export function playIntro(root, done) {
   el.addEventListener('click', end);
 
   // плавний рух і фізика: кожен вагон — окрема маса на пружно-демпферних зчепках
-  const run = el.querySelector('.in-run'), ws = [...el.querySelectorAll('.in-w')], N = ws.length, VB = 6097;
+  const sem = el.querySelector('.in-sem'), run = el.querySelector('.in-run'), ws = [...el.querySelectorAll('.in-w')], N = ws.length, VB = 6097;
   const cxs = ws.map((w) => +w.dataset.cx), r = new Float32Array(N), vr = new Float32Array(N);
   const K = 130, C = 15, LIM = 9;
   run.style.animation = 'none';
@@ -147,8 +162,12 @@ export function playIntro(root, done) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     const t = (now - t0) / 1000, vw = innerWidth, Wpx = run.getBoundingClientRect().width || 1;
-    const T = 8.2, x0 = -0.08 * vw - Wpx, x2 = 1.03 * vw;
-    const q = Math.min(1, t / T), x = x0 + (x2 - x0) * (0.5 - 0.5 * Math.cos(Math.PI * q));   // плавний розгін і гальмування, поїзд проходить увесь
+    const TA = 3.0, TH = 4.2, TD = 6.5, x0 = -0.08 * vw - Wpx, x1 = 0.86 * vw - Wpx, x2 = 1.03 * vw;
+    let x;
+    if (t < TA) x = x0 + (x1 - x0) * (1 - Math.pow(1 - t / TA, 3));            // заїзд і плавне гальмування перед червоним
+    else if (t < TH) x = x1;                                                      // стоїть: червоний → зелений
+    else { const q = Math.min(1, (t - TH) / TD); x = x1 + (x2 - x1) * (0.5 - 0.5 * Math.cos(Math.PI * q)); }   // м'який розгін, проходять усі вагони
+    if (t > 3.5 && sem.classList.contains('red')) { sem.classList.replace('red', 'green'); audio.click(); audio.bell(); }
     run.style.transform = `translateX(${x.toFixed(2)}px)`;
     if (xPrev === null || dt <= 0) { xPrev = x; return; }
     const v = (x - xPrev) / dt, upx = Wpx / VB, a = (v - vPrev) / dt / upx;
@@ -170,14 +189,18 @@ export function playIntro(root, done) {
   };
   raf = requestAnimationFrame(frame);
 
-  // звук: гудок, хід поїзда, світлофор, удар печатки
+  // звук і сценарій: гудок, зупинка, зелений, відправлення, фінал із чантом «Хто ми? — ЛОКО!»
+  const chant = el.querySelector('.in-chant');
+  const shout = (kind) => { chant.dataset.s = ''; void chant.offsetWidth; chant.dataset.s = kind; };
   at(150, () => audio.horn());
   at(400, () => audio.rumble());
-  at(2500, () => audio.thud());
-  at(3300, () => audio.horn());
-  at(3300, () => audio.click());
-  at(4200, () => { audio.click(); audio.bell(); });
-  at(5200, () => { audio.horn(); audio.thud(); });
-  at(10200, end);
+  at(2900, () => audio.thud());
+  at(4200, () => { audio.horn(); audio.rumble(); });
+  at(8800, () => { el.classList.add('fin'); audio.horn(); audio.thud(); });
+  at(10300, () => { shout('q'); say('Хто ми?', 0.5, 0.85, 1); });
+  at(11300, () => { shout('a'); say('Локо!', 1.0, 1.0, 1); audio.crowd(0.98); audio.horn(); });
+  at(12300, () => { shout('q'); say('Хто ми?', 0.5, 0.85, 1); });
+  at(13200, () => { shout('b'); say('Локо!', 1.1, 1.05, 1); audio.crowd(1); audio.horn(); audio.thud(); });
+  at(15000, end);
   el.classList.add('go');
 }
