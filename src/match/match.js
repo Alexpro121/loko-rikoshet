@@ -668,7 +668,7 @@ export class Match {
   }
   camOverride() {
     if (this.phase === 'intro') { const o = this.introCam(this.introT); return { p: o.p, l: o.l, fov: o.fov }; }
-    return this.phase === 'pens' && this.pens ? this.pens.camOverride() : null;
+    return (this.phase === 'pens' || (this.phase === 'paused' && this.prevPhase === 'pens')) && this.pens ? this.pens.camOverride() : null;
   }
 
   /** Режим володіння: поки м'яч у нас, час сповільнюється до удару або до відбору. */
@@ -1035,9 +1035,9 @@ export class Match {
   floatAt(x, z, text, kind) { this.game.floatWorld(x, 1.9, z, text, kind); }
 
   // ------------------------------------------------------------------ завершення
-  pause() { if (this.phase === 'play' || this.phase === 'intro') { this.prevPhase = this.phase; this.phase = 'paused'; this.cancelAim(); audio.crowd(0.2); } }
+  pause() { if (this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens') { this.prevPhase = this.phase; this.phase = 'paused'; this.cancelAim(); audio.crowd(0.2); } }
   resume() { if (this.phase === 'paused') { this.phase = this.prevPhase; audio.crowd(0.7); } }
-  isPlaying() { return this.phase === 'play' || this.phase === 'intro'; }
+  isPlaying() { return this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens'; }
 
   end() {
     const spec = this.spec, me = this.score.me, opp = this.score.opp;

@@ -709,7 +709,7 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 @media (max-aspect-ratio: 3/2) { .cu-wrap { grid-template-columns: 1fr; } }
 
 /* ===== серія пенальті ===== */
-.pen { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.pen { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .pen-top { position: absolute; top: calc(var(--pad-t) + var(--u) * 1); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: calc(var(--u) * 0.6); padding: calc(var(--u) * 1) calc(var(--u) * 2); background: rgba(8, 40, 30, 0.88); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.6); }
 .pen-row { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 3); font-size: var(--fs-s); font-weight: 800; }
 .pd { display: flex; gap: calc(var(--u) * 0.7); } .pd i { width: calc(var(--u) * 3); height: calc(var(--u) * 3); border-radius: 50%; background: #0a3a28; border: max(1px, calc(var(--u) * 0.25)) solid rgba(255, 255, 255, 0.4); } .pd i.g { background: #3fe08f; border-color: #fff; } .pd i.x { background: #ff3b4a; border-color: #fff; }
