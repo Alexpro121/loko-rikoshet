@@ -722,3 +722,26 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .res-pens { margin-top: calc(var(--u) * 0.8); font-size: var(--fs-m); font-weight: 800; color: var(--gold); text-align: center; }
 .pen-top { top: calc(var(--pad-t) + var(--u) * 15); }
 .pen-msg { left: calc(var(--pad-l) + var(--u) * 2); bottom: calc(var(--pad-b) + var(--u) * 2); transform: none; text-align: left; max-width: 46vw; font-size: var(--fs-m); }
+
+/* ===== адаптація вікон під низькі екрани (телефон у ландшафті): вміст прокручується, кнопка «закрити» завжди на місці ===== */
+.overlay { overflow: hidden; }
+.overlay .card-box { max-height: 100%; min-height: 0; overflow: hidden; }
+.card-box .sheet-h { flex: none; position: relative; z-index: 2; background: var(--deep); }
+.set-grid, .cu-wrap { overflow-y: auto; min-height: 0; flex: 1 1 auto; touch-action: pan-y; overscroll-behavior: contain; padding-right: calc(var(--u) * 0.6); -webkit-overflow-scrolling: touch; }
+.cu-opts { max-height: none; overflow-y: visible; }
+.pause .card-box, .reveal .card-box { overflow-y: auto; touch-action: pan-y; }
+.seg { flex-wrap: wrap; justify-content: flex-end; }
+.tg.q { flex-wrap: wrap; }
+.set-grid .tg.joy-set { align-items: center; }
+@media (max-height: 470px) {
+  .overlay { padding: max(6px, var(--pad-t)) max(8px, var(--pad-r)) max(6px, var(--pad-b)) max(8px, var(--pad-l)); }
+  .card-box { padding: 10px 14px; gap: 8px; min-width: 0; width: 100%; max-width: 760px; }
+  .card-box.wide { min-width: 0; }
+  .tg { min-height: 40px; padding: 4px 10px; gap: 8px; }
+  .set-grid { gap: 6px; }
+  .seg button { min-height: 34px; padding: 4px 10px; }
+  .joy-set { grid-template-columns: 1fr 1fr auto auto; gap: 8px; }
+  .joy-prev { width: 64px; height: 64px; } .joy-mv { min-height: 36px; }
+  .cu-wrap { grid-template-columns: 150px 1fr; gap: 12px; } .cu-prev img { width: 120px; height: 120px; }
+  .sheet-h .sq { width: 44px; height: 44px; }
+}

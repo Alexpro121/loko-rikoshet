@@ -98,7 +98,11 @@ export class UI {
       S.settings[k] = v; this.applyControls(); commit();
       const o = t.parentElement.querySelector('output'); if (o) o.textContent = v + '%';
     });
-    root.addEventListener('click', (e) => { const t = e.target.closest('[data-act]'); if (t) this.act(t.dataset.act, t); });
+    root.addEventListener('click', (e) => {
+      if (e.target === this.el.settings) return this.closeSettings();                 // тап по затемненню закриває вікно
+      if (e.target === this.el.custom) return this.closeCustom();
+      const t = e.target.closest('[data-act]'); if (t) this.act(t.dataset.act, t);
+    });
     this.hud.onShow = () => this.setMatchUi(true);
     this.hud.onHide = () => this.setMatchUi(false);
     this.initJoy();
