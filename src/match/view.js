@@ -12,6 +12,7 @@ import { shadowTexture } from '../graphics/textures.js';
 import { AimDots } from '../physics/aim.js';
 import { Weather } from '../graphics/weather.js';
 import { buildTunnel } from '../graphics/tunnel.js';
+import { buildSurround } from '../graphics/surround.js';
 
 const SKIN = ACADEMY.skins, HAIR = ACADEMY.hairs, HCOL = ACADEMY.hairCols;
 const SCALE = 0.82;
@@ -30,6 +31,7 @@ export class MatchView {
     scene.add(pitch.group);
     this.stands = new Stands(); scene.add(this.stands.group);
     this.tunnel = buildTunnel(); scene.add(this.tunnel);
+    this.surround = buildSurround(); scene.add(this.surround.group);
     this.weather = new Weather(); scene.add(this.weather.group);
     // сяйво прожекторів уночі й увечері
     const gc = document.createElement('canvas'); gc.width = gc.height = 128; const gg = gc.getContext('2d'), gr = gg.createRadialGradient(64, 64, 0, 64, 64, 64);
