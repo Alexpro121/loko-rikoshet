@@ -188,7 +188,7 @@ export class Penalties {
 
     // --- контакт: початкова швидкість, щоб м'яч (без перешкод) влучив у вибрану точку з тяжінням і закрутом
     if (this.kicked && !this.struck && this.kmode && kp.p.kickP >= 0.36) {
-      this.struck = true; this.st = 0;
+      this.struck = true; this.st = 0; gk.p.splitT = 0.18;
       audio.kick(1); v.ball.squash(dir, 0, 0.3); m.game.addTrauma(0.18); m.game.fovKick(2.5);
       v.particles.burst(m.ball.x, 0.3, m.ball.z, 8, 4, 0.5, 0.2, ['#8fb98a', '#f2f5ee'], 10, 0.6);
       const dist = Math.hypot(this.gx - m.ball.x, this.act.z), spd = 24 + 12 * kp.sk.shoot, Tf = clamp(dist / spd, 0.4, 0.62);

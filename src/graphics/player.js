@@ -301,7 +301,7 @@ export class Player {
         bob = -0.05;
         break;
       }
-      case 'gkwait': { const w = Math.sin(this.t * 5.5); legA = 0.18; legB = -0.1; kneeA = kneeB = 0.38 + Math.abs(w) * 0.08; drop = 0.1; armA = armB = 0.35; elbA = elbB = 0.8; spread = 0.95 + w * 0.05; leanX = 0.28; leanZ = w * 0.07; bob = Math.abs(w) * 0.025; break; }
+      case 'gkwait': { const w = Math.sin(this.t * 5.5); const hop = this.splitT > 0 ? Math.sin(clamp(1 - this.splitT / 0.18, 0, 1) * Math.PI) * 0.22 : 0; if (this.splitT > 0) this.splitT -= dt; lift = hop; legA = 0.18; legB = -0.1; kneeA = kneeB = 0.38 + Math.abs(w) * 0.08; drop = 0.1; armA = armB = 0.35; elbA = elbB = 0.8; spread = 0.95 + w * 0.05; leanX = 0.28; leanZ = w * 0.07; bob = Math.abs(w) * 0.025; break; }
       case 'catch': armA = armB = 1.45; elbA = elbB = 1.1; spread = 0.12; leanX = 0.2; break;
       case 'control': {
         if (this.style === 0) { legB = 1.0 * sn; legA = -0.2 * sn; kneeB = 0.9 * sn; leanX = -0.2 * sn; armA = 0.5 * sn; armB = -0.5 * sn; spread = 0.4 * sn; lift = 0.06 * sn; }
@@ -336,15 +336,21 @@ export class Player {
       }
       case 'pkick': {
         const P = this.kickP || 0, sm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
-        const back = sm(P / 0.3), strike = sm((P - 0.28) / 0.1), follow = sm((P - 0.4) / 0.55);
-        legB = -1.15 * back * (1 - strike) + 2.15 * strike * (1 - 0.4 * follow);
-        kneeB = 1.55 * back * (1 - strike) + 0.12 * strike + 0.55 * follow;
-        legA = 0.12 + 0.12 * back; kneeA = 0.2 + 0.4 * back * (1 - 0.6 * follow);
-        leanX = -0.3 * back * (1 - strike) + 0.55 * strike * (1 - 0.5 * follow);
-        leanY = 0.28 * strike * (1 - follow * 0.5) - 0.12 * back * (1 - strike);
-        armA = -0.5 * back + 1.0 * strike; armB = 0.7 * back - 0.8 * strike; elbA = elbB = 0.5; spread = 0.4 + 0.3 * strike;
-        lift = 0.26 * Math.sin(clamp((P - 0.3) / 0.35, 0, 1) * Math.PI);
-        drop = 0.04 * back;
+        const plant = sm(P / 0.14), back = sm(P / 0.3), strike = sm((P - 0.28) / 0.09), follow = sm((P - 0.4) / 0.5), land = sm((P - 0.62) / 0.3);
+        // б'ючa нога: замах назад зі зігнутим коліном → розпрямлення в контакті → висока проводка
+        legB = -1.25 * back * (1 - strike) + 2.25 * strike * (1 - 0.45 * follow) * (1 - 0.7 * land);
+        kneeB = 1.65 * back * (1 - strike) + 0.1 * strike + 0.7 * follow * (1 - land);
+        // опорна нога: корок у крапку, коліно амортизує, у контакті відштовхується на носок
+        legA = 0.1 + 0.18 * plant - 0.1 * strike; kneeA = 0.15 + 0.5 * plant * (1 - 0.7 * strike) + 0.3 * follow * (1 - land);
+        // корпус: нахил над м'ячем, у контакті вперед, скрут тулуба для сили
+        leanX = -0.28 * back * (1 - strike) + 0.6 * strike * (1 - 0.55 * follow) * (1 - 0.6 * land);
+        leanY = 0.34 * strike * (1 - 0.5 * follow) - 0.18 * back * (1 - strike);
+        leanZ = -0.06 * back + 0.05 * strike;
+        // руки: різко розкинуті для балансу
+        armA = -0.6 * back + 1.15 * strike - 0.3 * follow; armB = 0.85 * back - 0.95 * strike + 0.2 * follow;
+        elbA = 0.55; elbB = 0.45; spread = 0.5 + 0.32 * strike - 0.15 * land;
+        lift = 0.3 * Math.sin(clamp((P - 0.3) / 0.38, 0, 1) * Math.PI);        // легкий стрибок на проводці
+        drop = 0.06 * plant * (1 - strike);
         break;
       }
       case 'pdive': {
@@ -352,12 +358,24 @@ export class Player {
         const sm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
         const load = sm(P / 0.12) * (1 - sm((P - 0.1) / 0.1)), launch = sm((P - 0.09) / 0.3), settle = sm((P - 0.5) / 0.4);
         if (P < 1) {
-          tiltZ = sg * maxTilt * launch;
+          const glide = sm((P - 0.4) / 0.35), land = sm((P - 0.72) / 0.28);
+          // тіло: нахил вбік, невеликий прогин спини в польоті, у кінці глибше лягає на бік
+          tiltZ = sg * (maxTilt * launch + 0.14 * land);
+          leanX = 0.38 * load - 0.14 * launch * (1 - land) + 0.1 * land;
+          leanZ = sg * 0.14 * load;
+          // політ: дуга стрибка, потім ковзання по траві
           lift = Math.sin(clamp((P - 0.09) / 0.55, 0, 1) * Math.PI) * (high ? 1.0 : 0.5) * (1 - settle * 0.3);
-          armA = armB = 0.35 + 2.55 * launch * (1 - 0.7 * settle); elbA = elbB = 0.12 + 0.3 * settle; spread = 0.14 + 0.32 * launch;
-          legA = 0.85 * load - 0.35 * launch * (1 - settle); legB = 0.85 * load + 0.4 * launch * (1 - settle);
-          kneeA = 0.95 * load + 0.25 * launch; kneeB = 0.95 * load + 0.3 * launch; leanX = 0.3 * load - 0.12 * launch;
-          drop = THIGH * (1 - Math.cos(0.85 * load));
+          // руки: у присіді назад, у відштовхуванні різко вгору до м'яча (ведуча вище), на приземленні амортизують уперед
+          armA = -0.45 * load + (3.05 * launch) * (1 - 0.65 * land) + 0.0 * glide;
+          armB = -0.35 * load + (2.7 * launch) * (1 - 0.6 * land);
+          elbA = 0.55 * load + 0.04 * launch + 0.25 * land; elbB = 0.5 * load + 0.08 * launch + 0.3 * land;
+          spread = 0.1 + 0.16 * launch + 0.2 * land - 0.1 * load;
+          // ноги: поштовх відштовхувальною ногою (вона випрямляється назад), ведуча нога підтягнута; у польоті ноги разом, на ковзанні розслаблені
+          legA = 0.95 * load - 0.55 * launch * (1 - glide * 0.6) + 0.15 * land;
+          legB = 0.95 * load + 0.75 * launch * (1 - glide) + 0.1 * land;
+          kneeA = 1.05 * load + 0.12 * launch + 0.35 * land;
+          kneeB = 1.05 * load + 1.0 * launch * (1 - glide) + 0.4 * land;
+          drop = THIGH * (1 - Math.cos(0.95 * load));
         } else {
           this.rise(clamp((P - 1) / 0.5, 0, 1), 0, sg * maxTilt); tiltZ = r.tz; leanX = r.leanX; legA = r.legs; legB = r.legs * 0.8; kneeA = r.legs * 1.15; kneeB = r.legs * 0.95; armA = armB = r.arms; spread = r.spread; drop = r.drop;
         }
