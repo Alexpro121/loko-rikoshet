@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PITCH } from '../config.js';
 import { VoxelBuilder, rng } from './voxel.js';
+import { whenLogo } from './logo.js';
 import { netTexture, netPlane, grassTexture, boardTexture } from './textures.js';
 
 const { L, W, G, CH, WALL, WALL_H, GOAL_D } = PITCH;
@@ -156,5 +157,11 @@ export function buildPitch() {
     ng.add(back, roof, sideA, sideB);
     group.add(ng); nets.push(ng);
   }
+  // справжня емблема клубу в центрі поля
+  const lc = document.createElement('canvas'); lc.width = lc.height = 256; const lgc = lc.getContext('2d');
+  const ltex = new THREE.CanvasTexture(lc); ltex.colorSpace = THREE.SRGBColorSpace; ltex.anisotropy = 8;
+  whenLogo((img) => { lgc.clearRect(0, 0, 256, 256); const lh = 244, lw = lh * 166 / 180; lgc.drawImage(img, 128 - lw / 2, 6, lw, lh); ltex.needsUpdate = true; });
+  const decal = new THREE.Mesh(new THREE.PlaneGeometry(9.5, 9.5), new THREE.MeshBasicMaterial({ map: ltex, transparent: true, opacity: 0.78, depthWrite: false }));
+  decal.rotation.x = -Math.PI / 2; decal.position.y = 0.035; decal.renderOrder = 1; group.add(decal);
   return { group, nets, grassMat: group.userData.grassMat, boards: bt };
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { rng } from './voxel.js';
+import { whenLogo, logoReady, logoImg } from './logo.js';
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -138,7 +139,7 @@ export function boardTexture() {
   };
   /** Кожен блок: [ширина, малюнок]. Усе малюється на LED-панелі: градієнти, смуги, значки. */
   const blocks = () => [
-    [700, (x, bw) => { const gr = g.createLinearGradient(x, 0, x + bw, 0); gr.addColorStop(0, '#d4202c'); gr.addColorStop(1, '#8f1220'); g.fillStyle = gr; g.fillRect(x, 0, bw, h); g.fillStyle = '#1f8f3f'; g.beginPath(); g.moveTo(x + bw * 0.62, 0); g.lineTo(x + bw * 0.78, 0); g.lineTo(x + bw * 0.62, h); g.lineTo(x + bw * 0.46, h); g.fill(); g.save(); g.transform(1, 0, -0.2, 1, 0, 0); g.fillStyle = '#fff'; g.font = FONT(88); g.textBaseline = 'middle'; g.fillText('LOKO RUSH', x + 70, h / 2 + 18); g.restore(); }],
+    [700, (x, bw) => { const gr = g.createLinearGradient(x, 0, x + bw, 0); gr.addColorStop(0, '#d4202c'); gr.addColorStop(1, '#8f1220'); g.fillStyle = gr; g.fillRect(x, 0, bw, h); g.fillStyle = '#1f8f3f'; g.beginPath(); g.moveTo(x + bw * 0.62, 0); g.lineTo(x + bw * 0.78, 0); g.lineTo(x + bw * 0.62, h); g.lineTo(x + bw * 0.46, h); g.fill(); const lg = logoReady(); if (lg) g.drawImage(logoImg(), x + 28, 14, 132 * 166 / 180, 132); g.save(); g.transform(1, 0, -0.2, 1, 0, 0); g.fillStyle = '#fff'; g.font = FONT(88); g.textBaseline = 'middle'; g.fillText('LOKO RUSH', x + (lg ? 215 : 70), h / 2 + 18); g.restore(); }],
     [620, (x, bw) => { g.fillStyle = '#0e5a38'; g.fillRect(x, 0, bw, h); g.fillStyle = '#157a46'; g.fillRect(x, h * 0.62, bw, h * 0.38); icon.rail(x + 150, h * 0.5, 38, '#f1efe8'); g.fillStyle = '#f1efe8'; g.font = FONT(58); g.textBaseline = 'middle'; g.fillText('УЗ ЕКСПРЕС', x + 250, h * 0.4); g.font = FONT(26); g.fillStyle = '#bfe9d2'; g.fillText('ЛОКО ЇДЕ ВПЕРЕД', x + 252, h * 0.76); }],
     [560, (x, bw) => { g.fillStyle = '#1c2328'; g.fillRect(x, 0, bw, h); g.fillStyle = '#e8b923'; g.fillRect(x, h - 14, bw, 14); icon.ball(x + 90, h * 0.46, 42); g.fillStyle = '#e8b923'; g.font = FONT(64); g.textBaseline = 'middle'; g.fillText('КИЇВ · 1919', x + 160, h * 0.46); }],
     [520, (x, bw) => { g.fillStyle = '#f1efe8'; g.fillRect(x, 0, bw, h); icon.semaphore(x + 80, h * 0.5, 34); g.fillStyle = '#c8202b'; g.font = FONT(78); g.textBaseline = 'middle'; g.fillText('СТОП', x + 150, h * 0.5 + 4); g.fillStyle = '#157a46'; g.fillText('›', x + bw - 70, h * 0.5 + 2); }],
@@ -166,7 +167,7 @@ export function boardTexture() {
     g.fillStyle = 'rgba(0,0,0,0.12)'; for (let yy = 0; yy < h; yy += 5) g.fillRect(0, yy, w, 1.2);
     t.needsUpdate = true;
   };
-  redraw();
+  redraw(); whenLogo(() => redraw());
   return { texture: t, get width() { return w; }, redraw: (club) => { if (club) opp = { name: String(club.name).toUpperCase(), kit: { main: club.kit.main, second: club.kit.second } }; redraw(); } };
 }
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PITCH } from '../config.js';
 import { VoxelBuilder, rng } from './voxel.js';
+import { whenLogo, logoReady, logoImg } from './logo.js';
 
 const { L, W, WALL, GOAL_D } = PITCH;
 const ROW_D = 1.45, ROW_H = 0.92;
@@ -14,7 +15,9 @@ function canvasTex(w, h, draw, opts = {}) {
 
 /** Фасад над верхніми рядами: бетон, діагональні смуги лівреї УЗ, велика назва клубу й емблема. */
 function facadeTexture() {
-  return canvasTex(2048, 200, (g, w, h) => {
+  let ctx = null;
+  const tex = canvasTex(2048, 200, (g, w, h) => {
+    ctx = g;
     const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#59636a'); gr.addColorStop(1, '#3c454b'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
     // діагональні шеврони
     for (let x = -200; x < w; x += 170) { g.fillStyle = '#c8202b'; g.beginPath(); g.moveTo(x, h); g.lineTo(x + 60, h); g.lineTo(x + 140, 0); g.lineTo(x + 80, 0); g.fill(); g.fillStyle = '#1f8f3f'; g.beginPath(); g.moveTo(x + 70, h); g.lineTo(x + 110, h); g.lineTo(x + 190, 0); g.lineTo(x + 150, 0); g.fill(); g.fillStyle = '#f1efe8'; g.beginPath(); g.moveTo(x + 62, h); g.lineTo(x + 68, h); g.lineTo(x + 148, 0); g.lineTo(x + 142, 0); g.fill(); }
@@ -23,12 +26,12 @@ function facadeTexture() {
     g.fillText('ЛОКОМОТИВ', w * 0.3, h * 0.5);
     g.fillStyle = '#e02a38'; g.font = '800 56px Rubik, "Arial Black", sans-serif'; g.fillText('ЗАЛІЗНИЧНИКИ · КИЇВ', w * 0.7, h * 0.34);
     g.fillStyle = '#f1efe8'; g.font = '800 54px Rubik, sans-serif'; g.fillText('З 1919 РОКУ', w * 0.7, h * 0.7);
-    // емблема-трикутник
-    const cx = w * 0.5, cy = h * 0.5; g.fillStyle = '#d4202c'; g.beginPath(); g.moveTo(cx, cy - 80); g.lineTo(cx + 78, cy + 66); g.lineTo(cx - 78, cy + 66); g.closePath(); g.fill();
-    g.fillStyle = '#f1efe8'; g.beginPath(); g.moveTo(cx, cy - 46); g.lineTo(cx + 48, cy + 46); g.lineTo(cx - 48, cy + 46); g.closePath(); g.fill();
-    g.fillStyle = '#1f8f3f'; g.beginPath(); g.moveTo(cx, cy - 6); g.lineTo(cx + 28, cy + 44); g.lineTo(cx - 28, cy + 44); g.closePath(); g.fill();
+    // справжня емблема клубу (з'являється, щойно завантажиться SVG)
+    const drawLogo = () => { const lh = h * 0.92, lw = lh * 166 / 180; g.drawImage(logoImg(), w * 0.5 - lw / 2, (h - lh) / 2, lw, lh); };
+    if (logoReady()) drawLogo(); else whenLogo(() => { drawLogo(); tex.needsUpdate = true; });
     g.fillStyle = '#ffe9a6'; for (let i = 0; i < 48; i++) g.fillRect(i * (w / 48) + 6, 6, w / 48 - 12, 8);    // ряд ламп угорі
   });
+  return tex;
 }
 
 function windowsTexture() {
