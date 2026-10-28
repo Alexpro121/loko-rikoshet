@@ -372,9 +372,10 @@ export class Team {
         shot = true;
         if (g.shotSeen !== c.shotId) { g.shotSeen = c.shotId; g.shotErr = (Math.random() * 2 - 1) * (0.15 + 0.3 * this.gkErr) * (1.2 - 0.6 * g.sk.iq); }
         const err = g.shotErr * clamp(cr.t / 0.8, 0, 1);
-        tz = tz + (clamp(cr.z + err, -(G + 0.3), G + 0.3) - tz) * clamp(0.6 + 0.4 * this.gkTrack, 0, 1);
+        // повністю на лінію удару (з похибкою прочитання) і на повній швидкості — щоб не довелося стрибати в останню мить
+        tz = clamp(cr.z + err, -(G + 0.3), G + 0.3);
         tx = goalX + side * clamp((p.x - goalX) * side, 1.2, 5);
-        speed = this.gkSpeed * 0.85;
+        speed = this.gkSpeed;
       }
     }
     // суперник із м'ячем ідe на ворота (будь-звідки, і збоку теж): воротар не відступає на лінію, а виходить назустріч по

@@ -95,7 +95,7 @@ export class Match {
     this.myTeam.setFormation(MY_FORMATION); this.oppTeam.setFormation(spec.formation);
     const mg = this.mine[0].sk, og = this.opp[0].sk;
     Object.assign(this.myTeam, { speed: 9.2, gkSpeed: 6 + 7 * mg.react, gkTrack: 0.35 + 0.6 * mg.iq, gkErr: (1.15 - mg.react) * 3.0 });
-    Object.assign(this.oppTeam, { speed: 8.4, press: spec.press, line: spec.line, gkSpeed: 5 + 6 * og.react, gkTrack: 0.25 + 0.65 * og.iq, gkErr: (1.2 - og.react) * 3.4 });
+    Object.assign(this.oppTeam, { speed: spec.runSpeed, press: spec.press, line: spec.line, gkSpeed: 5 + 6 * og.react, gkTrack: 0.25 + 0.65 * og.iq, gkErr: (1.2 - og.react) * 3.4 });
     this.mine[0].body.r = this.mine[0].baseR = Math.max(0.9, 0.7 + 0.6 * mg.reach);
     this.opp[0].body.r = this.opp[0].baseR = Math.max(0.9, 0.7 + 0.6 * og.reach);
     this.score = { me: 0, opp: 0 };
@@ -1884,37 +1884,48 @@ export class Match {
       const b = this.ball, side = g.side, sp = Math.hypot(b.vx, b.vz);
       const toward = -b.vx * side;
       if (toward < 2 || sp < 3) continue;                              // і повільний м'яч (удар здалеку докочується) — теж читає
-      // людина бачить удар і може рушити лише через час реакції: удар зблизька, що долітає швидше, воротар не встигає
-      if (g.seenId !== this.shotId) { g.seenId = this.shotId; g.seenT = this.time; }
-      if (this.time - g.seenT < g.p.reactT) continue;
+      // людина бачить удар і може рушити лише через час реакції: удар зблизька, що долітає швидше, воротар не встигає.
+      // Помилку прочитання удару й рідкісне «завмер» вирішуємо раз на удар (а не щокадру)
+      if (g.seenId !== this.shotId) { g.seenId = this.shotId; g.seenT = this.time; g.rdU = Math.random() * 2 - 1; g.rdV = Math.random() * 2 - 1; g.froze = Math.random() > 0.97 + 0.03 * g.sk.react; }
+      if (this.time - g.seenT < g.p.reactT || g.froze) continue;
       // де й на якій висоті м'яч перетне лінію воротаря — з прогнозу польоту (дуга, підкрутка, відскоки)
       // лінія рішення — площина, де воротар зараз стоїть (він міг вийти на 5–9 м), а не лінія воріт позаду нього
       const line = g.p.x, cr = this.plan.cross(line, -side, this._cr), eta = cr.t;
-      if (eta < 0.06 || eta > 0.3 + 0.35 * g.sk.iq + (b.y > 0 || b.vy > 0 ? 0.35 : 0)) continue;
+      if (eta < 0.06) continue;
       if (Math.abs(cr.z) > G + 0.7 || cr.y > PITCH.GOAL_H) continue;   // мимо воріт або над поперечиною: воротар не стрибає
-      g.decided = this.shotId;
-      if (Math.random() > 0.97 + 0.03 * g.sk.react) continue;   // дуже зрідка «завмер» — не рушив зовсім
-      // воротар читає удар не ідеально: точка, куди він стрибає, зсунута тим більше, чим слабший «Інтелект» і чим раніше він
-      // мусить вирішити. У польоті руки виправляють помилку за тим, що він бачить, — якщо є шанс, дотягується
+      // воротар читає удар не ідеально: точка зсунута тим більше, чим слабший «Інтелект» і чим раніше він вирішує.
+      // У польоті руки виправляють помилку за тим, що він бачить, — якщо є шанс, дотягується
       const er = (0.12 + 0.55 * (1 - g.sk.iq)) * Math.min(1, eta / 0.4);
-      const predZ = cr.z + (Math.random() * 2 - 1) * er, predY = Math.max(0, cr.y + (Math.random() * 2 - 1) * er * 0.5);
+      const predZ = cr.z + g.rdU * er, predY = Math.max(0, cr.y + g.rdV * er * 0.5);
       const lateral = predZ - g.p.z;
       // скільки воротар дістає руками, не стрибаючи: високий м'яч — ~0.7 м убік; на рівні пояса — ~0.5 м; низом по траві стоячи
       // руки до землі збоку не дістають — уже з ~0.35 м падає на бік (короткий стрибок низом)
-      const handR = predY > 1.4 ? 0.7 : predY > 0.5 ? 0.5 : 0.35;
-      if (Math.abs(lateral) > handR) {                                   // далі — тільки стрибком (руками не дістає)
-        const dir = Math.sign(lateral), reach = Math.min(Math.abs(lateral) + (Math.abs(lateral) < 0.8 ? 0.6 : 1.0), (2.2 + g.sk.reach * 3.4 + (side < 0 ? this.oppTeam.gkSpeed : this.myTeam.gkSpeed) * 0.12) * (G / 7.2));   // дотяжка в масштабі воріт: складність як раніше
-        // м'яч у матчі котиться газоном: стрибок низом, а коли треба дотягнутись далеко — у польоті на середній висоті
+      const handR = predY > 1.4 ? 0.7 : predY > 0.5 ? 0.5 : 0.35, need = Math.abs(lateral) - handR;
+      if (need <= 0) {                                                   // уже на лінії удару: чекає м'яч і ловить
+        if (eta > 0.45) continue;
+        g.decided = this.shotId;
+        if (predY > 1.4) g.p.gkJump(); else g.p.catchBall();             // високо по центру — вистрибує; інакше ловить, руки до м'яча
+        continue;
+      }
+      // бігти чи стрибати — як справжній воротар: поки встигає ногами (приставним/бігом, team.js), біжить на лінію удару;
+      // стрибає, лише коли ногами вже не встигне, — і саме тоді, коли стрибку лишається рівно стільки часу, скільки він триває
+      // (не надто рано — тоді б завис у повітрі, і не в останню мить, коли м'яч уже поруч)
+      const vRun = (side < 0 ? this.oppTeam.gkSpeed : this.myTeam.gkSpeed), vLeg = 6.2 + 1.8 * g.sk.reach;
+      const runT = 0.18 + need / vRun, diveT = 0.22 + need / vLeg;
+      if (runT < eta - 0.1) continue;                                    // добіжить — біжить
+      if (eta > diveT + 0.15) continue;                                  // ще рано: біжить ближче, стрибне вчасно
+      g.decided = this.shotId;
+      {
+        const dir = Math.sign(lateral), reach = Math.min(Math.abs(lateral) + (Math.abs(lateral) < 0.8 ? 0.6 : 1.0), (2.2 + g.sk.reach * 3.4 + vRun * 0.12) * (G / 7.2));   // дотяжка в масштабі воріт
         // висота стрибка — за висотою м'яча: високий — угору-вбік, середній — у політ, низом (по траві чи нижче ~0.5 м) — низом,
         // навіть далеко (тоді витягнутим тілом уздовж газону), а не над м'ячем
         const kind = predY > 1.3 ? 0 : predY > 0.45 ? 1 : 2;
         g.dive = { t: 0, dur: 0.9, z0: g.p.z, dist: dir * reach, kind };
         // стрибок за фізикою: воротар відштовхується так, щоб руки встигли туди, де м'яч перетне його лінію; сила ніг — за навичкою.
         // Не встигає (задалеко, запізно) — летить, скільки дозволяють ноги, як справжній
-        g.manual = true; g.p.yaw = g.p.bodyYaw = side > 0 ? Math.PI / 2 : -Math.PI / 2; g.p.gkDive(dir, kind, { x: line, y: PITCH.BALL_VIS + predY, z: predZ }, eta, 6.2 + 1.8 * g.sk.reach);
+        g.manual = true; g.p.yaw = g.p.bodyYaw = side > 0 ? Math.PI / 2 : -Math.PI / 2; g.p.gkDive(dir, kind, { x: line, y: PITCH.BALL_VIS + predY, z: predZ }, eta, vLeg);
         audio.slide(); this.floatAt(g.p.x, g.p.z, 'СТРИБОК!', side > 0 ? 'good' : 'warn');
-      } else if (predY > 1.4) { g.p.gkJump(); }          // високо по центру — вистрибує вгору
-      else { g.p.catchBall(); }                       // м'яч у воротаря: ловить (низький — підбирає з трави), руки йдуть до м'яча
+      }
     }
   }
 

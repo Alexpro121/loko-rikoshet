@@ -82,22 +82,22 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function matchSpec(fixtureIdx, season) {
   const fx = FIXTURES[fixtureIdx];
   const lg = LEAGUES[fx.league];
-  const dr = fixtureIdx + season * FIXTURES.length, d = dr * 0.5;   // м'якший, плавніший ріст складності
+  // dr — номер матчу від початку гри: кожен наступний суперник помітно сильніший (швидше бігає, жорсткіше пресингує й
+  // відбирає, швидше й точніше контратакує, дає менше часу на роздуми). Перші матчі — легші, ніж раніше
+  const dr = fixtureIdx + season * FIXTURES.length;
   return {
     fixtureIdx, season, league: fx.league, leagueName: lg.name, club: fx.club, no: fx.no, of: fx.of, final: fx.final,
     globalNo: fixtureIdx + 1 + season * FIXTURES.length,
     formation: lg.formation, note: lg.note,
     scale: 1 + dr * 0.42,
     time: 270,                                    // 4 тайми по ~68 с (на табло — стиснуті 90 хв)
-    runSpeed: clamp(5.0 + d * 0.16, 5.0, 8.2),    // швидкість польових гравців суперника
-    press: clamp(0.12 + d * 0.035, 0.15, 0.85),   // наскільки агресивно суперник відбирає м'яч
-    line: clamp(0.0 + d * 0.012, 0, 0.14),        // наскільки високо грає захист
-    gkSpeed: clamp(5.0 + d * 0.3, 5, 10),
-    gkTrack: clamp(0.18 + d * 0.035, 0.15, 0.8),
-    gkErr: Math.max(0.4, 4.2 - d * 0.2),
-    counterSpeed: clamp(40 + d * 0.7, 40, 62),
-    tackle: clamp(0.5 + d * 0.01, 0.5, 0.9),
-    slowFactor: 0.14,   // скільки секунд суперник дозволяє тримати м'яч
+    runSpeed: clamp(7.3 + dr * 0.17, 7.3, 9.9),   // швидкість польових гравців суперника (наші — 9.2)
+    press: clamp(0.1 + dr * 0.045, 0.1, 0.9),     // наскільки агресивно суперник відбирає м'яч
+    line: clamp(dr * 0.009, 0, 0.14),             // наскільки високо грає захист
+    gkErr: Math.max(0.4, 4.8 - dr * 0.3),         // похибка ударів суперника (менше — точніше б'є)
+    counterSpeed: clamp(36 + dr * 1.6, 36, 62),   // сила ударів суперника
+    tackle: clamp(0.42 + dr * 0.03, 0.42, 0.93),  // шанс відбору
+    slowFactor: clamp(0.11 + dr * 0.006, 0.11, 0.24),   // темп сповільнення при прицілюванні (більше — менше часу на роздуми)
   };
 }
 

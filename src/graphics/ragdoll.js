@@ -108,7 +108,10 @@ export class Ragdoll {
       return;
     }
     this.com(target, _o);
-    for (let i = 0; i < this.pos.length; i++) { this.dl[i].subVectors(target[i], _o); this.dk[i] = kOf(i); }
+    // після приземлення ціль пози змінюється лише плавно: інакше кожен ривок анімації (руки, що ще шукають м'яч) м'язи
+    // передають тілу, яке лежить і тертям тримається за газон, — руки й корпус смикаються
+    const a = this.landT >= 0 ? 0.12 : 1;
+    for (let i = 0; i < this.pos.length; i++) { _v.subVectors(target[i], _o); if (a < 1) this.dl[i].lerp(_v, a); else this.dl[i].copy(_v); this.dk[i] = kOf(i); }
   }
 
   /** Система таза за точками: початок — середина стегон, x — до правого стегна, y — до грудей, z — уперед. */
@@ -140,7 +143,9 @@ export class Ragdoll {
         let ax = 0, ay = -this.g, az = 0;
         if (drv && this.dk[i] > 0) {
           // м'яз: пружина до цільової точки відносно центру мас + загасання відносно його руху
-          const l = this.dl[i], k = this.dk[i] * this.tone * (this.landT >= 0 && i >= 13 ? 0.6 : 1), c = 2 * 0.8 * Math.sqrt(k);   // руки на ударі трохи м'якші (гасять), але не мертві
+          // руки на ударі м'якші (гасять), а далі розслабляються й лягають на траву, а не тримають позу силою (тоді вони тремтять,
+          // борючись із тертям об газон)
+          const l = this.dl[i], k = this.dk[i] * this.tone * (this.landT >= 0 && i >= 13 ? Math.max(0.18, 0.6 - 1.4 * this.landT) : 1), c = 2 * 0.9 * Math.sqrt(k);
           // ціль: відносно центру мас (стрибок) або в системі таза, що падає сам (падіння)
           const tx = loc ? _hh.x + _hx.x * l.x + _hy.x * l.y + _hz.x * l.z : _o.x + l.x, ty = loc ? _hh.y + _hx.y * l.x + _hy.y * l.y + _hz.y * l.z : _o.y + l.y, tz = loc ? _hh.z + _hx.z * l.x + _hy.z * l.y + _hz.z * l.z : _o.z + l.z;
           const fx = k * (tx - p.x) - c * (_v.x / h - vo.x), fy = k * (ty - p.y) - c * (_v.y / h - vo.y), fz = k * (tz - p.z) - c * (_v.z / h - vo.z);
