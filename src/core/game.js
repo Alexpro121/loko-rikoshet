@@ -57,6 +57,18 @@ export class Game {
     requestAnimationFrame(this.tick);
   }
 
+  /** Чи щойно намальований кадр однотонний (9 точок однакового кольору). */
+  cineFlat() {
+    const gl = this.renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, p = new Uint8Array(4);
+    let first = null;
+    for (const fy of [0.3, 0.5, 0.7]) for (const fx of [0.3, 0.5, 0.7]) {
+      gl.readPixels((W * fx) | 0, (H * fy) | 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, p);
+      const k = p[0] >> 2 | (p[1] >> 2) << 6 | (p[2] >> 2) << 12;
+      if (first === null) first = k; else if (k !== first) return false;
+    }
+    return true;
+  }
+
   ensureMatch() { if (!this.match) { this.match = new Match(this); this.computeMatchBase(); } return this.match; }
 
   // ---------------------------------------------------------------- стани
@@ -363,6 +375,8 @@ export class Game {
     // кінофокус; якщо пристрій його не тягне (буфер чи шейдер) — той самий кадр звичайним рендером
     let done = false;
     if (!menu && this.dof && !this.cineBroken) { try { done = (this.cinefx ??= new CineFX(this.renderer)).render(this.match.view.scene, this.matchCam, this.dof.focus, this.dof.ap, dt); } catch (_) { this.cineBroken = true; } }
+    // перші кадри з ефектом перевіряємо: однотонний кадр (білий/небо) — драйвер телефона зламав прохід; тоді ефект вимикаємо
+    if (done && (this.cineChecks = (this.cineChecks || 0) + 1) <= 4 && this.cineFlat()) { this.cineBroken = true; done = false; }
     if (!done) this.renderer.render(menu ? this.menuScene : this.match.view.scene, menu ? this.menuCam : this.matchCam);
     if (this.fps) this.fps(dt);
   }

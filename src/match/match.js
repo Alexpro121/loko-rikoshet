@@ -1767,6 +1767,9 @@ export class Match {
       if (!inBox || b.y > 1.9 + 0.5 * (g.sk.reach ?? 0.5)) continue;          // вище витягнутих рук — не дістає
       // бере, лише коли м'яч справді в рукавицях (руки самі тягнуться до нього — handsIK); поруч чи збоку — ні, не «телепорт» у руки
       const lim = PHYS.trapSpeed * (1.4 + 0.8 * (g.sk.hands ?? 0.5));
+      // м'яч поруч і йде до нього, а руки ще не внизу — присідає й опускає руки до м'яча (далі бере, лише коли той у рукавицях)
+      const near = Math.hypot(b.x - g.p.x, b.z - g.p.z);
+      if (near < 1.6 && sp < lim && !g.manual && g.p.mode !== 'catch' && g.p.mode !== 'scoop' && this.facesBall(g)) g.p.catchBall(b.y < 0.6);
       if (sp < lim && this.inGloves(g, 0.1 + 0.08 * (g.sk.hands ?? 0.5))) { if (g.side > 0) this.trapMine(g, sp); else this.trapOpp(g, sp); return; }
     }
   }
@@ -1880,7 +1883,7 @@ export class Match {
       if (this.bs !== 'roll' || g.frozen > 0 || g.decided === this.shotId || g.manual) continue;
       const b = this.ball, side = g.side, sp = Math.hypot(b.vx, b.vz);
       const toward = -b.vx * side;
-      if (toward < 6 || sp < 10) continue;
+      if (toward < 2 || sp < 3) continue;                              // і повільний м'яч (удар здалеку докочується) — теж читає
       // людина бачить удар і може рушити лише через час реакції: удар зблизька, що долітає швидше, воротар не встигає
       if (g.seenId !== this.shotId) { g.seenId = this.shotId; g.seenT = this.time; }
       if (this.time - g.seenT < g.p.reactT) continue;
