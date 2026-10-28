@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { vcMat } from './voxel.js';
 import { PITCH } from '../config.js';
 
 const _ax = new THREE.Vector3();
 const _q = new THREE.Quaternion();
+const _UP = new THREE.Vector3(0, 1, 0);
 
 /** М'яч-«усічений ікосаедр»: ікосаедр деталізації 1, чорні «п'ятикутники» навколо 12 вершин. */
 function ballGeometry(r) {
@@ -15,7 +15,7 @@ function ballGeometry(r) {
     if (!verts.some((u) => u.distanceTo(v) < 1e-3)) verts.push(v);
   }
   const pos = g.attributes.position, col = new Float32Array(pos.count * 3);
-  const white = new THREE.Color('#f6f6f2'), black = new THREE.Color('#1c1c1e');
+  const white = new THREE.Color('#ffffff'), black = new THREE.Color('#15161a');
   const c = new THREE.Vector3();
   for (let f = 0; f < pos.count; f += 3) {
     c.set(0, 0, 0);
@@ -31,13 +31,24 @@ function ballGeometry(r) {
   return g;
 }
 
+/** Мінімальний діаметр м'яча на екрані — частка висоти кадру (~1.6%): здалеку м'яч не губиться на газоні. */
+const MIN_SCREEN = 0.016;
+
 export class BallView {
   constructor() {
     this.group = new THREE.Group();       // у світових осях: пружне стискання при ударі
-    this.mesh = new THREE.Mesh(ballGeometry(PITCH.R), vcMat());
-    this.group.add(this.mesh);
+    this.spin = new THREE.Group();        // обертання котіння (окремо від масштабу видимості)
+    // яскравий матеріал: білі панелі ледь світяться, тож м'яч вирізняється на траві й у тіні трибун
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, emissive: 0x3a3a3a });
+    this.mesh = new THREE.Mesh(ballGeometry(PITCH.BALL_VIS), mat);
+    // тонкий темний контур (вивернута оболонка) — чіткий силует проти зеленого
+    this.outline = new THREE.Mesh(new THREE.IcosahedronGeometry(PITCH.BALL_VIS * 1.13, 1), new THREE.MeshBasicMaterial({ color: 0x0b0f12, side: THREE.BackSide }));
+    this.spin.add(this.mesh); this.group.add(this.spin, this.outline);
     this.sx = 1; this.sy = 1; this.sz = 1;
     this.hop = 0;
+    this.cam = null;                      // камера, з якої дивимось (для мінімального розміру на екрані)
+    this.vs = 1;                          // поточне збільшення видимості (1 — справжній розмір)
+    this.rad = PITCH.BALL_VIS;            // видимий радіус зараз
   }
 
   /** Удар об перешкоду: стискаємо уздовж нормалі (світові осі). */
@@ -49,19 +60,28 @@ export class BallView {
     this.hop = Math.min(0.6, this.hop + amount * 1.1);
   }
 
-  update(dt, x, z, vx, vz) {
+  /** y — висота м'яча над газоном (навіс), w — бокове обертання (підкрутка): видно, як кручений м'яч крутиться в польоті. */
+  update(dt, x, z, vx, vz, y = 0, w = 0) {
     const sp = Math.hypot(vx, vz);
     if (sp > 0.05) {
       _ax.set(-vz / sp, 0, vx / sp);
-      _q.setFromAxisAngle(_ax, (sp / PITCH.R) * dt);
-      this.mesh.quaternion.premultiply(_q);
+      _q.setFromAxisAngle(_ax, (sp / PITCH.BALL_VIS) * dt * (y > 0 ? 0.35 : 1));   // у повітрі котіння не «наганяє» швидкість
+      this.spin.quaternion.premultiply(_q);
     }
+    if (w !== 0) { _q.setFromAxisAngle(_UP, w * 2.2 * dt); this.spin.quaternion.premultiply(_q); }
     const k = Math.min(1, dt * 16);
     this.sx += (1 - this.sx) * k; this.sy += (1 - this.sy) * k; this.sz += (1 - this.sz) * k;
     this.hop = Math.max(0, this.hop - dt * 3.2);
-    const h = this.hop * Math.abs(Math.sin(this.hop * 9)) * 0.9;
-    this.group.position.set(x, PITCH.R + h, z);
-    this.group.scale.set(this.sx, this.sy, this.sz);
+    // зблизька — справжній розмір, здалеку м'яч росте так, щоб на екрані був не меншим за MIN_SCREEN висоти кадру
+    if (this.cam) {
+      const c = this.cam, d = Math.hypot(c.position.x - x, c.position.y - this.rad, c.position.z - z);
+      const want = 0.5 * MIN_SCREEN * 2 * d * Math.tan((c.fov * Math.PI) / 360);
+      this.vs += (Math.max(1, want / PITCH.BALL_VIS) - this.vs) * Math.min(1, dt * 8);
+    }
+    this.rad = PITCH.BALL_VIS * this.vs;
+    const h = (y > 0 ? 0 : this.hop * Math.abs(Math.sin(this.hop * 9)) * 0.9) + y;
+    this.group.position.set(x, this.rad + h, z);
+    this.group.scale.set(this.sx * this.vs, this.sy * this.vs, this.sz * this.vs);
     return h;
   }
 }

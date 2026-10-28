@@ -101,7 +101,10 @@ export function buildPitch() {
   for (let i = 0; i < 8; i++) {
     const [x1, z1] = OUTLINE[i], [x2, z2] = OUTLINE[(i + 1) % 8];
     // кожен відрізок ділимо на дві частини, якщо це торцева стінка з воротами
-    const segs = (i === 2 || i === 6) ? (() => { const s = i === 2 ? 1 : -1; const zA = Math.min(z1, z2), zB = Math.max(z1, z2); return [[x1, zA, x1, -G], [x1, G, x1, zB]]; })() : [[x1, z1, x2, z2]];
+    // бровка з тунелем (z = −W): у борті — прохід навпроти тунелю, щоб команди виходили на поле, а не крізь рекламу
+    const tun = Math.abs(z1 - z2) < 0.01 && z1 < 0, TG = 2.5;
+    const segs = (i === 2 || i === 6) ? (() => { const s = i === 2 ? 1 : -1; const zA = Math.min(z1, z2), zB = Math.max(z1, z2); return [[x1, zA, x1, -G], [x1, G, x1, zB]]; })()
+      : tun ? [[x1, z1, Math.sign(x1) * TG, z1], [Math.sign(x2) * TG, z2, x2, z2]] : [[x1, z1, x2, z2]];
     for (const [ax, az, bx, bz] of segs) {
       const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
       if (len < 0.1) continue;
@@ -137,7 +140,7 @@ export function buildPitch() {
   // --- ворота: білі стійки й перекладина, окремо сітка
   const gb = new VoxelBuilder(0.1);
   for (const sd of [-1, 1]) {
-    const x0 = sd * L, x1 = sd * (L + GOAL_D), th = 0.3, H = PITCH.GOAL_H, H2 = PITCH.GOAL_H * 0.75;
+    const x0 = sd * L, x1 = sd * (L + GOAL_D), th = 0.14, H = PITCH.GOAL_H, H2 = PITCH.GOAL_H * 0.75;
     for (const zz of [-G, G]) {
       gb.box(x0, H / 2, zz, th, H, th, '#eceeea'); gb.box(x1, H2 / 2, zz, th, H2, th, '#d9dcd8');
       gb.box((x0 + x1) / 2, (H + H2) / 2, zz, Math.hypot(GOAL_D, H - H2) + th, th, th, '#e4e6e2', 0, 0, sd * Math.atan2(H2 - H, GOAL_D));

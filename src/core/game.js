@@ -7,6 +7,7 @@ import { stadiumTier } from '../state/economy.js';
 import { Island } from '../graphics/island.js';
 import { Particles } from '../graphics/particles.js';
 import { Match } from '../match/match.js';
+import { CineFX } from '../graphics/cinefx.js';
 
 const { L, W, GOAL_D } = PITCH;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -168,9 +169,9 @@ export class Game {
   /** Параметри слідкуючої камери: видима зона ~27 одиниць по Z і ≥44 по X. */
   computeMatchBase() {
     const cam = this.matchCam, asp = this.w / this.h;
-    const el = 57 * Math.PI / 180, half = Math.tan(cam.fov * Math.PI / 360);
+    const st = S.settings, el = clamp(st.camTilt ?? 57, 30, 80) * Math.PI / 180, half = Math.tan(cam.fov * Math.PI / 360);
     const dV = (37 * Math.sin(el)) / (2 * half), dH = 58 / (2 * half * asp);
-    this.mBase = { dist: Math.max(dV, dH), dirY: Math.sin(el), dirZ: Math.cos(el), fov: cam.fov, half, asp, tx: this.mBase ? this.mBase.tx : 0, tz: this.mBase ? this.mBase.tz : 0, zoom: this.mBase ? this.mBase.zoom : 1 };
+    this.mBase = { dist: Math.max(dV, dH) * clamp((st.camZoom ?? 100) / 100, 0.55, 1.6), dirY: Math.sin(el), dirZ: Math.cos(el), fov: cam.fov, half, asp, tx: this.mBase ? this.mBase.tx : 0, tz: this.mBase ? this.mBase.tz : 0, zoom: this.mBase ? this.mBase.zoom : 1 };
     this.updateMatchCam(0, true);
   }
   snapCamera() { if (this.mBase) { this.mBase.tx = 0; this.mBase.tz = 0; this.mBase.zoom = 1.8; } this.updateMatchCam(0, true); }
@@ -201,10 +202,11 @@ export class Game {
     const sweep = this.intro ? (1 - ie) * -26 : 0;
     const zoomT = cv ? cv.zoom : zoomT0;
     const tx = cv ? cv.tx : Math.max(-maxX, Math.min(maxX, b.gx + sweep)), tz = cv ? cv.tz : Math.max(-maxZ, Math.min(maxZ, b.gz));
-    const kf = snap ? 1 : 1 - Math.exp(-dt * (cv ? 4.5 : 2.8)), kz = snap ? 1 : 1 - Math.exp(-dt * (cv ? 3.8 : 3.2));
+    const fol = clamp((S.settings.camFollow ?? 100) / 100, 0.4, 2.5);   // швидкість слідкування з налаштувань
+    const kf = snap ? 1 : 1 - Math.exp(-dt * (cv ? 4.5 : 2.8 * fol)), kz = snap ? 1 : 1 - Math.exp(-dt * (cv ? 3.8 : 3.2));
     b.tx += (tx - b.tx) * kf; b.tz += (tz - b.tz) * kf; b.zoom += (zoomT - b.zoom) * kz;
     const dist = b.dist * b.zoom;
-    const s = this.trauma * this.trauma, t = this.time;
+    const s = S.settings.camShake === false ? 0 : this.trauma * this.trauma, t = this.time;
     const sx = Math.sin(t * 47) * 0.6 * s, sy = Math.sin(t * 61 + 1) * 0.45 * s;
     const ang = (this.celebAng || 0) * this.celebK;
     cam.position.set(b.tx + sx + Math.sin(ang) * b.dirZ * dist, b.dirY * dist + sy, b.tz + Math.cos(ang) * b.dirZ * dist);
@@ -213,12 +215,55 @@ export class Game {
     if (Math.abs(cam.fov - f) > 0.01) { cam.fov = f; cam.updateProjectionMatrix(); }
     const ov = m && m.camOverride ? m.camOverride() : null;
     if (ov) {
-      if (!this._ov) this._ov = { p: cam.position.clone(), l: new THREE.Vector3(b.tx, 0, b.tz), f: cam.fov };
-      const k = 1 - Math.exp(-dt * (snap ? 100 : 2.6));
-      this._ov.p.lerp(ov.p, k); this._ov.l.lerp(ov.l, k); this._ov.f += (ov.fov - this._ov.f) * k;
+      // кат-сцени монтуються кадрами: новий кадр (shot) — склейка без перельоту, усередині кадру — плавний супровід
+      const cut = ov.shot !== undefined && (!this._ov || ov.shot !== this._ovShot);
+      if (!this._ov) this._ov = { p: cam.position.clone(), l: new THREE.Vector3(b.tx, 0, b.tz), f: cam.fov, pv: new THREE.Vector3(), lv: new THREE.Vector3(), fv: 0 };
+      this._ovShot = ov.shot;
+      const o = this._ov;
+      if (cut || snap) { o.p.copy(ov.p); o.l.copy(ov.l); o.f = ov.fov; o.pv.set(0, 0, 0); o.lv.set(0, 0, 0); o.fv = 0; }
+      else if (ov.smooth === false) {
+        const k = 1 - Math.exp(-dt * (ov.rate || 2.6));
+        o.p.lerp(ov.p, k); o.l.lerp(ov.l, k); o.f += (ov.fov - o.f) * k;
+      } else {
+        // як операторський кран чи стедікам: камера — маса на пружині з критичним загасанням. Ціль може смикатися
+        // (гравець пригальмував, зупинився) — камера рухається плавно, без ривків швидкості й без перельоту
+        const w = 1.25 * (ov.rate || 2.6), n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
+        for (let i = 0; i < n; i++) {
+          for (const [x, v, tg] of [[o.p, o.pv, ov.p], [o.l, o.lv, ov.l]]) {
+            v.x += (w * w * (tg.x - x.x) - 2 * w * v.x) * h; v.y += (w * w * (tg.y - x.y) - 2 * w * v.y) * h; v.z += (w * w * (tg.z - x.z) - 2 * w * v.z) * h;
+            x.x += v.x * h; x.y += v.y * h; x.z += v.z * h;
+          }
+          o.fv += (w * w * (ov.fov - o.f) - 2 * w * o.fv) * h; o.f += o.fv * h;
+        }
+      }
       cam.position.copy(this._ov.p); cam.lookAt(this._ov.l);
+      // кінорежим: фокус там, куди дивиться камера (на героях кадру); aperture — з кадру (0 — без розмиття)
+      if (ov.dof > 0 && S.settings.quality !== 'low') {
+        // автофокус, як у камери: на найближчій людині біля центру кадру (хто в кадрі головний), а не на точці, куди
+        // «дивиться» камера (там часто порожньо — і різко не було нічого). Фокус переводиться плавно, на склейці — одразу
+        const f = this.autoFocus(cam, m, o.p.distanceTo(o.l));
+        this.focusS = cut || !this.dof ? f : this.focusS + (f - this.focusS) * (1 - Math.exp(-dt * 3.5));
+        this.dof = { focus: this.focusS, ap: ov.dof };
+      } else this.dof = null;
       if (Math.abs(cam.fov - this._ov.f) > 0.01) { cam.fov = this._ov.f; cam.updateProjectionMatrix(); }
-    } else this._ov = null;
+    } else { this._ov = null; this._ovShot = undefined; this.dof = null; }
+  }
+
+  /**
+   * Відстань фокуса: найближчий гравець (груди), що в кадрі ближче ~13° від центру; якщо таких нема — найближчий у
+   * ширшому конусі (~24°); інакше — точка, куди дивиться камера.
+   */
+  autoFocus(cam, m, fallback) {
+    const fw = _d.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    let best = 1e9, wide = 1e9;
+    for (const p of m.view.players) {
+      if (!p.root.visible) continue;
+      _v.set(p.root.position.x, 1.25, p.root.position.z).sub(cam.position);
+      const d = _v.length(); if (d < 1.2) continue;
+      const c = _v.dot(fw) / d;
+      if (c > 0.974 && d < best) best = d; else if (c > 0.91 && d < wide) wide = d;
+    }
+    return best < 1e9 ? best : wide < 1e9 ? wide : fallback;
   }
 
   /** Екран → площина газону (y = 0). */
@@ -264,6 +309,7 @@ export class Game {
       pid = e.pointerId; try { c.setPointerCapture(pid); } catch (_) { /* ignore */ }
       sx = lx = e.clientX; sy = e.clientY; moved = false; t0 = performance.now();
       if (this.sm.name === 'MATCH' && this.match) this.match.pointerDown(e.clientX, e.clientY);
+      if (this.sm.name === 'GOAL' && this.match) this.match.skipCine();
       if (this.sm.name === 'MENU') { this.orbit.dragging = true; this.orbit.vel = 0; }
       e.preventDefault();
     });
@@ -314,7 +360,8 @@ export class Game {
     this.governor(dt);
     this.sm.update(dt);
     const menu = this.sm.name === 'MENU';
-    this.renderer.render(menu ? this.menuScene : this.match.view.scene, menu ? this.menuCam : this.matchCam);
+    if (!menu && this.dof) (this.cinefx ??= new CineFX(this.renderer)).render(this.match.view.scene, this.matchCam, this.dof.focus, this.dof.ap, dt);
+    else this.renderer.render(menu ? this.menuScene : this.match.view.scene, menu ? this.menuCam : this.matchCam);
     if (this.fps) this.fps(dt);
   }
 }

@@ -3,14 +3,16 @@
 export const PITCH = {
   L: 58,          // пів-довжини газону по X (100 одиниць, як справжнє поле 105×68 у масштабі)
   W: 37,          // пів-ширини по Z (64)
-  G: 7.2,         // пів-ширини воріт
+  // одиниця ≈ 0.9 м; гравець ~1.9 м. Ворота й м'яч — у справжніх пропорціях до гравців (трохи «пробачливіші» за реальні)
+  G: 4.6,         // пів-ширини воріт (8.3 м; справжні 7.32 м)
   CH: 2.8,        // зріз кутів арени
   WALL: 1.2,
   WALL_H: 1.2,
-  GOAL_H: 3.8,    // висота воріт
-  GOAL_D: 3.2,    // глибина воріт за лінією
-  R: 0.34,        // радіус м'яча
-  POST_R: 0.34,
+  GOAL_H: 2.9,    // висота воріт (2.6 м; справжні 2.44 м)
+  GOAL_D: 2.2,    // глибина воріт за лінією
+  R: 0.16,        // радіус м'яча у фізиці (трохи більший за видимий — м'яч легше прийняти й заблокувати)
+  BALL_VIS: 0.14, // видимий радіус м'яча (діаметр ~25 см; справжній 22 см)
+  POST_R: 0.16,
 };
 
 export const PHYS = {
@@ -19,6 +21,8 @@ export const PHYS = {
   roll: 1.1,       // постійне гальмування, од/с²
   stop: 0.5,       // нижче цієї швидкості м'яч зупиняється
   wallE: 0.88,
+  wallMu: 0.14,    // тертя м'яча об борт у мить удару: ковзний відскок втрачає частину дотичної швидкості
+  postE: 0.85,     // пружність стовпів і поперечини
   baseShot: 64,    // швидкість максимального удару без прокачки
   maxSpeed: 100,
   pullMaxFrac: 0.34, // відтягування (частка висоти екрана) для 100% сили
@@ -84,7 +88,7 @@ export function matchSpec(fixtureIdx, season) {
     globalNo: fixtureIdx + 1 + season * FIXTURES.length,
     formation: lg.formation, note: lg.note,
     scale: 1 + dr * 0.42,
-    time: 75,
+    time: 270,                                    // 4 тайми по ~68 с (на табло — стиснуті 90 хв)
     runSpeed: clamp(5.0 + d * 0.16, 5.0, 8.2),    // швидкість польових гравців суперника
     press: clamp(0.12 + d * 0.035, 0.15, 0.85),   // наскільки агресивно суперник відбирає м'яч
     line: clamp(0.0 + d * 0.012, 0, 0.14),        // наскільки високо грає захист
@@ -138,4 +142,12 @@ export const ACADEMY = {
 export const STADIUM_TIERS = [0, 2, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 26];
 export const STADIUM_TIER_NAMES = ['Перші трибуни', 'Бічні трибуни', 'Тунель і лавки', 'Прожектори', 'Другий ярус', 'LED-борти', 'Дах і табло', 'Прапори', 'Клубний магазин і кафе', 'Тренувальне поле', 'Музей клубу', 'Готель і офіс', 'Паркінг і автобуси', 'Золота арена'];
 
-export const SETTINGS_DEFAULT = { sfx: true, music: true, haptics: true, quality: 'auto', control: 'auto', hand: 'right', joySize: 135, joyAlpha: 70, joyX: -1, joyY: -1, timeOfDay: 'day', weather: 'clear' };
+export const SETTINGS_DEFAULT = { sfx: true, music: true, haptics: true, quality: 'auto', control: 'auto', hand: 'right', joySize: 135, joyAlpha: 70, joyX: -1, joyY: -1, timeOfDay: 'day', weather: 'clear',
+  camView: 'classic', camZoom: 100, camTilt: 57, camFollow: 100, camShake: true };
+/** Готові види камери матчу: нахил (°) і відстань (% від автоматичної, що вміщує поле). */
+export const CAM_VIEWS = {
+  classic: { name: 'КЛАСИЧНА', tilt: 57, zoom: 100 },
+  close: { name: 'БЛИЖЧЕ', tilt: 50, zoom: 72 },
+  broadcast: { name: 'ТРАНСЛЯЦІЯ', tilt: 36, zoom: 104 },
+  top: { name: 'ЗВЕРХУ', tilt: 78, zoom: 106 },
+};

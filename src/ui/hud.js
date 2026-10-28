@@ -6,6 +6,7 @@ export class Hud {
   constructor(root) {
     root.insertAdjacentHTML('beforeend', `
 <section class="hud" id="hud" hidden>
+  <div class="cine" id="h-cine"><i class="lb t"></i><i class="lb b"></i><span class="cine-tag" id="h-cine-tag"></span><small class="cine-skip">Торкнись — пропустити</small></div>
   <div class="bug hud-mid" id="h-bug">
     <span id="h-title" hidden></span>
     <div class="bug-main">
@@ -47,7 +48,7 @@ export class Hud {
     this.t.crestOpp.innerHTML = crest(spec.club.kit, spec.club.name.slice(0, 2));
     this.last = { time: '', me: -1, opp: -1, coins: -1 };
   }
-  hide() { if (this.onHide) this.onHide(); this.el.hidden = true; this.clearGoal(); this.warn(null); this.hint(null); this.t.banner.hidden = true; }
+  hide() { if (this.onHide) this.onHide(); this.cine(false); this.el.hidden = true; this.clearGoal(); this.warn(null); this.hint(null); this.t.banner.hidden = true; }
 
   setScore(me, opp) {
     const pop = (el, v) => { el.textContent = v; this.bump(el); const box = el.parentElement; box.classList.remove('goalfx'); void box.offsetWidth; box.classList.add('goalfx'); const bug = this.t.mid; bug.classList.remove('scored'); void bug.offsetWidth; bug.classList.add('scored'); };
@@ -100,6 +101,12 @@ export class Hud {
     g.className = 'goaltxt ' + kind; g.hidden = false;
   }
   clearGoal() { this.t.goal.hidden = true; }
+  /** Кінорежим: чорні смуги згори й знизу, мітка кадру («ПОВТОР»), підказка про пропуск. */
+  cine(on, tag = null) {
+    const c = this.cineEl ??= this.el.querySelector('#h-cine'), tg = this.cineTag ??= this.el.querySelector('#h-cine-tag');
+    c.classList.toggle('on', !!on); this.el.classList.toggle('cine-on', !!on);
+    tg.textContent = on && tag ? tag : ''; tg.classList.toggle('live', tag === 'ПОВТОР');
+  }
 
   /** Картка гравця з м'ячем: ім'я, рейтинг і три головні навички. null — сховати. */
   setCard(c, side) {

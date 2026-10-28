@@ -40,44 +40,71 @@ export function numberCell(num, light) {
   return cellRect(i % COLS, 1 + ((i / COLS) | 0));
 }
 
+const SPONSOR_CELL = [0, 29], CREST_CELL = [1, 29];
+export const sponsorCell = () => cellRect(...SPONSOR_CELL);
+export const crestCell = () => cellRect(...CREST_CELL);
+
 let _atlas = null;
 export function playerAtlas() {
   if (_atlas) return _atlas;
   const c = canvas(AW, AH), g = c.getContext('2d');
   g.imageSmoothingEnabled = false;
   g.fillStyle = '#fff'; g.fillRect(0, 0, AW, AH);
-  // обличчя: 16×16 пікселів у клітинці 32×32 на білому тлі (колір шкіри дає вершинний колір): очі з білками й відблиском, брови, ніс, рот, щоки; бороди окремими варіантами
+  // обличчя: піксель-арт 32×32 на білому тлі (колір шкіри дає вершинний колір): брови з тінню, очі з райдужкою, зіницею,
+  // повікою й відблиском, ніс із ніздрями, губи, вилиці й підборіддя; бороди окремими варіантами
   const drawFace = (x0, y0, expr, beard) => {
-    const f = CELL / 16;
+    const f = CELL / 32;
     const px = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x0 + x * f, y0 + y * f, w * f, h * f); };
-    const ink = '#161a21', brow = '#3a2616', mouth = '#7a2530', tooth = '#fbf6ee', shade = 'rgba(60,30,20,0.16)', blush = 'rgba(235,90,90,0.30)';
+    const ink = '#14181f', iris = '#4a3322', brow = '#33210f', lid = 'rgba(70,35,25,0.35)', lip = '#a2525a', lipD = '#6e2630', tooth = '#fbf6ee';
+    const sh = (a) => `rgba(90,45,30,${a})`, hi = (a) => `rgba(255,240,225,${a})`;
+    // об'єм: тінь під бровами, вилиці, щоки, підборіддя, скроні
+    px(3, 9, 9, 1, sh(0.12)); px(20, 9, 9, 1, sh(0.12));
+    px(1, 15, 3, 7, sh(0.07)); px(28, 15, 3, 7, sh(0.07));
+    px(10, 29, 12, 2, sh(0.12)); px(12, 27, 8, 1, hi(0.1));
+    px(13, 4, 6, 3, hi(0.08));
     // брови
-    if (expr === 'angry') { px(2, 3, 3, 1, brow); px(4, 4, 1, 1, brow); px(11, 3, 3, 1, brow); px(11, 4, 1, 1, brow); }
-    else if (expr === 'shock') { px(2, 2, 3, 1, brow); px(11, 2, 3, 1, brow); }
-    else if (expr === 'happy') { px(2, 3, 3, 1, brow); px(11, 3, 3, 1, brow); px(3, 2, 1, 1, brow); px(12, 2, 1, 1, brow); }
-    else { px(2, 3, 3, 1, brow); px(11, 3, 3, 1, brow); }
+    const browL = (x, y, tilt) => { for (let i = 0; i < 7; i++) px(x + i, y + Math.round(tilt * (i - 3) / 3), 1, 2, brow); };
+    const browR = (x, y, tilt) => { for (let i = 0; i < 7; i++) px(x + i, y - Math.round(tilt * (i - 3) / 3), 1, 2, brow); };
+    if (expr === 'angry') { browL(5, 7, 1.4); browR(20, 7, 1.4); px(14, 8, 4, 1, sh(0.2)); }
+    else if (expr === 'shock') { browL(5, 5, -0.7); browR(20, 5, -0.7); }
+    else if (expr === 'happy') { browL(5, 6, -0.4); browR(20, 6, -0.4); }
+    else { browL(5, 7, 0); browR(20, 7, 0); }
     // очі
-    const eye = (ex) => {
-      if (expr === 'happy') { px(ex, 6, 1, 1, ink); px(ex + 1, 5, 2, 1, ink); px(ex + 3, 6, 1, 1, ink); }
-      else if (expr === 'shock') { px(ex, 4, 4, 4, '#fff'); px(ex + 1, 5, 2, 2, ink); px(ex + 1, 5, 1, 1, '#fff'); }
-      else { px(ex, 5, 4, 3, '#fff'); px(ex + 1, 5, 2, 3, ink); px(ex + 1, 5, 1, 1, '#fff'); if (expr === 'angry') px(ex, 5, 4, 1, shade); }
+    const eye = (ex, side) => {
+      if (expr === 'happy') {                                       // примружені дуги
+        px(ex, 12, 1, 1, ink); px(ex + 1, 11, 5, 1, ink); px(ex + 6, 12, 1, 1, ink); px(ex + 1, 13, 5, 1, hi(0.25));
+        return;
+      }
+      const top = expr === 'shock' ? 9 : 10, h = expr === 'shock' ? 6 : 5;
+      px(ex, top, 7, h, '#f6f2ea');                                  // білок
+      const ix = ex + 2 + (side > 0 ? 0 : 0);
+      px(ix, top + (expr === 'shock' ? 1 : 0), 3, Math.min(5, h), iris);   // райдужка
+      px(ix + 1, top + (expr === 'shock' ? 2 : 1), 2, 2, ink);       // зіниця
+      px(ix + 1, top + (expr === 'shock' ? 1 : 0), 1, 1, '#ffffff'); // відблиск
+      px(ex, top - 1, 7, 1, ink);                                    // верхня повіка й вії
+      px(ex - 1, top, 1, 1, ink); px(ex + 7, top, 1, 1, ink);
+      px(ex + 1, top + h, 5, 1, lid);                                // нижня повіка
+      if (expr === 'angry') px(ex, top, 7, 2, sh(0.35));             // насуплена повіка
     };
-    eye(2); eye(10);
-    // ніс і тіні
-    px(7, 7, 2, 3, shade); px(6, 9, 4, 1, 'rgba(60,30,20,0.22)'); px(7, 6, 2, 1, 'rgba(255,255,255,0.18)');
-    // щоки
-    if (expr === 'happy') { px(1, 9, 2, 1, blush); px(13, 9, 2, 1, blush); }
-    // бороди (нижня частина обличчя)
-    const bcol = 'rgba(38,24,16,0.92)', st = 'rgba(38,24,16,0.34)';
-    if (beard === 1) { for (let y = 9; y < 16; y++) for (let x = 2; x < 14; x++) if ((x + y) % 2 === 0 && !(y >= 11 && y <= 12 && x >= 5 && x <= 10)) px(x, y, 1, 1, st); }
-    if (beard === 2) { px(4, 9, 8, 1, bcol); px(3, 10, 3, 1, bcol); px(10, 10, 3, 1, bcol); }
-    if (beard === 3) { px(1, 8, 2, 7, bcol); px(13, 8, 2, 7, bcol); px(2, 13, 12, 2, bcol); px(3, 15, 10, 1, bcol); px(3, 9, 10, 1, bcol); px(4, 10, 2, 3, bcol); px(10, 10, 2, 3, bcol); px(5, 13, 6, 1, bcol); }
+    eye(5, -1); eye(20, 1);
+    // ніс: спинка з відблиском, тінь збоку, ніздрі
+    px(15, 12, 2, 7, hi(0.18)); px(17, 12, 1, 8, sh(0.16)); px(13, 19, 6, 1, sh(0.2)); px(13, 18, 1, 1, sh(0.35)); px(18, 18, 1, 1, sh(0.35));
+    px(14, 20, 4, 1, sh(0.12));
+    if (expr === 'happy') { px(4, 18, 4, 2, 'rgba(235,90,90,0.28)'); px(24, 18, 4, 2, 'rgba(235,90,90,0.28)'); }
+    // бороди
+    const bcol = 'rgba(38,24,16,0.92)', st = 'rgba(38,24,16,0.28)';
+    if (beard === 1) { for (let y = 19; y < 32; y++) for (let x = 3; x < 29; x++) if ((x * 7 + y * 3) % 4 === 0 && !(y >= 22 && y <= 26 && x >= 10 && x <= 21)) px(x, y, 1, 1, st); }
+    if (beard === 2) { px(9, 21, 14, 2, bcol); px(8, 22, 3, 3, bcol); px(21, 22, 3, 3, bcol); px(14, 21, 4, 1, 'rgba(38,24,16,0.6)'); }
+    if (beard === 3) {
+      px(2, 15, 4, 14, bcol); px(26, 15, 4, 14, bcol); px(4, 26, 24, 4, bcol); px(7, 30, 18, 2, bcol);
+      px(9, 21, 14, 2, bcol); px(8, 22, 3, 5, bcol); px(21, 22, 3, 5, bcol); px(11, 27, 10, 1, bcol);
+    }
     // рот
-    const my = beard === 3 ? 11 : 11;
-    if (expr === 'happy') { px(5, my, 6, 1, mouth); px(6, my, 4, 1, tooth); px(6, my + 1, 4, 1, mouth); px(4, my - 1, 1, 1, mouth); px(11, my - 1, 1, 1, mouth); }
-    else if (expr === 'shock') { px(6, my, 4, 3, mouth); px(7, my + 1, 2, 1, '#c24a56'); px(6, my, 4, 1, tooth); }
-    else if (expr === 'angry') { px(5, my + 1, 6, 1, mouth); px(4, my + 2, 1, 1, mouth); px(11, my + 2, 1, 1, mouth); px(6, my, 4, 1, 'rgba(250,246,238,0.85)'); }
-    else { px(6, my, 4, 1, mouth); px(5, my, 1, 1, 'rgba(122,37,48,0.5)'); px(10, my, 1, 1, 'rgba(122,37,48,0.5)'); }
+    const my = 23;
+    if (expr === 'happy') { px(9, my - 1, 1, 1, lipD); px(22, my - 1, 1, 1, lipD); px(10, my, 12, 1, lipD); px(10, my + 1, 12, 2, tooth); px(11, my + 3, 10, 1, lipD); px(12, my + 4, 8, 1, lip); }
+    else if (expr === 'shock') { px(12, my, 8, 1, lip); px(11, my + 1, 10, 4, lipD); px(12, my + 1, 8, 1, tooth); px(13, my + 3, 6, 2, '#c24a56'); px(12, my + 5, 8, 1, lip); }
+    else if (expr === 'angry') { px(10, my, 12, 1, lipD); px(10, my + 1, 12, 2, 'rgba(250,246,238,0.9)'); px(14, my + 1, 1, 2, sh(0.4)); px(18, my + 1, 1, 2, sh(0.4)); px(10, my + 3, 12, 1, lipD); px(9, my + 3, 1, 1, lipD); px(22, my + 3, 1, 1, lipD); }
+    else { px(11, my, 10, 1, lip); px(10, my + 1, 12, 1, lipD); px(11, my + 2, 10, 1, lip); px(13, my + 3, 6, 1, sh(0.15)); }
   };
   FACES.forEach((expr, k) => {
     drawFace((1 + k) * CELL, 0, expr, 0);
@@ -91,6 +118,24 @@ export function playerAtlas() {
     g.fillStyle = v ? '#23282d' : '#f1efe8'; g.fillRect(x, y, CELL, CELL);
     g.fillStyle = v ? '#f1efe8' : '#13321f'; g.font = `800 ${(n > 9 ? 21 : 25) * CELL / 32}px Rubik, "Arial Black", sans-serif`;
     g.fillText(String(n), x + CELL / 2, y + CELL / 2 + CELL / 32);
+  }
+  // спонсор «УЗ» зі смугами на червоному тлі домашньої форми й емблема клубу (декалі на грудях)
+  {
+    const x = SPONSOR_CELL[0] * CELL, y = SPONSOR_CELL[1] * CELL;
+    g.fillStyle = '#d4202c'; g.fillRect(x, y, CELL, CELL);
+    g.fillStyle = '#f4f4ee'; g.font = `800 ${CELL * 0.5}px Rubik, "Arial Black", sans-serif`;
+    g.fillText('УЗ', x + CELL / 2, y + CELL * 0.33);
+    for (let k = 0; k < 3; k++) g.fillRect(x + CELL * 0.1, y + CELL * (0.66 + k * 0.12), CELL * 0.8, CELL * 0.06);
+    const cx = CREST_CELL[0] * CELL, cy = CREST_CELL[1] * CELL, sh = (s, col) => {
+      g.fillStyle = col; g.beginPath();
+      g.moveTo(cx + CELL * (0.5 - 0.36 * s), cy + CELL * (0.5 - 0.4 * s)); g.lineTo(cx + CELL * (0.5 + 0.36 * s), cy + CELL * (0.5 - 0.4 * s));
+      g.lineTo(cx + CELL * (0.5 + 0.36 * s), cy + CELL * (0.5 + 0.05 * s)); g.quadraticCurveTo(cx + CELL * (0.5 + 0.3 * s), cy + CELL * (0.5 + 0.34 * s), cx + CELL * 0.5, cy + CELL * (0.5 + 0.45 * s));
+      g.quadraticCurveTo(cx + CELL * (0.5 - 0.3 * s), cy + CELL * (0.5 + 0.34 * s), cx + CELL * (0.5 - 0.36 * s), cy + CELL * (0.5 + 0.05 * s)); g.closePath(); g.fill();
+    };
+    g.fillStyle = '#d4202c'; g.fillRect(cx, cy, CELL, CELL);
+    sh(1.08, '#f4f4ee'); sh(0.92, '#1f8f3f');
+    g.fillStyle = '#d4202c'; g.fillRect(cx + CELL * 0.17, cy + CELL * 0.14, CELL * 0.66, CELL * 0.22);
+    g.fillStyle = '#f4f4ee'; g.font = `800 ${CELL * 0.36}px Rubik, "Arial Black", sans-serif`; g.fillText('Л', cx + CELL / 2, cy + CELL * 0.6);
   }
   _atlas = tex(c, { mip: true, aniso: 16 });
   _atlas.magFilter = THREE.LinearFilter;

@@ -1,4 +1,4 @@
-import { S } from './save.js';
+import { S, commit } from './save.js';
 import { STADIUM_TIERS, STRIKERS, KEEPERS, ACADEMY } from '../config.js';
 
 const round = (v) => {
@@ -7,13 +7,17 @@ const round = (v) => {
   return Math.round(v / 50) * 50;
 };
 
-export const kickCost = (lvl = S.up.kick) => round(60 * Math.pow(1.32, lvl));
 export const stadiumCost = (lvl = S.up.stadium) => round(90 * Math.pow(1.34, lvl));
 
-export const KICK_STEP = 6;     // % сили за рівень
 export const INCOME_STEP = 8;   // % доходу за рівень
 
-export const powerMult = () => 1 + (KICK_STEP / 100) * S.up.kick;
+// Загальну прокачку сили удару прибрано: удар тепер росте в кожного гравця окремо (навичка «Удар»).
+// Хто встиг її купити — отримує витрачені монети назад, один раз.
+if (S.up.kick > 0) {
+  let back = 0;
+  for (let l = 0; l < S.up.kick; l++) back += round(60 * Math.pow(1.32, l));
+  S.coins += back; S.up.kick = 0; commit();
+}
 export const academyBonus = () => S.academy.players.reduce((a, p) => a + p.bonus, 0);
 export const incomePct = () => INCOME_STEP * S.up.stadium + academyBonus();
 export const incomeMult = () => 1 + incomePct() / 100;

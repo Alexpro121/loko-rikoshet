@@ -1,6 +1,6 @@
 import { S, commit, resetAll, subscribe } from '../state/save.js';
-import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, KITS, matchSpec } from '../config.js';
-import { kickCost, stadiumCost, KICK_STEP, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
+import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, KITS, matchSpec, CAM_VIEWS } from '../config.js';
+import { stadiumCost, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
 import { audio } from '../core/audio.js';
 import { I, crest, lokoCrest } from './icons.js';
 import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact } from '../club.js';
@@ -51,7 +51,6 @@ export class UI {
   <aside class="m-side m-right" id="m-next"></aside>
   <footer class="bottom">
     <div class="cards">
-      <button class="card" id="m-kick" data-act="up-kick"><span class="card-ic">${I.boot}</span><span class="card-t"><b>УДАР</b><em id="m-kick-v"></em></span><span class="card-p" id="m-kick-c"></span></button>
       <button class="card" id="m-stad" data-act="up-stadium"><span class="card-ic">${I.stadium}</span><span class="card-t"><b>СТАДІОН</b><em id="m-stad-v"></em></span><span class="card-p" id="m-stad-c"></span></button>
     </div>
     <button class="cta" id="m-cta" data-act="play"><span class="tk-main"><small>КВИТОК · ЛОКО</small><b>ВПЕРЕД!</b><i class="tk-bar"></i></span><span class="tk-stub"><em>РЕЙС</em><strong id="m-cta-n"></strong><small id="m-cta-s"></small></span></button>
@@ -98,14 +97,15 @@ export class UI {
 <div class="flash" id="flash"></div>
 <div class="slowfx" id="slowfx"></div>`);
     const q = (id) => root.querySelector('#' + id);
-    this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), custom: q('custom'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), club: q('m-club'), next: q('m-next'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), kick: q('m-kick'), kickV: q('m-kick-v'), kickC: q('m-kick-c'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
+    this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), custom: q('custom'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), club: q('m-club'), next: q('m-next'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
     root.addEventListener('input', (e) => {
       const nm = e.target.closest('[data-cname]');
       if (nm && this.cu != null) { const pl = allPlayers()[this.cu]; if (pl) { pl.name = nm.value.slice(0, 22) || pl.name; pl.custom = true; commit(); } return; }
       const t = e.target.closest('[data-range]'); if (!t) return;
       const k = t.dataset.range, v = +t.value;
       S.settings[k] = v; this.applyControls(); commit();
-      const o = t.parentElement.querySelector('output'); if (o) o.textContent = v + '%';
+      if (k.startsWith('cam')) { S.settings.camView = 'custom'; this.game.computeMatchBase(); this.markCamView(); }
+      const o = t.parentElement.querySelector('output'); if (o) o.textContent = v + (t.dataset.unit || '%');
     });
     root.addEventListener('click', (e) => {
       if (e.target === this.el.settings) return this.closeSettings();                 // тап по затемненню закриває вікно
@@ -214,7 +214,6 @@ export class UI {
       case 'settings': audio.click(); return this.openSettings();
       case 'close-settings': audio.back(); return this.closeSettings();
       case 'cash': return this.claimCash();
-      case 'up-kick': return this.buyKick();
       case 'up-stadium': return this.buyStadium();
       case 'nav-match': audio.click(); return this.closePanel();
       case 'nav-transfers': case 'nav-academy': case 'nav-stadium': audio.click(); return this.openPanel(a.slice(4));
@@ -237,11 +236,13 @@ export class UI {
       case 'hand-right': case 'hand-left': S.settings.hand = a.slice(5); commit(); this.applyControls(); audio.click(); return this.renderSettings();
       case 'set-sfx': S.settings.sfx = !S.settings.sfx; audio.applySettings(); audio.click(); commit(); return this.renderSettings();
       case 'set-music': S.settings.music = !S.settings.music; audio.applySettings(); commit(); return this.renderSettings();
+      case 'set-shake': S.settings.camShake = !S.settings.camShake; commit(); audio.click(); return this.renderSettings();
       case 'set-haptics': S.settings.haptics = !S.settings.haptics; commit(); if (S.settings.haptics && navigator.vibrate) navigator.vibrate(30); return this.renderSettings();
       case 'q-auto': case 'q-high': case 'q-low': S.settings.quality = a.slice(2); g.res = 1; g.applyPixelRatio(true); commit(); audio.click(); return this.renderSettings();
       case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
       default:
         if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); return this.renderPanel(); }
+        if (a.startsWith('cam-')) { const v = CAM_VIEWS[a.slice(4)]; if (v) { Object.assign(S.settings, { camView: a.slice(4), camTilt: v.tilt, camZoom: v.zoom }); commit(); g.computeMatchBase(); audio.click(); return this.renderSettings(); } }
         if (a.startsWith('tod-')) { S.settings.timeOfDay = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
         if (a.startsWith('wth-')) { S.settings.weather = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
         if (a.startsWith('cust:')) return this.openCustom(+a.slice(5));
@@ -297,11 +298,9 @@ export class UI {
     countTo(e.tickets, S.tickets, 0, (v) => String(Math.round(v)));
     const spec = matchSpec(S.fixture, S.season);
     e.ctaS.textContent = spec.club.name; document.getElementById('m-cta-n').textContent = '№' + spec.no;
-    e.kickV.textContent = '+' + KICK_STEP + '% · рів. ' + (S.up.kick + 1);
-    e.kickC.innerHTML = fmt(kickCost()) + I.coin;
     e.stadV.textContent = '+' + INCOME_STEP + '% · рів. ' + (S.up.stadium + 1);
     e.stadC.innerHTML = fmt(stadiumCost()) + I.coin;
-    e.kick.classList.toggle('can', S.coins >= kickCost()); e.stad.classList.toggle('can', S.coins >= stadiumCost());
+    e.stad.classList.toggle('can', S.coins >= stadiumCost());
     e.acadDot.hidden = !S.academy.ready;
     if (force || this._leagueKey !== S.fixture + ':' + S.season) { this._leagueKey = S.fixture + ':' + S.season; this.leagueStrip(); }
     this.menuCards(force);
@@ -359,12 +358,6 @@ export class UI {
   deny(el) { audio.deny(); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
   pop(el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
 
-  buyKick() {
-    const c = kickCost();
-    if (S.coins < c) return this.deny(this.el.kick);
-    S.coins -= c; S.up.kick++; commit(); audio.buy(); this.pop(this.el.kick);
-    this.toast('Сила удару +' + KICK_STEP + '%: тепер ' + Math.round((1 + S.up.kick * KICK_STEP / 100) * 100) + '%');
-  }
   buyStadium() {
     const c = stadiumCost();
     if (S.coins < c) return this.deny(this.el.stad);
@@ -593,6 +586,8 @@ export class UI {
     this.el.settings.hidden = false; this.renderSettings();
   }
   closeSettings() { this.el.settings.hidden = true; }
+  /** Повзунок камери змінено вручну: жоден готовий вид більше не підсвічений. */
+  markCamView() { for (const b of this.el.settings.querySelectorAll('.cam-views button')) b.classList.remove('on'); }
   renderSettings() {
     const s = S.settings, row = (a, label, on) => `<button class="tg ${on ? 'on' : ''}" data-act="${a}"><span>${label}</span><i><u></u></i></button>`;
     const cb = (k, t) => `<button class="${s.control === k ? 'on' : ''}" data-act="ctl-${k}">${t}</button>`;
@@ -608,6 +603,9 @@ export class UI {
         <div class="tg q"><span>Керування ударом</span><div class="seg">${cb('auto', 'АВТО')}${cb('joy', 'ДЖОЙСТИК')}${cb('drag', 'ВІДТЯГУВАННЯ')}</div></div>
         <div class="tg q"><span>Час доби</span><div class="seg">${tdb('day', 'ДЕНЬ')}${tdb('dusk', 'ВЕЧІР')}${tdb('night', 'НІЧ')}${tdb('random', 'ВИПАДКОВО')}</div></div>
         <div class="tg q"><span>Погода</span><div class="seg">${wtb('clear', 'ЯСНО')}${wtb('cloudy', 'ХМАРНО')}${wtb('rain', 'ДОЩ')}${wtb('snow', 'СНІГ')}${wtb('fog', 'ТУМАН')}${wtb('random', 'ВИПАДКОВО')}</div></div>
+        <div class="tg q"><span>Камера в матчі</span><div class="seg cam-views">${Object.entries(CAM_VIEWS).map(([k, v]) => `<button class="${s.camView === k ? 'on' : ''}" data-act="cam-${k}">${v.name}</button>`).join('')}</div></div>
+        <div class="tg q joy-set"><div class="rng"><label>Відстань<output>${s.camZoom}%</output></label><input type="range" min="60" max="140" step="2" value="${s.camZoom}" data-range="camZoom" aria-label="Відстань камери"/></div><div class="rng"><label>Нахил<output>${s.camTilt}°</output></label><input type="range" min="32" max="80" step="1" value="${s.camTilt}" data-range="camTilt" data-unit="°" aria-label="Нахил камери"/></div><div class="rng"><label>Слідкування за м'ячем<output>${s.camFollow}%</output></label><input type="range" min="50" max="220" step="10" value="${s.camFollow}" data-range="camFollow" aria-label="Швидкість слідкування камери"/></div></div>
+        ${row('set-shake', 'Тряска камери', s.camShake !== false)}
         <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
         <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><button class="btn alt joy-mv" data-act="joy-move"><b>ПЕРЕМІСТИТИ</b></button><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>
         <button class="tg" data-act="fs"><span>На весь екран</span>${I.full}</button>

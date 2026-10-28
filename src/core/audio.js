@@ -148,6 +148,7 @@ class AudioEngine {
   }
   beat(danger = 0) { this.tone('sine', 80, 42, 0.2, 0.34 + danger * 0.3); if (danger > 0.55) this.tone('sine', 80, 42, 0.16, 0.22, 0.17); }
   slide() { this.hiss(1500, 0.5, 0.28, 0.34); this.tone('sine', 140, 70, 0.18, 0.2); }
+  clap() { this.hiss(2300, 1.1, 0.06, 0.6); this.hiss(900, 0.9, 0.04, 0.35); this.tone('sine', 260, 120, 0.04, 0.18); }   // ляпас долонь
   thud() { this.tone('sine', 110, 50, 0.16, 0.4); this.hiss(400, 0.7, 0.1, 0.25); }
   chug() { this.hiss(180, 0.6, 0.09, 0.5, 0, 'lowpass'); }
 

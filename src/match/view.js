@@ -124,12 +124,12 @@ export class MatchView {
     let o = 0;
     for (let i = 0; i < this.players.length; i++) {
       const p = this.players[i];
-      const k = (p.root.scale.x / 0.82) * 2.5 * (1 - Math.min(0.4, p.root.position.y * 0.25));
+      const k = p.root.visible ? (p.root.scale.x / 0.82) * 2.5 * (1 - Math.min(0.4, p.root.position.y * 0.25)) : 0;   // схований (ще в тунелі) — без тіні
       m[o] = k * 1.15; m[o + 1] = 0; m[o + 2] = 0; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = 1; m[o + 6] = 0; m[o + 7] = 0;
-      m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = k * 0.95; m[o + 11] = 0; m[o + 12] = p.x + 0.45; m[o + 13] = 0.05; m[o + 14] = p.z - 0.25; m[o + 15] = 1;
+      m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = k * 0.95; m[o + 11] = 0; m[o + 12] = p.root.position.x + 0.45; m[o + 13] = 0.05; m[o + 14] = p.root.position.z - 0.25;   // за тілом (і в повторі) m[o + 15] = 1;
       o += 16;
     }
-    const k = 1.45 * (1 - Math.min(0.6, ballH * 0.5));
+    const k = 0.75 * (this.ball.vs || 1) * (1 - Math.min(0.6, ballH * 0.5));   // тінь у розмір м'яча (разом зі збільшенням видимості)
     m[o] = k; m[o + 1] = 0; m[o + 2] = 0; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = 1; m[o + 6] = 0; m[o + 7] = 0;
     m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = k; m[o + 11] = 0; m[o + 12] = ballX + 0.2; m[o + 13] = 0.05; m[o + 14] = ballZ - 0.12; m[o + 15] = 1;
     this.shadows.instanceMatrix.needsUpdate = true;

@@ -10,7 +10,7 @@ function init(renderer) {
   scene.add(new THREE.HemisphereLight(0xffffff, 0x9a7458, 1.25));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(-4, 8, 7); scene.add(sun);
   const cam = new THREE.PerspectiveCamera(26, 1, 1, 60);
-  cam.position.set(0, 2.0, 8.6); cam.lookAt(0, 1.62, 0);
+  cam.position.set(0, 1.45, 6.6); cam.lookAt(0, 1.3, 0);
   const rt = new THREE.WebGLRenderTarget(256, 256, { samples: 4 });
   rt.texture.colorSpace = THREE.SRGBColorSpace;
   const c2 = document.createElement('canvas'); c2.width = 256; c2.height = 256;
