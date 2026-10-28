@@ -55,6 +55,10 @@ export class CineFX {
     const rt = new THREE.WebGLRenderTarget(s.x, s.y, { type: half ? THREE.HalfFloatType : THREE.UnsignedByteType, samples: coarse ? 0 : 4 });
     rt.depthTexture = new THREE.DepthTexture(s.x, s.y); rt.depthTexture.type = THREE.UnsignedIntType;
     this.comp = new EffectComposer(renderer, rt);
+    // другий буфер композитор робить копією першого — і текстура глибини в копії ділить ту саму GPU-текстуру. Без
+    // згладжування (телефони) шейдер тоді читає глибину, у яку сам пише: браузер відкидає кадр — білий екран.
+    // Тому другому буферу — своя, окрема текстура глибини
+    this.comp.renderTarget2.depthTexture = new THREE.DepthTexture(s.x, s.y); this.comp.renderTarget2.depthTexture.type = THREE.UnsignedIntType;
     this.rp = new RenderPass(null, null); this.dof = new ShaderPass({ ...DofShader, defines: { TAPS: coarse ? 10 : 16 } }); this.out = new OutputPass();
     this.comp.addPass(this.rp); this.comp.addPass(this.dof); this.comp.addPass(this.out);
     this.t = 0; this.ok = true; this.checked = false;
