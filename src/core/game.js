@@ -360,8 +360,10 @@ export class Game {
     this.governor(dt);
     this.sm.update(dt);
     const menu = this.sm.name === 'MENU';
-    if (!menu && this.dof) (this.cinefx ??= new CineFX(this.renderer)).render(this.match.view.scene, this.matchCam, this.dof.focus, this.dof.ap, dt);
-    else this.renderer.render(menu ? this.menuScene : this.match.view.scene, menu ? this.menuCam : this.matchCam);
+    // кінофокус; якщо пристрій його не тягне (буфер чи шейдер) — той самий кадр звичайним рендером
+    let done = false;
+    if (!menu && this.dof && !this.cineBroken) { try { done = (this.cinefx ??= new CineFX(this.renderer)).render(this.match.view.scene, this.matchCam, this.dof.focus, this.dof.ap, dt); } catch (_) { this.cineBroken = true; } }
+    if (!done) this.renderer.render(menu ? this.menuScene : this.match.view.scene, menu ? this.menuCam : this.matchCam);
     if (this.fps) this.fps(dt);
   }
 }

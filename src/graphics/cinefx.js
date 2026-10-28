@@ -48,17 +48,34 @@ export class CineFX {
   constructor(renderer) {
     this.r = renderer;
     const s = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const coarse = matchMedia('(pointer: coarse)').matches;
-    const rt = new THREE.WebGLRenderTarget(s.x, s.y, { type: THREE.HalfFloatType, samples: coarse ? 0 : 4 });
+    const coarse = matchMedia('(pointer: coarse)').matches, ext = renderer.extensions;
+    // буфер з плаваючою точністю — лише там, де в нього справді можна малювати (на багатьох телефонах — ні: білий екран);
+    // на телефонах — звичайний 8-бітний, без згладжування
+    const half = !coarse && (ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float'));
+    const rt = new THREE.WebGLRenderTarget(s.x, s.y, { type: half ? THREE.HalfFloatType : THREE.UnsignedByteType, samples: coarse ? 0 : 4 });
     rt.depthTexture = new THREE.DepthTexture(s.x, s.y); rt.depthTexture.type = THREE.UnsignedIntType;
     this.comp = new EffectComposer(renderer, rt);
     this.rp = new RenderPass(null, null); this.dof = new ShaderPass({ ...DofShader, defines: { TAPS: coarse ? 10 : 16 } }); this.out = new OutputPass();
     this.comp.addPass(this.rp); this.comp.addPass(this.dof); this.comp.addPass(this.out);
-    this.t = 0;
+    this.t = 0; this.ok = true; this.checked = false;
+  }
+  /** Чи буфери справді придатні для малювання (інакше — кат-сцени без ефекту, звичайним рендером). */
+  verify() {
+    const r = this.r, gl = r.getContext();
+    try {
+      for (const t of [this.comp.renderTarget1, this.comp.renderTarget2]) {
+        r.setRenderTarget(t);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) this.ok = false;
+      }
+    } catch (_) { this.ok = false; }
+    r.setRenderTarget(null);
+    this.checked = true;
   }
   resize() { const s = this.r.getDrawingBufferSize(new THREE.Vector2()); this.comp.setPixelRatio(1); this.comp.setSize(s.x, s.y); }
   /** Кадр із фокусом на відстані focus (м); aperture — наскільки «мала глибина різкості» (0 — без розмиття). */
   render(scene, cam, focus, aperture, dt) {
+    if (!this.checked) this.verify();
+    if (!this.ok) return false;
     const s = this.r.getDrawingBufferSize(_s);
     if (s.x !== this.comp.renderTarget1.width || s.y !== this.comp.renderTarget1.height) this.resize();
     this.rp.scene = scene; this.rp.camera = cam;
@@ -67,7 +84,11 @@ export class CineFX {
     // розмиття обмежене: фон і передній план м'які, але читаються (не «все в милі»)
     u.focus.value = focus; u.aperture.value = aperture * 0.7; u.maxblur.value = Math.min(0.0075, aperture * 0.6);
     u.near.value = cam.near; u.far.value = cam.far; u.aspect.value = cam.aspect; u.time.value = (this.t += dt) % 100;
-    this.comp.render(dt);
+    try { this.comp.render(dt); } catch (_) { this.ok = false; return false; }
+    // шейдер не зібрався на цьому пристрої — більше не пробуємо
+    const pr = this.r.properties.get(this.dof.material).currentProgram;
+    if (pr && pr.diagnostics && pr.diagnostics.runnable === false) { this.ok = false; return false; }
+    return true;
   }
 }
 const _s = new THREE.Vector2();

@@ -342,7 +342,7 @@ export class Match {
       const sk = a.sk, limit = a.receiver ? 34 : PHYS.trapSpeed * (1.2 + 0.8 * sk.hands);
       // ловить, лише якщо м'яч прийшов у рукавиці; удар у ноги чи тулуб — відскік (повільний м'яч біля ніг — підбере сам)
       const outBox = (this.ball.x + a.side * L) * a.side > 17 || Math.abs(this.ball.z) > 17;   // поза штрафним — грає ногою, як польовий
-      if (speed < limit && a.noTrap <= 0 && (outBox || this.inGloves(a, 0.12) || (speed < 5 && this.facesBall(a)))) {
+      if (speed < limit && a.noTrap <= 0 && (outBox || this.inGloves(a, 0.16) || (speed < 5 && this.facesBall(a)))) {
         if (a.side > 0) { this.trapMine(a, speed); return true; }
         if (a.receiver || (this.protectT <= 0 && Math.random() < (0.64 + 0.34 * this.oppTeam.press) * (0.7 + 0.6 * sk.hands))) { this.trapOpp(a, speed); return true; }
         a.noTrap = 0.45;
@@ -1767,7 +1767,7 @@ export class Match {
       if (!inBox || b.y > 1.9 + 0.5 * (g.sk.reach ?? 0.5)) continue;          // вище витягнутих рук — не дістає
       // бере, лише коли м'яч справді в рукавицях (руки самі тягнуться до нього — handsIK); поруч чи збоку — ні, не «телепорт» у руки
       const lim = PHYS.trapSpeed * (1.4 + 0.8 * (g.sk.hands ?? 0.5));
-      if (sp < lim && this.inGloves(g, 0.06 + 0.06 * (g.sk.hands ?? 0.5))) { if (g.side > 0) this.trapMine(g, sp); else this.trapOpp(g, sp); return; }
+      if (sp < lim && this.inGloves(g, 0.1 + 0.08 * (g.sk.hands ?? 0.5))) { if (g.side > 0) this.trapMine(g, sp); else this.trapOpp(g, sp); return; }
     }
   }
 
@@ -1776,7 +1776,8 @@ export class Match {
    * майже зупинився). Спиною — прийняти не може: м'яч відскакує від тіла.
    */
   facesBall(g) {
-    const p = g.p, b = this.ball, y = p.bodyYaw ?? p.yaw, fx = Math.sin(y), fz = Math.cos(y);
+    // у стрибку тіло розвернуте боком — «лице» воротаря тоді рахуємо від своїх воріт у поле
+    const p = g.p, b = this.ball, y = p.bodyYaw ?? p.yaw, fx = g.dive || p.downed ? g.side : Math.sin(y), fz = g.dive || p.downed ? 0 : Math.cos(y);
     const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz) || 1e-3;
     if ((dx * fx + dz * fz) / d < 0.15) return false;                     // м'яч позаду або збоку-ззаду
     const sp = Math.hypot(b.vx, b.vz);
@@ -1800,7 +1801,7 @@ export class Match {
       const d = Math.hypot(b.x - c.ax - ex * t, by - c.ay - ey * t, b.z - c.az - ez * t);
       if (d < c.r + PITCH.BALL_VIS + extra) n++;
     }
-    return n >= (sp > 12 ? 2 : 1);
+    return n >= 1;
   }
 
   /**
@@ -1895,7 +1896,7 @@ export class Match {
       const er = (0.12 + 0.55 * (1 - g.sk.iq)) * Math.min(1, eta / 0.4);
       const predZ = cr.z + (Math.random() * 2 - 1) * er, predY = Math.max(0, cr.y + (Math.random() * 2 - 1) * er * 0.5);
       const lateral = predZ - g.p.z;
-      if (Math.abs(lateral) > 1.5) {
+      if (Math.abs(lateral) > 0.7) {                                     // далі за ~0.7 м убік — тільки стрибком (руками не дістає)
         const dir = Math.sign(lateral), reach = Math.min(Math.abs(lateral) + 1.0, (2.2 + g.sk.reach * 3.4 + (side < 0 ? this.oppTeam.gkSpeed : this.myTeam.gkSpeed) * 0.12) * (G / 7.2));   // дотяжка в масштабі воріт: складність як раніше
         // м'яч у матчі котиться газоном: стрибок низом, а коли треба дотягнутись далеко — у польоті на середній висоті
         // висота стрибка — за висотою м'яча: високий — угору-вбік, середній — у політ, низом (по траві чи нижче ~0.5 м) — низом,
@@ -2141,11 +2142,12 @@ export class Match {
       let n = 0;
       for (const c of hit) {
         const o = cs[n++];
-        o.ax = c.ax; o.ay = c.ay; o.az = c.az; o.bx = c.bx; o.by = c.by; o.bz = c.bz; o.r = c.r + (c.glove ? 0.05 : 0.02);   // точно за тілом, ледь-ледь запасу
+        o.ax = c.ax; o.ay = c.ay; o.az = c.az; o.bx = c.bx; o.by = c.by; o.bz = c.bz; o.r = c.r + (c.glove ? 0.14 : 0.03);   // тіло — точно; рукавиці трохи «прощаючі» (долоні, пальці)
         o.vx = clamp((c.vax + c.vbx) / 2, -12, 12); o.vy = clamp((c.vay + c.vby) / 2, -12, 12); o.vz = clamp((c.vaz + c.vbz) / 2, -12, 12);
       }
-      cs.n = n; b.capsOnly = true;                                     // для м'яча — лише капсули тіла (без кола «дотягу»)
-      if (!a.sliding) b.r = a.dive ? 0.45 : a.baseR;
+      // для м'яча: у стрибку — тіло (коло 0.45) і капсули; стоячи — капсули й невелика зона ніг і тулуба (0.5 м, а не 0.9–1.3)
+      cs.n = n; b.capsOnly = false;
+      if (!a.sliding) b.r = a.dive ? 0.45 : 0.5;
       b.h = a.dive ? 0.6 : 1.1;
     }
   }
