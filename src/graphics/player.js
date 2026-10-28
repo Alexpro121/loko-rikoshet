@@ -1105,6 +1105,11 @@ export class Player {
           armA = lerp(armA, 2.85, e); armB = lerp(armB, 2.85, e); elbA = lerp(elbA, 0.12, e); elbB = lerp(elbB, 0.12, e); spread = lerp(spread, 0.25, e); hdX -= 0.4 * e;
         } else if (st === 16) {                                // аплодує трибунам над головою
           const c2 = accent(T * 2.1); armA = lerp(armA, 2.35, e); armB = lerp(armB, 2.35, e); elbA = lerp(elbA, 0.55, e); elbB = lerp(elbB, 0.55, e); spread = lerp(spread, 0.03 + 0.3 * (1 - c2), e); hdX -= 0.2 * e;
+        } else if (st === 43) {                                // «літак» на бігу: руки розкинуті в боки, корпус закладає віражі
+          const bank = Math.sin(T * 1.6);
+          armA = lerp(armA, 0.15, e); armB = lerp(armB, 0.15, e); elbA = lerp(elbA, 0.12, e); elbB = lerp(elbB, 0.12, e);
+          spread = lerp(spread, 1.45, e); leanZ += 0.32 * bank * e; leanX += 0.08 * e; hdZ -= 0.15 * bank * e;
+          if (e > 0.5 && this.expr === 'neutral') this.setExpr('happy', 0.8);
         } else if (st >= 40 && st <= 42) {
           // МАХАННЯ однією (правою) рукою, IK з полюсом ліктя. 40 — привітне: долоня біля голови, передпліччя гойдається
           // від ліктя з боку в бік; 41 — велике: уся рука над головою ходить дугою (до трибун); 42 — коротке, на рівні плеча
@@ -1841,7 +1846,9 @@ export class Player {
   hitbox(dt) {
     const s = this.root.scale.x || 0.82;
     const D = (this._hbD ??= [
-      [this.pose, 0, 0, 0, this.neck, 0, 0, 0, 0.2, 0], [this.neck, 0, 0.29, 0.02, this.neck, 0, 0.29, 0.02, 0.2, 0],
+      // тулуб — дві паралельні капсули на всю ширину (±0.27) і товщину (±0.17) моделі; голова — у її розмір
+      [this.pose, -0.1, -0.05, 0.005, this.neck, -0.1, -0.08, 0.005, 0.17, 0], [this.pose, 0.1, -0.05, 0.005, this.neck, 0.1, -0.08, 0.005, 0.17, 0],
+      [this.neck, 0, 0.22, -0.015, this.neck, 0, 0.32, -0.015, 0.23, 0],
       [this.armL, 0, 0, 0, this.foreL, 0, 0, 0, 0.08, 0], [this.armR, 0, 0, 0, this.foreR, 0, 0, 0, 0.08, 0],
       [this.foreL, 0, 0, 0, this.handL, 0, 0, 0, 0.065, 0], [this.foreR, 0, 0, 0, this.handR, 0, 0, 0, 0.065, 0],
       [this.handL, 0, -0.04, 0, this.handL, 0, -0.22, 0, 0.09, 1], [this.handR, 0, -0.04, 0, this.handR, 0, -0.22, 0, 0.09, 1],

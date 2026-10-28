@@ -153,7 +153,7 @@ export function buildPitch() {
   const nets = [];
   for (const sd of [-1, 1]) {
     const ng = new THREE.Group();
-    const back = new THREE.Mesh(netPlane(2 * G, PITCH.GOAL_H * 0.75), netMat); back.position.set(sd * (L + GOAL_D), PITCH.GOAL_H * 0.375, 0); back.rotation.y = Math.PI / 2;
+    const back = new THREE.Mesh(netPlane(2 * G, PITCH.GOAL_H * 0.75, 0.5, 18, 8), netMat); back.position.set(sd * (L + GOAL_D), PITCH.GOAL_H * 0.375, 0); back.rotation.y = Math.PI / 2;   // з сіткою вершин — прогинається від м'яча
     const roof = new THREE.Mesh(netPlane(GOAL_D, 2 * G), netMat); roof.position.set(sd * (L + GOAL_D / 2), PITCH.GOAL_H * 0.875, 0); roof.rotation.x = -Math.PI / 2;
     const sideA = new THREE.Mesh(netPlane(GOAL_D, PITCH.GOAL_H * 0.875), netMat); sideA.position.set(sd * (L + GOAL_D / 2), PITCH.GOAL_H * 0.4375, G);
     const sideB = sideA.clone(); sideB.position.z = -G;

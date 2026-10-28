@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PITCH } from '../config.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
@@ -16,7 +17,7 @@ export class Replay {
     this.v = view; this.hz = hz;
     this.nodes = view.players.map((p) => NODES.map((k) => p[k]));
     this.per = NODES.length * 7 + 1;
-    this.N = view.players.length * this.per + 10;
+    this.N = view.players.length * this.per + 11;
     this.cap = Math.ceil(seconds * hz);
     this.buf = new Float32Array(this.cap * this.N); this.ts = new Float64Array(this.cap);
     this.live = new Float32Array(this.N);
@@ -41,7 +42,7 @@ export class Replay {
       for (let j = 0; j < ns.length; j++) { const n = ns[j]; n.position.toArray(a, o); n.quaternion.toArray(a, o + 3); o += 7; }
       a[o++] = Math.max(0, EXPR.indexOf(P[i].expr));
     }
-    const B = this.v.ball; B.group.position.toArray(a, o); B.spin.quaternion.toArray(a, o + 3); B.group.scale.toArray(a, o + 7);
+    const B = this.v.ball; B.group.position.toArray(a, o); B.spin.quaternion.toArray(a, o + 3); B.group.scale.toArray(a, o + 7); a[o + 10] = B.vs || 1;
   }
   blend(A, oa, Bf, ob, al) {
     const P = this.v.players, l = (k) => A[oa + k] + (Bf[ob + k] - A[oa + k]) * al;
@@ -58,7 +59,10 @@ export class Replay {
       oa++; ob++;
     }
     const B = this.v.ball;
-    B.group.position.set(l(0), l(1), l(2)); THREE.Quaternion.slerpFlat(_q, 0, A, oa + 3, Bf, ob + 3, al); B.spin.quaternion.fromArray(_q); B.group.scale.set(l(7), l(8), l(9));
+    // у грі здалеку м'яч збільшено (щоб не губився); у повторі камера близько — справжній розмір і справжня висота
+    const vs = Math.max(1, l(10)), R0 = PITCH.BALL_VIS;
+    B.group.position.set(l(0), l(1) - R0 * (vs - 1), l(2)); THREE.Quaternion.slerpFlat(_q, 0, A, oa + 3, Bf, ob + 3, al); B.spin.quaternion.fromArray(_q);
+    B.group.scale.set(l(7) / vs, l(8) / vs, l(9) / vs); B.vs = 1; B.rad = R0;
     this.ball.copy(B.group.position);
     this.v.updateShadows(this.ball.x, this.ball.z, Math.max(0, this.ball.y - B.rad));
   }

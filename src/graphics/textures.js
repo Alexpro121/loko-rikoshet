@@ -227,8 +227,8 @@ export function netTexture() {
   return _net;
 }
 
-export function netPlane(w, h, cell = 0.5) {
-  const g = new THREE.PlaneGeometry(w, h);
+export function netPlane(w, h, cell = 0.5, sx = 1, sy = 1) {
+  const g = new THREE.PlaneGeometry(w, h, sx, sy);
   const uv = g.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / cell), uv.getY(i) * (h / cell));
   return g;

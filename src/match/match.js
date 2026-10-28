@@ -30,6 +30,7 @@ const LZ = -14;                     // лінія шикування: ближч
 const LANE_Z = LZ + 1.45;           // доріжка гостей — перед шеренгою господарів (між ними й трибуною), на відстані витягнутої руки
 const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3();
 const H = 1 / PHYS.hz;
+const GK_THROW = 1.25;              // сила кидка воротаря рукою (×1.25 до колишньої)
 const GK_CLEAR = 7;                 // на скільки суперники відходять від воротаря з м'ячем у руках
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth01 = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
@@ -251,9 +252,9 @@ export class Match {
     if (!valid) { this.hideAim(); sh.power = 0; return; }
     sh.dirx = dirx; sh.dirz = dirz; sh.power = power;
     let speed = Math.min(PHYS.maxSpeed, PHYS.baseShot * (0.28 + 0.72 * sh.power) * this.shotMul(sh.power));
-    // воротар із м'ячем у руках кидає рукою — це не удар: до ~26 м/с (від ~9 — короткий кидок партнеру поруч)
+    // воротар із м'ячем у руках кидає рукою — це не удар: до ~32 м/с (від ~11 — короткий кидок партнеру поруч)
     if (this.holder && this.holder.isGK && !this.holder.footBall) {
-      speed = 9 + 17 * sh.power;
+      speed = (9 + 17 * sh.power) * GK_THROW;
       // воротар кидає своєму: найближчий до напрямку прицілу партнер (у межах ~45°) — кидок точно йому, на випередження,
       // і не слабше, ніж треба, щоб м'яч до нього докотився
       let q = null, ba = 0.8;
@@ -265,7 +266,7 @@ export class Match {
         const dl = Math.hypot(q.p.x - b.x, q.p.z - b.z), t = dl / Math.max(9, speed);
         const tx = q.p.x + q.p.vx * t - b.x, tz = q.p.z + q.p.vz * t - b.z, tl = Math.hypot(tx, tz) || 1;
         dirx = tx / tl; dirz = tz / tl; sh.dirx = dirx; sh.dirz = dirz;
-        speed = clamp(Math.max(speed, this.launchFor(tl, 4)), 9, 26);
+        speed = clamp(Math.max(speed, this.launchFor(tl, 4)), 9, 26 * GK_THROW);
       }
     }
     sh.vx = sh.dirx * speed; sh.vz = sh.dirz * speed;
@@ -339,7 +340,9 @@ export class Match {
       if (speed < 6) return true;
     } else {
       const sk = a.sk, limit = a.receiver ? 34 : PHYS.trapSpeed * (1.2 + 0.8 * sk.hands);
-      if (speed < limit && a.noTrap <= 0) {
+      // ловить, лише якщо м'яч прийшов у рукавиці; удар у ноги чи тулуб — відскік (повільний м'яч біля ніг — підбере сам)
+      const outBox = (this.ball.x + a.side * L) * a.side > 17 || Math.abs(this.ball.z) > 17;   // поза штрафним — грає ногою, як польовий
+      if (speed < limit && a.noTrap <= 0 && (outBox || this.inGloves(a, 0.12) || (speed < 5 && this.facesBall(a)))) {
         if (a.side > 0) { this.trapMine(a, speed); return true; }
         if (a.receiver || (this.protectT <= 0 && Math.random() < (0.64 + 0.34 * this.oppTeam.press) * (0.7 + 0.6 * sk.hands))) { this.trapOpp(a, speed); return true; }
         a.noTrap = 0.45;
@@ -646,8 +649,8 @@ export class Match {
     const b = this.ball, hands = a.isGK && !a.footBall && !long;   // кидок рукою (long — воротар вибиває ногою)
     const err = (1 - a.sk.pass) * (hands ? 1.2 : 3.2);                // рукою точніше
     const dx = best.p.x + best.p.vx * 0.35 - b.x + (Math.random() - 0.5) * err, dz = best.p.z + best.p.vz * 0.35 - b.z + (Math.random() - 0.5) * err, d = Math.hypot(dx, dz) || 1;
-    // воротар кидає рукою — м'якше й коротше, ніж б'є польовий (до ~26 м/с)
-    const sp = (hands ? clamp(10 + d * 0.55, 13, 26) : clamp(16 + d * 0.9, 22, 46)) * (0.92 + 0.16 * a.sk.pass);
+    // воротар кидає рукою — м'якше, ніж б'є польовий (до ~32 м/с)
+    const sp = (hands ? clamp(10 + d * 0.55, 13, 26) * GK_THROW : clamp(16 + d * 0.9, 22, 46)) * (0.92 + 0.16 * a.sk.pass);
     b.vx = (dx / d) * sp; b.vz = (dz / d) * sp;
     a.cool = 0.35; a.noTrap = 1.3; a.manual = false; this.taker = null; this.lastOppTaker = a;
     best.receiver = true; this.passTarget = best; this.receiverT = 3.2;
@@ -842,7 +845,7 @@ export class Match {
   // ------------------------------------------------------------------ голи
   onGoal(side) {
     const spec = this.spec, v = this.view, mine = side > 0;
-    this.bs = 'net'; this.owner = 0; this.ball.vx *= 0.3; this.ball.vz *= 0.3;
+    this.bs = 'net'; this.owner = 0;                               // м'яч летить далі — у пружну сітку, відскакує й падає
     this.nextKick = mine ? -1 : 1;                                 // з центру розводить та команда, якій забили
     this.goalMine = mine; this.goalT = 0; this.goalTime = this.time; this.rp = null;
     this.endDrama(); this.ui.hud.cine(true);
@@ -851,12 +854,7 @@ export class Match {
     if (this.taker) { this.taker.manual = false; this.taker = null; }
     const gx = side * (L + 1);
     const sc = mine ? (this.shooter || this.mine[1]) : (this.lastOppTaker || this.opp[1]);
-    // сценарій святкування — щоразу інший: ковзання на колінах до кутового; до трибун (біжить до найближчої, показує їм
-    // жести); або на місці — стрибок і партнери збігаються на обійми. Партнери: перші двоє-троє — обіймають, решта стрибає довкола
-    const kinds = ['corner', 'fans', 'fans', 'jump'], kind = kinds[(Math.random() * kinds.length) | 0];
-    const fz = (sc.p.z >= 0 ? 1 : -1) * (W - 3.2), fx = clamp(sc.p.x + side * 4, -L + 8, L - 8);
-    this.celeb = { mine, scorer: sc, t: 0, kneeled: false, kind, tx: kind === 'fans' ? fx : side * (L - 7.5), tz: kind === 'fans' ? fz : (sc.p.z >= 0 ? 1 : -1) * (W - 5), huggers: 0, hugOn: 0 };
-    for (const a of this.actors) { a.celebHug = false; a.hugOn = false; a.cheered = false; a.hugged = false; a.hf = false; }
+    let gt;
     if (mine) {
       this.score.me++; this.stats.goals++;
       const bn = this.shotBounces, mult = bn >= 2 ? Math.min(4, 1 + 0.5 * (bn - 1)) : 1;
@@ -864,7 +862,7 @@ export class Match {
       const c = Math.round(50 * spec.scale * mult);
       this.coins += c; this.ui.hud.setCoins(this.coins);
       if (this.shooter && this.mine.indexOf(this.shooter) >= 0) { this.addXp(this.shooter, 60 + (bn >= 2 ? 20 : 0)); if (this.shooter.info) this.shooter.info.goals++; }
-      this.ui.hud.goal('ГОЛ!', (bn >= 2 ? 'РИКОШЕТ ×' + mult + ' · ' : '') + '+' + c, 'me');
+      gt = ['ГОЛ!', (bn >= 2 ? 'РИКОШЕТ ×' + mult + ' · ' : '') + '+' + c, 'me'];
       v.stands.react('goal', { mine: true });
       for (let i = 0; i < this.opp.length; i++) this.opp[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 60, 11, 1.8, 0.4, ['#b3162a', '#117a4a', '#f1efe8', '#e8b923'], 12, 1.0);
@@ -872,23 +870,33 @@ export class Match {
       this.ui.flash('rgba(255,255,255,.4)');
     } else {
       this.score.opp++;
-      this.ui.hud.goal('ПРОПУСТИЛИ', 'контратака спрацювала', 'opp'); v.stands.react('goal', { mine: false });
+      gt = ['ПРОПУСТИЛИ', 'контратака спрацювала', 'opp']; v.stands.react('goal', { mine: false });
       for (let i = 0; i < this.mine.length; i++) this.mine[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 24, 8, 1.4, 0.35, ['#9ca3af', '#4b5563', '#f1efe8'], 12, 1.0);
       audio.concede(); this.game.addTrauma(0.4); vibrate(80);
     }
+    // важливість гола: від неї — святкування, розпач суперника, трибуни, салют і підпис
+    const { I, tag } = this.goalImportance(mine);
+    this.setupCelebration(mine, sc, side, I);
+    this.ui.hud.goal(gt[0], tag ? tag + ' · ' + gt[1] : gt[1], gt[2]);
+    if (I > 0.55) { v.stands.react('goal', { mine, dur: 3.8 + 3 * I }); audio.crowd(1); this.walk.fireworks(3 + Math.round(4 * I)); this.game.addTrauma(0.25 * I); }
     this.ui.hud.setScore(this.score.me, this.score.opp);
     this.ts = 0.28;
     this.game.sm.go('GOAL', { mine });
   }
 
   updateGoal(rawDt) {
+    if (this.rp) { this.updateClip(rawDt); return; }
     this.goalT += rawDt;
-    // мить гола — сповільнення (×0.28), за ~0.7 с плавно назад до звичайного темпу
-    const k = clamp((this.goalT - 0.5) / 0.7, 0, 1);
+    // мить гола — сповільнення (×0.28); важливий гол — сповільнення довше. Далі плавно назад до звичайного темпу
+    const I = this.celeb ? this.celeb.I : 0.3, k = clamp((this.goalT - (0.45 + 0.8 * I)) / 0.7, 0, 1);
     this.ts = 0.28 + (1 - 0.28) * k;
     this.tick(rawDt * this.ts, rawDt);
-    if (this.goalT > 5.0) { this.storeClip('goal', this.goalTime, this.goalMine ? 1 : -1); this.afterGoal(); }   // святкування ~5 с; гол — у підбірку тайму
+    // святкування (довше для важливого гола) → повтор гола → розведення з центру; гол ще й у підбірку тайму
+    if (this.goalT > (this.celeb ? this.celeb.dur : 5)) {
+      const clip = this.storeClip('goal', this.goalTime, this.goalMine ? 1 : -1);
+      if (clip) this.playClips([clip], 'ПОВТОР', () => this.afterGoal()); else this.afterGoal();
+    }
   }
   afterGoal() {
     this.ui.hud.clearGoal(); this.ui.hud.cine(false);
@@ -1314,6 +1322,7 @@ export class Match {
     Object.assign(c, { kind, tE, side, pr: kind === 'goal' ? 3 : kind === 'save' ? 2 : 1 });
     this.clips.push(c);
     if (this.clips.length > 4) { let w = 0; this.clips.forEach((x, i) => { if (x.pr < this.clips[w].pr) w = i; }); this.clips.splice(w, 1); }   // лишаємо найважливіші
+    return c;
   }
   /** Чергові запам'ятовані моменти — вирізати, щойно після них минула секунда запису. */
   takeMoments(force = false) {
@@ -1321,44 +1330,60 @@ export class Match {
   }
   /** Показ підбірки: кліп за кліпом — спершу в реальному темпі, останні ~2 с — сповільнено, з різних ракурсів. */
   startHighlights(n) {
-    this.hl = { list: this.clips.slice().sort((a, b) => a.tE - b.tE), i: -1, n };
+    const list = this.clips.slice().sort((a, b) => a.tE - b.tE);
     this.clips = []; this.moments = [];
+    this.playClips(list, 'ПІДБІРКА · ' + n + '-Й ТАЙМ', () => { this.ui.hud.cine(true, this.brk && this.brk.n === 2 ? 'ПЕРЕРВА' : null); if (this.brk) this.brk.t = 0; });
+  }
+  /** Програти кліпи один за одним (стан гри відкладено; після — повернуто як був), потім done(). */
+  playClips(list, title, done) {
+    this.hl = { list, i: -1, title, done };
     this.replay.saveLive();
     this.nextClip();
   }
   nextClip() {
     const H = this.hl; H.i++;
-    if (H.i >= H.list.length) { this.endHighlights(); return; }
+    if (H.i >= H.list.length) { this.endClips(); return; }
     const c = H.list[H.i], a = c.ts[0], b = c.ts[c.n - 1];
-    this.rp = { a, b, slowAt: Math.max(a + 0.3, c.tE - 1.0), t: a, side: c.side, low: Math.random() < 0.55, hold: 0, clip: c };
+    this.rp = { a, b, slowAt: Math.max(a + 0.3, c.tE - 1.15), t: a, side: c.side, view: (Math.random() * 2) | 0, hold: 0, clip: c };
     const name = { goal: 'ГОЛ', save: 'СЕЙВ', post: 'ШТАНГА' }[c.kind];
-    this.ui.hud.cine(true, 'ПІДБІРКА · ' + H.n + '-Й ТАЙМ · ' + name + ' ' + (H.i + 1) + '/' + H.list.length);
+    this.ui.hud.clearGoal();
+    this.ui.hud.cine(true, H.list.length > 1 ? H.title + ' · ' + name + ' ' + (H.i + 1) + '/' + H.list.length : H.title);
     this.ui.flash('rgba(255,255,255,.4)');
     this.replay.applyClip(c, a);
   }
-  updateHighlights(rawDt) {
+  updateClip(rawDt) {
     const r = this.rp, slow = r.t >= r.slowAt;
     if (slow && !r.slowOn) { r.slowOn = true; this.ui.flash('rgba(255,255,255,.22)'); }
-    if (r.t < r.b) r.t = Math.min(r.b, r.t + rawDt * (slow ? 0.45 : 1)); else r.hold += rawDt;
+    if (r.t < r.b) r.t = Math.min(r.b, r.t + rawDt * (slow ? 0.4 : 1)); else r.hold += rawDt;
     this.time += rawDt;                                                 // натовп і погода живуть далі
     this.replay.applyClip(r.clip, r.t);
+    // сітка в повторі прогинається так само, як у грі (за положенням м'яча з запису)
+    const B = this.replay.ball, sd = B.x > 0 ? 1 : -1, dep = Math.abs(B.x) - (L + PITCH.GOAL_D - PITCH.R);
+    this.world.netPush = dep > 0 && Math.abs(B.z) < G + 0.5 ? { sd, depth: Math.min(0.55, dep), y: B.y, z: B.z } : null;
+    this.netBulge(rawDt);
     const v = this.view; v.stands.update(rawDt, this.time); v.weather.update(rawDt); v.surround.update(rawDt); v.pitch.decals.update(rawDt); v.particles.update(rawDt);
     if (r.hold > 0.45) this.nextClip();
   }
-  endHighlights() {
-    this.replay.restoreLive(); this.rp = null; this.hl = null;
-    this.ui.flash('rgba(255,255,255,.35)'); this.ui.hud.cine(true, this.brk && this.brk.n === 2 ? 'ПЕРЕРВА' : null);
-    if (this.brk) this.brk.t = 0;
+  endClips() {
+    const H = this.hl;
+    this.replay.restoreLive(); this.rp = null; this.hl = null; this.world.netPush = null;
+    this.ui.flash('rgba(255,255,255,.35)');
+    if (H && H.done) H.done();
   }
   replayCam() {
-    const r = this.rp, B = this.replay.ball, sd = r.side, gx = sd * L;
-    if (r.t < r.slowAt) return { p: _c1.set(B.x * 0.85 - sd * 8, 9, Math.max(-W + 4, B.z - 24)), l: _c2.set(B.x, 0.6, B.z * 0.8), fov: 30, shot: 'rpA', rate: 4 };
-    if (r.low) return { p: _c1.set(gx + sd * (PITCH.GOAL_D + 1.6), 2.2, clamp(B.z * 0.4, -2.5, 2.5)), l: _c2.set(B.x, 0.7, B.z), fov: 36, shot: 'rpB', rate: 6, dof: 0.014 };
-    return { p: _c1.set(B.x - sd * 3.2, 0.9, B.z + (B.z > 0 ? -6.5 : 6.5)), l: _c2.set(B.x + sd * 1.2, 0.6, B.z), fov: 38, shot: 'rpC', rate: 5, dof: 0.016 };
+    const r = this.rp, B = this.replay.ball, sd = r.side, gx = sd * L, tE = r.clip ? r.clip.tE : r.b;
+    // 1) реальний темп — загальний план з боку головної трибуни, супровід м'яча
+    if (r.t < r.slowAt) return { p: _c1.set(B.x - sd * 5, 8.5, Math.min(W - 6, B.z + 21)), l: _c2.set(B.x + sd * 2, 0.6, B.z * 0.7), fov: 34, shot: 'rpA', rate: 3 };
+    // 2) сповільнено — низько за м'ячем: попереду ворота й воротар
+    if (r.t < tE - 0.2) return { p: _c1.set(B.x - sd * 5.5, 1.5, B.z * 0.85 + (B.z > 0 ? -1.2 : 1.2)), l: _c2.set(gx, 1.2, B.z * 0.4), fov: 38, shot: 'rpB', rate: 5, dof: 0.01 };
+    // 3) удар у сітку — збоку воріт, з поля біля стійки (видно, як м'яч перетинає лінію й прогинає сітку), або згори над сіткою
+    if (r.view === 0) return { p: _c1.set(gx - sd * 2.6, 1.35, (B.z >= 0 ? -1 : 1) * (G + 4.5)), l: _c2.set(gx + sd * 0.8, 1.0, B.z), fov: 40, shot: 'rpC', rate: 6, dof: 0.012 };
+    return { p: _c1.set(gx + sd * (PITCH.GOAL_D + 2.5), 6.2, B.z * 0.3), l: _c2.set(gx - sd * 1.5, 0.6, B.z * 0.8), fov: 44, shot: 'rpD', rate: 5, dof: 0.008 };
   }
   /** Тап під час святкування гола — одразу далі гра. */
   skipCine() {
-    if (this.game.sm.name === 'GOAL' && this.goalT > 1.0) this.goalT = Math.max(this.goalT, 5.0);
+    if (this.rp && this.hl) { this.rp.t = this.rp.b; this.rp.hold = 1; return; }      // повтор — далі
+    if (this.game.sm.name === 'GOAL' && this.goalT > 1.0) this.goalT = Math.max(this.goalT, this.celeb ? this.celeb.dur : 5);
   }
   endDrama() { if (!this.drama) return; this.drama = null; this.ui.hud.cine(false); }
 
@@ -1379,7 +1404,7 @@ export class Match {
     if (this.clips.length) this.startHighlights(n);
   }
   updateBreak(dt) {
-    if (this.hl) { this.updateHighlights(dt); return; }
+    if (this.hl) { this.updateClip(dt); return; }
     const B = this.brk; B.t += dt;
     this.actors.forEach((a, i) => {
       const to = this.brkTo[i], d = Math.hypot(to.x - a.p.x, to.z - a.p.z);
@@ -1740,10 +1765,42 @@ export class Match {
       if (g.dive || g.frozen > 0 || g.cool > 0 || g.noTrap > 0 || g.stun > 0 || g.p.downed || (this.shotBy === g.side && this.shooter === g)) continue;
       const goalX = -g.side * L, inBox = (b.x - goalX) * g.side < 20 && Math.abs(b.z) < 18;
       if (!inBox || b.y > 1.9 + 0.5 * (g.sk.reach ?? 0.5)) continue;          // вище витягнутих рук — не дістає
-      const reach = 1.5 + 0.5 * (g.sk.hands ?? 0.5), d = Math.hypot(b.x - g.p.x, b.z - g.p.z);
+      // бере, лише коли м'яч справді в рукавицях (руки самі тягнуться до нього — handsIK); поруч чи збоку — ні, не «телепорт» у руки
       const lim = PHYS.trapSpeed * (1.4 + 0.8 * (g.sk.hands ?? 0.5));
-      if (d < reach && sp < lim) { if (g.side > 0) this.trapMine(g, sp); else this.trapOpp(g, sp); return; }
+      if (sp < lim && this.inGloves(g, 0.06 + 0.06 * (g.sk.hands ?? 0.5))) { if (g.side > 0) this.trapMine(g, sp); else this.trapOpp(g, sp); return; }
     }
+  }
+
+  /**
+   * Чи воротар лицем до м'яча: м'яч перед грудьми (не позаду і не збоку-ззаду), а летить на нього спереду (або вже
+   * майже зупинився). Спиною — прийняти не може: м'яч відскакує від тіла.
+   */
+  facesBall(g) {
+    const p = g.p, b = this.ball, y = p.bodyYaw ?? p.yaw, fx = Math.sin(y), fz = Math.cos(y);
+    const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz) || 1e-3;
+    if ((dx * fx + dz * fz) / d < 0.15) return false;                     // м'яч позаду або збоку-ззаду
+    const sp = Math.hypot(b.vx, b.vz);
+    return sp < 3 || (b.vx * fx + b.vz * fz) / sp < 0.3;                 // летить назустріч (не в спину й не вздовж)
+  }
+
+  /**
+   * Чи м'яч у рукавицях воротаря: відстань від центра м'яча до відрізка рукавиці (за скелетом) не більша за товщину
+   * рукавиці + радіус м'яча + запас (кращі руки — трохи більший). Для ловлі достатньо однієї рукавиці, якщо м'яч повільний,
+   * або обох поруч — якщо швидкий.
+   */
+  inGloves(g, extra = 0.08) {
+    const caps = g.p.hitCaps; if (!caps) return false;
+    if (!this.facesBall(g)) return false;                                // спиною (чи боком-позаду) до м'яча — не ловить
+    const b = this.ball, by = b.y + PITCH.R, sp = Math.hypot(b.vx, b.vy || 0, b.vz);
+    let n = 0;
+    for (const c of caps) {
+      if (!c.glove || !c.ok) continue;
+      const ex = c.bx - c.ax, ey = c.by - c.ay, ez = c.bz - c.az, l2 = ex * ex + ey * ey + ez * ez || 1e-6;
+      let t = ((b.x - c.ax) * ex + (by - c.ay) * ey + (b.z - c.az) * ez) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(b.x - c.ax - ex * t, by - c.ay - ey * t, b.z - c.az - ez * t);
+      if (d < c.r + PITCH.BALL_VIS + extra) n++;
+    }
+    return n >= (sp > 12 ? 2 : 1);
   }
 
   /**
@@ -1854,99 +1911,160 @@ export class Match {
     }
   }
 
-  /** Святкування: автор голу біжить до кута й ковзає на колінах, найближчі партнери біжать до нього, суперники плетуться назад. */
-  /** Кадри святкування: крупний план автора голу, потім гурт, потім загальний. Повертає null, коли святкування нема. */
+  /**
+   * Важливість гола 0..1 — від неї залежить, наскільки бурхливе святкування й розпач суперника: сильніший суперник,
+   * останні хвилини й доданий час, зрівняв чи вийшов уперед (а не просто збільшив відрив), фінал, золотий гол.
+   * Повертає { I, tag } — tag для підпису («НА ОСТАННІХ СЕКУНДАХ!», «ВІДІГРАЛИСЯ!»…).
+   */
+  goalImportance(mine) {
+    const sp = this.spec, f = clamp(1 - this.clock / sp.time, 0, 1);
+    const avg = (arr) => { let s = 0; for (let i = 1; i < arr.length; i++) s += arr[i].info ? ovr(arr[i].info) : 60; return s / (arr.length - 1); };
+    const gap = mine ? avg(this.opp) - avg(this.mine) : avg(this.mine) - avg(this.opp);
+    const us = mine ? this.score.me : this.score.opp, them = mine ? this.score.opp : this.score.me, d = us - them;
+    let I = 0.25 + clamp(gap / 12, -0.1, 0.25), tag = '';
+    if (gap > 4) tag = 'ПРОТИ ФАВОРИТА';
+    if (d === 0) { I += 0.22; tag = 'ВІДІГРАЛИСЯ!'; }
+    else if (d === 1) { I += them > 0 || f > 0.5 ? 0.25 : 0.12; if (them > 0) tag = 'ВИХІД УПЕРЕД!'; }
+    else if (d >= 3) I -= 0.15;
+    if (f > 0.85) { I += 0.35 * (f - 0.85) / 0.15; if (f > 0.93) tag = 'НА ОСТАННІХ ХВИЛИНАХ!'; }
+    if (this.timeUp) { I += 0.25; tag = 'НА ОСТАННІХ СЕКУНДАХ!'; }
+    if (sp.final) I += 0.12;
+    if (this.golden) { I = 1; tag = 'ЗОЛОТИЙ ГОЛ!'; }
+    return { I: clamp(I, 0, 1), tag };
+  }
+
+  /**
+   * Сценарій святкування — щоразу інший і за важливістю гола. Спокійні: показати на партнера й «п'ятірки» дорогою,
+   * стрибок, віддання честі. Яскравіші: ковзання на колінах до кутового, до трибун із жестами, «літак», танець із
+   * партнерами, «тихо!». Найважливіші: до самого борту до фанатів (стрибок до них, конфетті й дим на трибуні) і купа-мала.
+   */
+  setupCelebration(mine, sc, side, I) {
+    const pick = (a) => a[(Math.random() * a.length) | 0];
+    let kind = sc.isGK ? 'jump' : pick(I < 0.35 ? ['calm', 'calm', 'jump', 'salute', 'fans', 'corner'] : I < 0.65 ? ['corner', 'fans', 'board', 'airplane', 'jump', 'dance', 'shush'] : ['board', 'board', 'pile', 'corner', 'airplane', 'fans', 'shush']);
+    const zs = sc.p.z >= 0 ? 1 : -1, team = mine ? this.mine : this.opp;
+    let tx = sc.p.x, tz = sc.p.z;
+    if (kind === 'corner') { tx = side * (L - 7.5); tz = zs * (W - 5); }
+    else if (kind === 'fans' || kind === 'board' || kind === 'shush') { tx = clamp(sc.p.x + side * 4, -L + 8, L - 8); tz = zs * (W - (kind === 'board' ? 1.1 : 3.4)); }
+    else if (kind === 'airplane') { tx = clamp(sc.p.x - side * 7, -L + 8, L - 8); tz = zs * (W - 9); }
+    else if (kind === 'calm') { tx = sc.p.x - side * 9; tz = sc.p.z * 0.6; }
+    this.celeb = { mine, scorer: sc, t: 0, kind, I, side, zs, tx, tz, dur: 4.4 + 4.2 * I, st: 'run', actT: 0, huggers: 0, hugOn: 0, maxHug: kind === 'pile' ? 6 : I > 0.6 ? 4 : 3, bursts: 0 };
+    for (const a of this.actors) { a.celebHug = false; a.hugOn = false; a.cheered = false; a.hugged = false; a.hf = false; a.celebJoin = false; a.hug = false; }
+    // хто біжить до автора гола: найближчі (неважливий гол — двоє-троє, важливий — уся команда)
+    const joinN = I < 0.35 ? 3 : I < 0.65 ? 6 : 10;
+    team.slice(1).filter((a) => a !== sc).sort((a, b) => Math.hypot(a.p.x - sc.p.x, a.p.z - sc.p.z) - Math.hypot(b.p.x - sc.p.x, b.p.z - sc.p.z)).forEach((a, k) => { a.celebJoin = k < joinN; });
+    if (kind === 'airplane' || kind === 'calm') sc.p.gesture(2.6, kind === 'airplane' ? 43 : 10);
+  }
+
+  /** Кадри святкування: крупний план автора, потім гурт, потім загальний; біля трибун — з поля на трибуну за спиною. */
   celebView() {
-    const c = this.celeb; if (!c || this.game.sm.name !== 'GOAL') return null;
+    const c = this.celeb; if (!c || this.game.sm.name !== 'GOAL' || this.rp) return null;
     const sc = c.scorer, team = c.mine ? this.mine : this.opp;
-    const shot = c.t < 1.7 ? 0 : c.t < 3.5 ? 1 : 2;
-    if (c.shot !== shot) { c.shot = shot; this.game.addTrauma(0.14); this.game.fovKick(3); if (shot > 0) this.ui.flash('rgba(255,255,255,.22)'); }
+    const shot = c.t < 1.8 ? 0 : c.t < 3.8 ? 1 : c.t < 5.8 ? 2 : 3;
+    if (c.shot !== shot) { c.shot = shot; this.game.addTrauma(0.12 + 0.1 * c.I); this.game.fovKick(2 + 2 * c.I); if (shot > 0) this.ui.flash('rgba(255,255,255,.2)'); }
     if (shot === 0) return { tx: sc.p.x, tz: sc.p.z, zoom: 0.5, ang: -0.55 + c.t * 0.35 };
-    if (shot === 1) {
+    if (shot === 1 || shot === 3) {
       let cx = sc.p.x, cz = sc.p.z, n = 1;
       for (let i = 1; i < team.length; i++) { const a = team[i]; if (a !== sc && Math.hypot(a.p.x - sc.p.x, a.p.z - sc.p.z) < 6) { cx += a.p.x; cz += a.p.z; n++; } }
-      return { tx: cx / n, tz: cz / n, zoom: 0.72, ang: 0.15 + (c.t - 1.7) * 0.4 };
+      const fan = c.kind === 'fans' || c.kind === 'board' || c.kind === 'shush';
+      return { tx: cx / n, tz: cz / n, zoom: shot === 3 ? 0.62 : 0.72, ang: fan ? (c.zs > 0 ? 2.6 : 0.35) : 0.15 + (c.t - 1.8) * 0.3 };
     }
-    return { tx: sc.p.x * 0.8, tz: sc.p.z * 0.8, zoom: 1.12, ang: 0.85 - (c.t - 3.5) * 0.2 };
+    return { tx: sc.p.x * 0.8, tz: sc.p.z * 0.8, zoom: 1.1, ang: 0.85 - (c.t - 3.8) * 0.2 };
+  }
+
+  /** Вболівальники біля автора гола: конфетті з трибуни й дим фаєрів (кольори команди, що забила). */
+  fanBurst(x, zs, mine) {
+    const P = this.view.particles, z = zs * (W + 4.5), cols = mine ? ['#d4202c', '#1f8f3f', '#f1efe8', '#e8b923'] : ['#f1efe8', '#9ca3af', '#e8b923'];
+    P.burst(x, 3.5, z, 40, 6, 1.6, 0.22, cols, 4, 0.5);
+    for (let i = 0; i < 6; i++) P.emit(x + (Math.random() - 0.5) * 8, 1.6, zs * (W + 2.2), (Math.random() - 0.5) * 0.8, 0.8 + Math.random() * 0.6, 0, 2.4, 0.9, mine ? (i % 2 ? '#c4303a' : '#2f8a4c') : '#9aa3ad', -0.12, 0.9, 0, 0.9);
   }
 
   updateCelebration(dt) {
     const c = this.celeb; if (!c) return;
     c.t += dt;
-    const sc = c.scorer, team = c.mine ? this.mine : this.opp, other = c.mine ? this.opp : this.mine, dir = c.mine ? 1 : -1;
+    const sc = c.scorer, team = c.mine ? this.mine : this.opp, other = c.mine ? this.opp : this.mine, I = c.I;
+    const pick = (a) => a[(Math.random() * a.length) | 0], face = (p, x, z) => { p.yaw = Math.atan2(x - p.x, z - p.z); };
+    // ---- автор гола
     if (sc && !sc.isGK) {
-      if (c.kind === 'jump') {                                         // на місці: вибух радості, далі обійми з партнерами
-        sc.p.vx *= Math.exp(-dt * 5); sc.p.vz *= Math.exp(-dt * 5);
-        if (!c.special && Math.hypot(sc.p.vx, sc.p.vz) < 1.5) { c.special = true; sc.p.cheer(1.6, [0, 16, 13][(Math.random() * 3) | 0]); sc.p.amp = 1; }
-        if (!c.kneeled && c.t > 2.6 && sc.p.mode === 'idle') { c.kneeled = true; sc.p.cheer(2.2, [14, 1, 20, 17][(Math.random() * 4) | 0]); }   // ніхто не добіг — радіє далі сам
-        if (!c.kneeled && c.hugOn >= 2 && c.t > 1.4) { c.kneeled = true; const h = team.find((m) => m.hugOn); if (h) sc.p.yaw = Math.atan2(h.p.x - sc.p.x, h.p.z - sc.p.z); sc.p.hug(2.2); }
-      } else if (!c.kneeled) {
-        sc.move(c.tx, c.tz, 9.2, dt);
-        if (Math.hypot(sc.p.vx, sc.p.vz) > 0.5) sc.p.yaw = Math.atan2(sc.p.vx, sc.p.vz);
-        if (c.t > 1.2 || Math.hypot(c.tx - sc.p.x, c.tz - sc.p.z) < 2.4) {
-          c.kneeled = true; c.kt = c.t; c.kx = sc.p.x; c.kz = sc.p.z;
-          if (c.kind === 'corner') { sc.p.kneel(); sc.p.vx = sc.p.vz = 0; }
-          // біля трибуни: спершу гальмує на ногах (хода), розвертається до фанатів — і вже тоді жест
+      const p = sc.p, d = Math.hypot(c.tx - p.x, c.tz - p.z), runs = c.kind !== 'jump' && c.kind !== 'pile' && c.kind !== 'salute' && c.kind !== 'dance';
+      if (c.st === 'run') {
+        if (runs && d > 1.2 && c.t < 3.2) {
+          sc.move(c.tx, c.tz, c.kind === 'calm' ? 5.5 : 9.2, dt);
+          if (Math.hypot(p.vx, p.vz) > 0.5) p.yaw = Math.atan2(p.vx, p.vz);
+          if (c.kind === 'airplane' && p.mode !== 'gesture') p.gesture(1.6, 43);
+          if (c.kind === 'corner' && d < 3.2) { c.st = 'act'; c.actT = c.t; p.kneel(); p.vx = p.vz = 0; }   // з розгону — на коліна, ковзає
+        } else { c.st = 'act'; c.actT = c.t; }
+        if (c.st === 'act') {
+          const fanSide = c.kind === 'fans' || c.kind === 'board' || c.kind === 'shush';
+          if (fanSide) { p.yaw = c.zs > 0 ? 0 : Math.PI; this.fanBurst(p.x, c.zs, c.mine); this.view.stands.react('goal', { mine: c.mine, dur: 2.5 + 2 * I }); }
+          if (c.kind === 'fans') p.cheer(2.6, pick([18, 19, 20, 15, 16]));
+          else if (c.kind === 'board') p.cheer(1.5, 18);                                       // «не чую!» — а потім стрибок до них
+          else if (c.kind === 'shush') p.cheer(2.8, 8);
+          else if (c.kind === 'airplane') p.cheer(2.2, pick([17, 20, 13]));
+          else if (c.kind === 'jump') p.cheer(1.8, pick([0, 16, 13]));
+          else if (c.kind === 'pile') p.cheer(1.4, 16);
+          else if (c.kind === 'salute') p.cheer(2.4, 11);
+          else if (c.kind === 'dance') p.cheer(3.2, pick([4, 6]));
+          else if (c.kind === 'calm') p.gesture(2.2, 14);
         }
       } else {
-        sc.p.vx *= Math.exp(-dt * 6); sc.p.vz *= Math.exp(-dt * 6); sc.p.x += sc.p.vx * dt; sc.p.z += sc.p.vz * dt;
-        if (c.kind === 'fans') {
-          sc.p.yaw = sc.p.z >= 0 ? 0 : Math.PI;
-          if (!c.fanCheer && Math.hypot(sc.p.vx, sc.p.vz) < 1.2) { c.fanCheer = true; sc.p.cheer(2.6, [18, 19, 20, 15, 16][(Math.random() * 5) | 0]); sc.p.amp = 1; }   // обличчям до трибуни — жест фанатам
-        }
-        if (!c.special && c.t > c.kt + (c.kind === 'corner' ? 1.6 : 2.4)) {
+        const k = Math.exp(-dt * 6);
+        if (c.kind !== 'corner' || p.mode !== 'kneel') { p.vx *= k; p.vz *= k; p.x += p.vx * dt; p.z += p.vz * dt; }
+        const u = c.t - c.actT;
+        if (c.kind === 'board' && !c.leap && u > 1.5) { c.leap = true; p.cheer(2.4, 0); this.fanBurst(p.x, c.zs, c.mine); this.game.addTrauma(0.15); }   // стрибок до фанатів
+        if (c.kind === 'corner' && !c.roar && u > 1.6) { c.roar = true; p.cheer(2.2, I > 0.6 ? 17 : pick([16, 13, 20])); }
+        // хтось добіг — обіймає у відповідь; ніхто — радіє далі своїм жестом
+        if (!c.special && u > (c.kind === 'board' ? 3.4 : 2.0)) {
           c.special = true;
-          if (c.hugOn >= 1) { const h = team.find((m) => m.hugOn); if (h) sc.p.yaw = Math.atan2(h.p.x - sc.p.x, h.p.z - sc.p.z); sc.p.hug(2); }   // обіймає у відповідь — до того, хто добіг
-          else { sc.p.cheer(3.0); sc.p.style = [6, 7, 12, 10, 8, 11, 9, 14, 17][(Math.random() * 9) | 0]; sc.p.amp = 1; }
+          const h = team.find((m) => m.hugOn);
+          if (h) { face(p, h.p.x, h.p.z); p.hug(2.2); } else p.cheer(2.4, pick(p.persona.cheer));
         }
       }
     }
-    // усі польові партнери збігаються до автора голу й радіють колом; воротар підбігає на кілька кроків і піднімає руки
-    c.assigned = true;
+    // ---- партнери: ті, хто біжить до автора, обіймають (перші — впритул, кожен зі свого боку) або радіють колом;
+    // решта (неважливий гол) — радіють на місці й підтюпцем повертаються на свою половину
     for (let i = 1; i < team.length; i++) {
       const a = team[i]; if (a === sc) continue;
+      if (!a.celebJoin) {
+        if (!a.cheered && c.t > 0.5 + 0.4 * (i % 3)) { a.cheered = true; a.p.gesture(1.6, pick([10, 14, 6, 16])); }
+        a.move(a.p.x - c.side * 2.5 * dt, a.p.z, 2.4, dt); if (Math.hypot(a.p.vx, a.p.vz) > 0.4) a.p.yaw = Math.atan2(a.p.vx, a.p.vz);
+        continue;
+      }
       a.hug = true;
-      // перші двоє-троє, хто добіг, — обіймають автора (впритул, ~0.8 м, кожен зі свого боку), решта стрибає й радіє довкола
-      // обіймальник підходить з того боку, звідки прибіг (кути трьох — рознесені), решта — колом довкола
       const close = a.celebHug, ang = close ? a.hugAng : i * 2.4 + c.t * 0.35, rad = close ? 0.75 : 1.8 + (i % 3) * 0.8;
       const tx = sc.p.x + Math.cos(ang) * rad, tz = sc.p.z + Math.sin(ang) * rad;
       const busy = a.p.mode === 'cheer' || a.p.mode === 'hug';
-      // у позі радості/обіймів ноги скриптові — гравець стоїть (інакше стопи ковзали б по траві); рухається лише між ними
       if (busy) { a.p.vx *= Math.exp(-dt * 10); a.p.vz *= Math.exp(-dt * 10); a.p.x += a.p.vx * dt; a.p.z += a.p.vz * dt; }
-      else a.move(tx, tz, close ? 4.5 : 8.8 + (i % 4) * 0.5, dt);
+      else a.move(tx, tz, close ? 4.5 : 8.8 + (i % 4) * 0.5 + 1.2 * I, dt);
       const d = Math.hypot(sc.p.x - a.p.x, sc.p.z - a.p.z);
       a.p.yaw = d > 3 ? Math.atan2(a.p.vx, a.p.vz) || a.p.yaw : Math.atan2(sc.p.x - a.p.x, sc.p.z - a.p.z);
-      const scStill = Math.hypot(sc.p.vx, sc.p.vz) < 1 && (c.kind === 'jump' || c.kneeled);
+      const scStill = Math.hypot(sc.p.vx, sc.p.vz) < 1 && c.st === 'act';
       if (d < 3.4 && !a.cheered) {
         a.cheered = true;
-        if (c.huggers < 3 && c.t > 0.6 && scStill) { a.celebHug = true; a.hugAng = Math.atan2(a.p.z - sc.p.z, a.p.x - sc.p.x) + (c.huggers - 1) * 0.9; c.huggers++; }
-        else a.p.cheer(2.4 + (i % 3) * 0.5, [0, 1, 14, 16, 13, 4, 20, 17][(Math.random() * 8) | 0]);
+        if (c.huggers < c.maxHug && c.t > 0.6 && scStill) { a.celebHug = true; a.hugAng = Math.atan2(a.p.z - sc.p.z, a.p.x - sc.p.x) + (c.huggers - 1) * (c.kind === 'pile' ? 0.6 : 0.9); c.huggers++; }
+        else a.p.cheer(2.4 + (i % 3) * 0.5, c.kind === 'dance' ? pick([4, 6]) : pick(a.p.persona.cheer));
       }
-      // обіймає, лише коли вже впритул (~1 м) — до того добігає
-      if (a.celebHug && !a.hugOn && d < 1.1) { a.hugOn = true; c.hugOn = (c.hugOn || 0) + 1; a.p.vx = a.p.vz = 0; a.p.yaw = Math.atan2(sc.p.x - a.p.x, sc.p.z - a.p.z); a.p.hug(2.4 + Math.random() * 0.6); }
+      if (a.celebHug && !a.hugOn && d < 1.1) { a.hugOn = true; c.hugOn++; a.p.vx = a.p.vz = 0; face(a.p, sc.p.x, sc.p.z); a.p.hug(2.4 + Math.random() * 0.6 + 1.2 * I); }
     }
+    // воротар: важливий гол — біжить кілька десятків метрів назустріч і радіє; звичайний — радіє біля воріт
     {
-      const gk = team[0]; gk.p.vx = gk.p.vz = 0;
-      if (c.t > 0.8 && !gk.cheered) { gk.cheered = true; gk.p.cheer(3.5); }
+      const gk = team[0];
+      if (I > 0.6 && c.t < 3) { gk.move(gk.p.x + c.side * 6, gk.p.z * 0.9, 6, dt); if (Math.hypot(gk.p.vx, gk.p.vz) > 0.5) gk.p.yaw = Math.atan2(gk.p.vx, gk.p.vz); }
+      else { gk.p.vx *= Math.exp(-dt * 6); gk.p.vz *= Math.exp(-dt * 6); gk.p.x += gk.p.vx * dt; gk.p.z += gk.p.vz * dt; }
+      if (c.t > 0.8 && !gk.cheered) { gk.cheered = true; gk.p.cheer(2.5 + 2 * I, I > 0.6 ? pick([0, 16, 14]) : pick([14, 13])); }
     }
-    // команда-суперник: ті, що програли, плетуться до своєї половини опустивши голови
-    for (let i = 1; i < other.length; i++) { const a = other[i]; a.move(a.p.x * 0.92, a.p.z, 2.1, dt); a.p.yaw = Math.atan2(a.p.vx, a.p.vz) || a.p.yaw; }
-    team[0].p.vx = team[0].p.vz = 0; other[0].p.vx = other[0].p.vz = 0;
-    // загальне святкування: усі свої радіють, суперники сумують, салют і хвилі трибун
+    // команда, якій забили: плетуться до своєї половини; чим важливіший гол — тим важчий розпач (присіли, руки на голові)
     if (!c.fx) {
-      c.fx = true; c.bursts = 0;
-      for (let i = 0; i < other.length; i++) other[i].p.sad(5);
-      this.game.addTrauma(0.25);
+      c.fx = true;
+      for (let i = 0; i < other.length; i++) other[i].p.sad(4 + 3 * I, I > 0.6 ? pick([7, 0, 5, 6, 4]) : undefined);
+      this.game.addTrauma(0.2 + 0.2 * I);
     }
-    for (let i = 1; i < team.length; i++) {
-      const a = team[i];
-      if (a.hug && !a.hugged && a !== sc && !a.celebHug && a.p.mode !== 'cheer' && Math.hypot(sc.p.x - a.p.x, sc.p.z - a.p.z) < 2.2) { a.hugged = true; a.p.cheer(2.4); }
-    }
+    for (let i = 1; i < other.length; i++) { const a = other[i]; a.move(a.p.x * 0.92, a.p.z, 2.1 - 0.8 * I, dt); a.p.yaw = Math.atan2(a.p.vx, a.p.vz) || a.p.yaw; }
+    other[0].p.vx = other[0].p.vz = 0;
     // партнери, що радіють поруч один з одним, б'ють «п'ять» — кожен лише раз
     if (c.t > 1.0) {
       c.hf ??= [];
       for (let i = 1; i < team.length; i++) {
-        const a = team[i]; if (a === sc || a.celebHug || a.hf) continue;
+        const a = team[i]; if (a === sc || a.celebHug || a.hf || !a.celebJoin) continue;
         for (let j = i + 1; j < team.length; j++) {
           const b = team[j]; if (b === sc || b.celebHug || b.hf) continue;
           if (Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z) < 1.8) { a.hf = b.hf = true; c.hf.push({ a, b, t: 0 }); break; }
@@ -1956,16 +2074,23 @@ export class Match {
         if (h.t > 0.9) continue;
         h.t += dt;
         if (!h.on) h.on = this.slaps.add(h.a.p, h.b.p, 0.34);
-        // підступають один до одного на відстань руки і розвертаються — «п'ять» з ляпасом (Slaps)
         const A = h.a.p, B = h.b.p, dx = B.x - A.x, dz = B.z - A.z, d = Math.hypot(dx, dz) || 1, st = d > 1.0 && h.t < 0.4 ? 0.5 * (d - 1.0) * Math.min(1, dt * 6) : 0;
         A.x += dx / d * st; A.z += dz / d * st; B.x -= dx / d * st; B.z -= dz / d * st;
         A.yaw = Math.atan2(dx, dz); B.yaw = Math.atan2(-dx, -dz);
       }
+      // спокійне святкування: автор дорогою б'є «п'ять» тим, повз кого пробігає
+      if (c.kind === 'calm' && sc) for (const a of team) {
+        if (a === sc || a.hf || a.isGK) continue;
+        if (Math.hypot(a.p.x - sc.p.x, a.p.z - sc.p.z) < 1.7 && this.slaps.add(sc.p, a.p, 0.32)) { a.hf = true; break; }
+      }
     }
-    if (sc && c.t > c.bursts * 0.75 + 0.3 && c.bursts < 4) {
+    // салют часточок над автором гола; важливий гол — більше й довше, і салют над трибунами
+    const nb = 2 + Math.round(4 * I);
+    if (sc && c.t > c.bursts * 0.75 + 0.3 && c.bursts < nb) {
       c.bursts++;
       const cols = c.mine ? ['#b3162a', '#117a4a', '#f1efe8', '#e8b923'] : ['#f1efe8', '#9ca3af', '#e8b923'];
-      this.view.particles.burst(sc.p.x, 1.8, sc.p.z, 26, 7, 1.5, 0.3, cols, 12, 1.0);
+      this.view.particles.burst(sc.p.x, 1.8, sc.p.z, 20 + Math.round(16 * I), 7, 1.5, 0.3, cols, 12, 1.0);
+      if (I > 0.6 && c.bursts % 2 === 0) this.walk.fireworks(2);
     }
   }
 
@@ -2016,10 +2141,10 @@ export class Match {
       let n = 0;
       for (const c of hit) {
         const o = cs[n++];
-        o.ax = c.ax; o.ay = c.ay; o.az = c.az; o.bx = c.bx; o.by = c.by; o.bz = c.bz; o.r = c.r + (c.glove ? 0.2 : 0.1);
+        o.ax = c.ax; o.ay = c.ay; o.az = c.az; o.bx = c.bx; o.by = c.by; o.bz = c.bz; o.r = c.r + (c.glove ? 0.05 : 0.02);   // точно за тілом, ледь-ледь запасу
         o.vx = clamp((c.vax + c.vbx) / 2, -12, 12); o.vy = clamp((c.vay + c.vby) / 2, -12, 12); o.vz = clamp((c.vaz + c.vbz) / 2, -12, 12);
       }
-      cs.n = n;
+      cs.n = n; b.capsOnly = true;                                     // для м'яча — лише капсули тіла (без кола «дотягу»)
       if (!a.sliding) b.r = a.dive ? 0.45 : a.baseR;
       b.h = a.dive ? 0.6 : 1.1;
     }
@@ -2074,6 +2199,7 @@ export class Match {
       }
     }
     v.updateShadows(rx, rz, h);
+    this.netBulge(dt);
     v.stands.update(dt, this.time); v.weather.update(dt); v.surround.update(dt); v.pitch.decals.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
     v.particles.update(dt);
     if (this.bs === 'ready') {
@@ -2087,6 +2213,23 @@ export class Match {
     if (this.phase === 'play' && !this.rp && (this.bs !== 'net' || this.time < this.goalTime + 1.2)) { this.replay.rec(this.time); this.takeMoments(); }   // запис для підбірки моментів
     const sp = Math.hypot(b.vx, b.vz);
     if (sp > 20 && dt > 0 && Math.random() < 0.6) v.particles.emit(b.x, 0.25, b.z, (Math.random() - 0.5) * 1.2, 0.7, (Math.random() - 0.5) * 1.2, 0.3, 0.17, '#e8f2e4', 0, 1, 0, -1);
+  }
+
+  /** Сітка воріт прогинається там, куди влетів м'яч (глибина — з пружної сітки фізики), і плавно розпрямляється. */
+  netBulge(dt) {
+    const np = this.world.netPush, nets = this.view.pitch.nets;
+    for (let k = 0; k < 2; k++) {
+      const back = nets[k].children[0], sd = k ? 1 : -1, U = back.userData, hit = np && np.sd === sd;
+      U.amt = (U.amt ?? 0) + ((hit ? np.depth : 0) - (U.amt ?? 0)) * Math.min(1, dt * (hit ? 25 : 6));
+      if (hit) { U.cx = -np.z; U.cy = np.y - back.position.y; }
+      if (U.amt < 0.003 && !U.dirty) continue;
+      const pos = back.geometry.attributes.position, base = (U.base ??= pos.array.slice()), a = pos.array;
+      for (let i = 0; i < pos.count; i++) {
+        const dx = base[i * 3] - (U.cx ?? 0), dy = base[i * 3 + 1] - (U.cy ?? 0);
+        a[i * 3 + 2] = base[i * 3 + 2] + sd * U.amt * Math.exp(-(dx * dx + dy * dy) / 0.7);
+      }
+      pos.needsUpdate = true; U.dirty = U.amt >= 0.003;
+    }
   }
 
   floatAt(x, z, text, kind) { this.game.floatWorld(x, 1.9, z, text, kind); }
