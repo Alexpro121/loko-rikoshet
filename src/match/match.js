@@ -932,7 +932,7 @@ export class Match {
       // фінальний свисток: гра зупинилась (жодного ІІ, м'яч не грає) — переможці біжать обіймати свого воротаря й радіють,
       // ті, що програли, зупиняються й сумують. Через ~4 с — екран результату
       // далі пари гравців двох команд сходяться й тиснуть руки; камера — крупно на рукостисканнях, потім загальний план
-      this.endT += rawDt; this.endCelebrate(rawDt); if (this.endT > 2.8) this.endShake(rawDt); this.syncView(rawDt);
+      this.endT += rawDt; this.endCelebrate(rawDt); if (this.endT > 1.0) this.endShake(rawDt); this.endTalk(rawDt); this.syncView(rawDt);
       if (this.endT > END_T && !this.resultSent) { this.resultSent = true; this.ui.hud.cine(false); this.game.sm.go('RESULT', this.result); }
       return;
     }
@@ -1439,27 +1439,58 @@ export class Match {
   }
 
   /**
-   * Після свистка: гравці двох команд розбиваються на пари (найближчі один до одного), сходяться й тиснуть руки;
-   * дехто ще обіймається чи кладе долоню на плече. Потім переможці махають трибунам, решта аплодує вболівальникам.
+   * Після свистка кожен поводиться по-своєму, а не всі разом біжать тиснути руки:
+   *  • руки тиснуть лише суперники, що справді поруч (до ~6 м), — підходять кроком;
+   *  • переможці біля свого воротаря збігаються в купу, далекі — йдуть до трибуни й аплодують;
+   *  • ті, хто програв, сідають на газон, лягають на спину, стоять руки на колінах або просто сумують;
+   *  • дехто по двоє з одноклубником повільно йде до тунелю й розмовляє (говорять по черзі).
+   * У нічиїй — спокійніше: рукостискання, розмови, хтось сідає, хтось аплодує.
    */
-  buildPairs() {
+  assignEndRoles() {
+    const R = Math.random, d2 = (a, b) => Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
+    for (const a of this.actors) { a.endRole = null; a.endPair = false; a.endDone = false; a.endAt = 0.8 + 1.6 * R(); }
     const cand = [];
-    for (const a of this.mine) for (const b of this.opp) { const d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z); if (d < 50) cand.push([d, a, b]); }
+    for (const a of this.mine) for (const b of this.opp) { const d = d2(a, b); if (d < 6 && !a.isGK && !b.isGK) cand.push([d, a, b]); }
     cand.sort((x, y) => x[0] - y[0]);
-    const used = new Set(), pairs = [];
+    const pairs = [];
     for (const [d, a, b] of cand) {
-      if (used.has(a) || used.has(b)) continue;
-      used.add(a); used.add(b);
+      if (a.endRole || b.endRole) continue;
+      a.endRole = b.endRole = 'pair'; a.endPair = b.endPair = true;
       const ok = d > 0.01, ux = ok ? (b.p.x - a.p.x) / d : 1, uz = ok ? (b.p.z - a.p.z) / d : 0;
-      pairs.push({ a, b, d, mx: (a.p.x + b.p.x) / 2, mz: (a.p.z + b.p.z) / 2, ux, uz, gap: 0.42, off: 0.26, mt: 0, met: false, ready: false, after: 0, kind: Math.random() < 0.3 ? 'hug' : Math.random() < 0.5 ? 'pat' : 'shake' });
+      pairs.push({ a, b, d, mx: (a.p.x + b.p.x) / 2, mz: (a.p.z + b.p.z) / 2, ux, uz, gap: 0.42, off: 0.26, mt: 0, met: false, ready: false, after: 0, kind: R() < 0.3 ? 'hug' : R() < 0.5 ? 'pat' : 'shake' });
+      if (a.p.mode === 'cheer' || a.p.mode === 'hug') a.p.setMode('idle');
+      if (b.p.mode === 'cheer' || b.p.mode === 'hug') b.p.setMode('idle');
     }
-    // кого показувати крупно: дві пари, що зійдуться найшвидше
-    this.endFeat = pairs.slice().sort((x, y) => x.d - y.d).slice(0, 2);
     this.endPairs = pairs;
-    for (const a of this.actors) { a.endPair = used.has(a); if (a.endPair && (a.p.mode === 'cheer' || a.p.mode === 'hug')) a.p.setMode('idle'); }
+    this.endTalks = [];
+    const tz = this.view.tunnel.userData.startZ;
+    for (const T of [this.mine, this.opp]) {
+      const won = this.endWin === T, lost = this.endLose === T;
+      for (const a of T) {
+        if (a.endRole || a.isGK || R() > (won ? 0.2 : 0.35)) continue;
+        let b = null, bd = 10;
+        for (const q of T) { if (q === a || q.endRole || q.isGK) continue; const d = d2(a, q); if (d < bd) { bd = d; b = q; } }
+        if (!b) continue;
+        a.endRole = b.endRole = 'talk';
+        const mx = (a.p.x + b.p.x) / 2, mz = (a.p.z + b.p.z) / 2, dl = Math.hypot(mx, tz - mz) || 1, ux = -mx / dl, uz = (tz - mz) / dl;
+        const sa = Math.sign((a.p.x - mx) * uz - (a.p.z - mz) * ux) || 1;   // хто ліворуч, хто праворуч — як стояли
+        this.endTalks.push({ a, b, sa, at: 0.6 + R() * 1.2, spk: R() < 0.5 ? 0 : 1, swT: 0.3 });
+      }
+      for (const a of T) {
+        if (a.endRole) continue;
+        const r = R();
+        if (a.isGK) a.endRole = won ? 'hub' : lost ? (r < 0.5 ? 'lie' : 'sit') : 'stand';
+        else if (won) a.endRole = Math.hypot(this.endHub.x - a.p.x, this.endHub.z - a.p.z) < 22 ? 'hub' : 'fans';
+        else if (lost) a.endRole = r < 0.3 ? 'sit' : r < 0.5 ? 'lie' : r < 0.75 ? 'knees' : 'stand';
+        else a.endRole = r < 0.25 ? 'knees' : r < 0.45 ? 'sit' : r < 0.75 ? 'fans' : 'stand';
+      }
+    }
+    // крупні плани: дві найближчі пари; бракує — розмова або той, хто сів чи ліг
+    const solo = this.actors.filter((a) => (a.endRole === 'sit' || a.endRole === 'lie') && !a.isGK).map((a) => ({ a, b: a, solo: true }));
+    this.endFeat = [...pairs.slice(0, 2), ...this.endTalks.map((T) => ({ a: T.a, b: T.b })), ...solo].slice(0, 2);
   }
   endShake(dt) {
-    if (!this.endPairs) this.buildPairs();
+    if (!this.endPairs) return;
     const win = this.endWin;
     for (const P of this.endPairs) {
       // стають трохи навскіс (кожен зсунутий уліво на ширину плеча): праві плечі навпроти, долоні сходяться перед ними
@@ -1468,8 +1499,12 @@ export class Match {
       let here = 0, turned = 0;
       for (const [X, tx, tz, yw] of ends) {
         const d = Math.hypot(tx - X.p.x, tz - X.p.z);
-        if (d > 0.3 && !P.met) { X.avx = X.avz = 0; X.move(tx, tz, d > 6 ? 7 : 3, dt); X.p.yaw = d < 1.6 ? yw : Math.hypot(X.p.vx, X.p.vz) > 0.6 ? Math.atan2(X.p.vx, X.p.vz) : X.p.yaw; }
-        else { here++; const k = Math.exp(-dt * 7); X.p.vx *= k; X.p.vz *= k; X.p.x += (tx - X.p.x) * Math.min(1, dt * 3); X.p.z += (tz - X.p.z) * Math.min(1, dt * 3); X.p.yaw = yw; }
+        if (d > 0.3 && !P.met) { X.avx = X.avz = 0; X.move(tx, tz, 1.6, dt);   // поруч — підходять кроком, а не біжать
+          X.p.yaw = d < 1.6 ? yw : Math.hypot(X.p.vx, X.p.vz) > 0.6 ? Math.atan2(X.p.vx, X.p.vz) : X.p.yaw; }
+        else {   // дотягується до місця кроком: швидкість — та сама, що й зсув (інакше хода бачить нуль і стопи ковзають)
+          here++; const kk = Math.min(1, dt * 3), sx = (tx - X.p.x) * kk, sz = (tz - X.p.z) * kk;
+          X.p.x += sx; X.p.z += sz; X.p.vx = dt > 0 ? sx / dt : 0; X.p.vz = dt > 0 ? sz / dt : 0; X.p.yaw = yw;
+        }
         let e = (X.p.bodyYaw - yw) % (Math.PI * 2); if (e > Math.PI) e -= Math.PI * 2; if (e < -Math.PI) e += Math.PI * 2;
         if (Math.abs(e) < 0.3) turned++;
       }
@@ -1496,8 +1531,13 @@ export class Match {
     }
     const F = this.endFeat || [];
     const pairCam = (P, id, sgn) => {
-      const mx = (P.a.p.x + P.b.p.x) / 2, mz = (P.a.p.z + P.b.p.z) / 2, nx = -P.uz * sgn, nz = P.ux * sgn;
-      return { p: _c1.set(mx + nx * 4.3 + P.ux * 0.8, 1.55, mz + nz * 4.3 + P.uz * 0.8), l: _c2.set(mx, 1.1, mz), fov: 34, shot: id, rate: 4, dof: 0.014 };
+      if (P.solo) {                                                     // хто сів чи ліг: низько, спереду-збоку
+        const q = P.a.p, y = q.bodyYaw ?? q.yaw, fx = Math.sin(y + 0.6 * sgn), fz = Math.cos(y + 0.6 * sgn);
+        return { p: _c1.set(q.x + fx * 3.6, 1.0, q.z + fz * 3.6), l: _c2.set(q.x, 0.5, q.z), fov: 34, shot: id, rate: 4, dof: 0.014 };
+      }
+      const mx = (P.a.p.x + P.b.p.x) / 2, mz = (P.a.p.z + P.b.p.z) / 2, d = Math.hypot(P.b.p.x - P.a.p.x, P.b.p.z - P.a.p.z) || 1;
+      const ux = (P.b.p.x - P.a.p.x) / d, uz = (P.b.p.z - P.a.p.z) / d, nx = -uz * sgn, nz = ux * sgn;
+      return { p: _c1.set(mx + nx * 4.3 + ux * 0.8, 1.55, mz + nz * 4.3 + uz * 0.8), l: _c2.set(mx, 1.1, mz), fov: 34, shot: id, rate: 4, dof: 0.014 };
     };
     if (t < 5.6 && F[0]) return pairCam(F[0], 'end2', 1);
     if (t < 7.6 && (F[1] || F[0])) return pairCam(F[1] || F[0], 'end3', -1);
@@ -2054,7 +2094,7 @@ export class Match {
       const a = team[i]; if (a === sc) continue;
       if (!a.celebJoin) {
         if (!a.cheered && c.t > 0.5 + 0.4 * (i % 3)) { a.cheered = true; a.p.gesture(1.6, pick([10, 14, 6, 16])); }
-        a.move(a.p.x - c.side * 2.5 * dt, a.p.z, 2.4, dt); if (Math.hypot(a.p.vx, a.p.vz) > 0.4) a.p.yaw = Math.atan2(a.p.vx, a.p.vz);
+        a.move(a.p.x - c.side * 4, a.p.z, 2.4, dt); if (Math.hypot(a.p.vx, a.p.vz) > 0.4) a.p.yaw = Math.atan2(a.p.vx, a.p.vz);   // ціль на кілька метрів уперед (2.5·dt було ближче за поріг move — стояли)
         continue;
       }
       a.hug = true;
@@ -2270,23 +2310,62 @@ export class Match {
 
   /** Після фінального свистка: переможці збігаються до свого воротаря (кожен на своє місце довкола) і радіють; решта стоїть. */
   endCelebrate(dt) {
+    const t = this.endT, pick = (a) => a[(Math.random() * a.length) | 0];
     for (const a of this.actors) {
-      if (a.endPair) continue;                                         // уже йде тиснути руку суперникові
-      const win = this.endWin && this.endWin.includes(a);
-      if (!win) {
-        // ті, що програли, повільно плетуться ближче до переможців (потиснути руки); у нічиїй — стоять
-        const h = this.endHub, d = h ? Math.hypot(h.x - a.p.x, h.z - a.p.z) : 0;
-        if (h && d > 7 && !a.isGK) { a.avx = a.avz = 0; a.move(h.x, h.z, 2.4, dt); if (Math.hypot(a.p.vx, a.p.vz) > 0.6) a.p.yaw = Math.atan2(a.p.vx, a.p.vz); }
-        else { a.p.vx *= Math.exp(-dt * 4); a.p.vz *= Math.exp(-dt * 4); a.p.x += a.p.vx * dt; a.p.z += a.p.vz * dt; }
+      const r = a.endRole, p = a.p;
+      if (r === 'pair' || r === 'talk') continue;
+      if (r === 'hub') {
+        // переможці збігаються в купу посеред своєї групи (воротар теж прибігає)
+        const gk = this.endHub, i = this.endWin.indexOf(a), ang = i * Math.PI * 2 / Math.max(1, this.endWin.length - 1), rr = a.isGK ? 0 : 1.7, tx = gk.x + Math.cos(ang) * rr, tz = gk.z + Math.sin(ang) * rr;
+        if (!a.endHug) {
+          a.avx = a.avz = 0; a.move(tx, tz, 6.5, dt);
+          const sp = Math.hypot(p.vx, p.vz); if (sp > 0.6) p.yaw = Math.atan2(p.vx, p.vz);
+          const dh = Math.hypot(tx - p.x, tz - p.z);                    // далекий добігає, а не завмирає посеред поля з розгону
+          if (dh < 1.0 || (t > 3.2 && dh < 3)) { a.endHug = true; p.yaw = Math.atan2(gk.x - p.x, gk.z - p.z); p.cheer(4); }
+        } else { p.vx *= Math.exp(-dt * 6); p.vz *= Math.exp(-dt * 6); p.x += p.vx * dt; p.z += p.vz * dt; }
         continue;
       }
-      // переможці збігаються в купу посеред своєї групи (воротар теж прибігає) — звідти ж потім ідуть тиснути руки суперникам
-      const gk = this.endHub, i = this.endWin.indexOf(a), ang = i * 0.65, rr = a.isGK ? 0 : 1.7, tx = gk.x + Math.cos(ang) * rr, tz = gk.z + Math.sin(ang) * rr;
-      if (!a.endHug) {
-        a.avx = a.avz = 0; a.move(tx, tz, 7.5, dt);
-        const sp = Math.hypot(a.p.vx, a.p.vz); if (sp > 0.6) a.p.yaw = Math.atan2(a.p.vx, a.p.vz);
-        if (Math.hypot(tx - a.p.x, tz - a.p.z) < 1.0 || this.endT > 2.6) { a.endHug = true; a.p.yaw = Math.atan2(gk.x - a.p.x, gk.z - a.p.z); a.p.cheer(4); }
-      } else { a.p.vx *= Math.exp(-dt * 6); a.p.vz *= Math.exp(-dt * 6); a.p.x += a.p.vx * dt; a.p.z += a.p.vz * dt; }
+      if (r === 'fans' && t > a.endAt && t < a.endAt + 2.6) {
+        // кілька кроків до найближчої трибуни, далі — оплески над головою чи помах
+        const sz = (p.z >= 0 ? 1 : -1) * (W - 2); a.avx = a.avz = 0; a.move(p.x, sz, 1.4, dt);
+        if (Math.hypot(p.vx, p.vz) > 0.4) p.yaw = Math.atan2(p.vx, p.vz);
+        continue;
+      }
+      const k = Math.exp(-dt * 4); p.vx *= k; p.vz *= k; p.x += p.vx * dt; p.z += p.vz * dt;   // гальмує й стоїть
+      if (p.mode === 'rest') p.vx = p.vz = 0;
+      if (t < a.endAt + (r === 'fans' ? 2.6 : 0) || a.endDone || Math.hypot(p.vx, p.vz) > 1.2) continue;
+      a.endDone = true;
+      const lost = this.endLose && this.endLose.includes(a);
+      if (r === 'sit') p.rest(p.persona.sitV);                         // кожен сідає й лягає по-своєму
+      else if (r === 'lie') p.rest(p.persona.lieV);
+      else if (r === 'knees') p.gesture(12, 9);
+      else if (r === 'fans') { p.yaw = p.z >= 0 ? 0 : Math.PI; p.gesture(5, this.endWin && this.endWin.includes(a) ? pick([16, 5]) : 16); }
+      else if (lost) p.sad(8, pick([5, 6, 0, 8, 1]));
+      else p.gesture(5, pick([11, 12, 7]));                          // нічия: видихає, розминає шию, витирає піт
+    }
+  }
+
+  /** По двоє до тунелю: ідуть поруч повільним кроком, говорить то один, то інший, слухач повертає голову до нього. */
+  endTalk(dt) {
+    if (!this.endTalks) return;
+    const tz = this.view.tunnel.userData.startZ;
+    for (const T of this.endTalks) {
+      const { a, b } = T;
+      if (this.endT < T.at) { for (const X of [a, b]) { const k = Math.exp(-dt * 4); X.p.vx *= k; X.p.vz *= k; X.p.x += X.p.vx * dt; X.p.z += X.p.vz * dt; } continue; }
+      if (a.p.mode === 'sad' || a.p.mode === 'cheer') a.p.setMode('idle');
+      if (b.p.mode === 'sad' || b.p.mode === 'cheer') b.p.setMode('idle');
+      const mx = (a.p.x + b.p.x) / 2, mz = (a.p.z + b.p.z) / 2, dl = Math.hypot(mx, tz - mz) || 1, ux = -mx / dl, uz = (tz - mz) / dl, rx = uz, rz = -ux;
+      const far = dl > 6;                                               // біля тунелю — зупиняються й договорюють
+      for (const [X, sg] of [[a, T.sa], [b, -T.sa]]) {
+        const tx = mx + (far ? ux * 2.5 : 0) + rx * 0.5 * sg, tzz = mz + (far ? uz * 2.5 : 0) + rz * 0.5 * sg;
+        X.avx = X.avz = 0; X.move(tx, tzz, far ? 1.5 : 1.0, dt);
+        if (Math.hypot(X.p.vx, X.p.vz) > 0.4) X.p.yaw = Math.atan2(X.p.vx, X.p.vz);
+      }
+      T.swT -= dt;
+      if (T.swT <= 0) { T.spk ^= 1; T.swT = 1.6 + Math.random() * 1.8; (T.spk ? b : a).p.gesture(T.swT, 44); }
+      const S = T.spk ? b : a, Lr = S === a ? b : a;
+      Lr.p.engage(Math.atan2(S.p.x - Lr.p.x, S.p.z - Lr.p.z), 0, 0.55);   // слухає — дивиться на того, хто говорить
+      S.p.engage(Math.atan2(Lr.p.x - S.p.x, Lr.p.z - S.p.z), 0, 0.3);
     }
   }
 
@@ -2305,6 +2384,7 @@ export class Match {
       this.endHub = { x: clamp(hx / 10, -L * 0.6, L * 0.6), z: clamp(hz / 10, -W * 0.6, W * 0.6) };
       for (let i = 0; i < this.endLose.length; i++) this.endLose[i].p.sad(5);
     }
+    this.assignEndRoles();
     if (win) this.view.stands.react('wave'); else if (outcome === 'loss') this.view.stands.react('groan');
     if (this.holder) this.holder.manual = false;
 

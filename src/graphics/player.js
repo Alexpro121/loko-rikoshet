@@ -415,6 +415,9 @@ export class Player {
       fid: some([7, 8, 10, 11, 12, 14, 2, 1, 0], 4), cheer: some([0, 1, 13, 14, 15, 16, 17, 18, 19, 20, 6, 12, 8, 4], 3), sad: some([0, 4, 5, 6, 8, 1, 2], 2),
       clap: some([30, 30, 31, 32, 33, 34], 2)[0], clapV: some([30, 30, 31, 32, 33, 34], 2), waveV: some([40, 40, 41, 42], 2), walk: some([16, 5, 6, 15, 17, 11, 12, 7, 14], 3),
       walkP: some([0, 0, 1, 1, 3], 2), stand: some([2, 4, 5, 6, 7, 2], 3),   // як тримає руки на ходу й стоячи
+      // вибуховість (наскільки різко б'є, як сильно тіло «віддає» в ударі й падінні), як сідає й лягає на газон, якою рукою
+      // жестикулює в розмові, як часто й глибоко дихає після гри
+      power: 0.8 + 0.45 * R(), sitV: R() < 0.6 ? 0 : 1, lieV: R() < 0.5 ? 2 : 3, talkH: R() < 0.7 ? 1 : 0, breath: 1.3 + 0.7 * R(), heave: 0.6 + 0.8 * R(),
     };
     this.wrist = [{ a: 0.12, v: 0 }, { a: 0.12, v: 0 }];
     this.gaitSys = new Gait({ THIGH, SHIN, YA, HIP_X }); this.gaitFree = false;
@@ -453,7 +456,8 @@ export class Player {
   setMode(m, t = 0) { this.bakeSlide(); const k = 0.92 + 0.16 * Math.random(); t *= k; this.mode = m; this.modeT = t; this.modeD = t; this.vary = 0.9 + 0.2 * Math.random(); }
   kick(power = 1) {
     this.kicking = 0.0001; this.kickPow = power; this.kickAmp = (0.6 + 0.6 * power) * (0.93 + 0.14 * Math.random()); this.setExpr('angry', 0.6);
-    this.kickSide = this.backLeg();
+    this.kickSide = this.backLeg(); this.kickHit = false;
+    this.kickAmp *= 0.92 + 0.4 * (this.persona.power - 0.8);          // хтось б'є з величезним замахом, хтось — коротко
     // на бігу проводка й крок через м'яч коротші — тіло не «пливе» з застиглими ногами, хода підхоплює раніше
     this.kickF = lerp(1, 0.6, smooth(clamp((Math.hypot(this.vx, this.vz) - 2) / 4, 0, 1)));
   }
@@ -609,6 +613,11 @@ export class Player {
    * Поштовх від удару долонею: рука відскакує назад, плечі й голова здригаються (вторинний рух тіла), обличчя — радість.
    * mag ~1 — звичайна «п'ять».
    */
+  /** Поштовх у вторинний рух (маятники тулуба, голови, рук і стиск тіла): удар, контакт, падіння на газон. */
+  hit(tr = 0, hd = 0, side = 0, aA = 0, aB = 0, sq = 0) {
+    const s = this.sec; if (!s) return;
+    s.tr.v += tr; s.hd.v += hd; s.trZ.v += side; s.aA.v += aA; s.aB.v += aB; s.sq.v += sq;
+  }
   jolt(mag = 1, arm = 1) {
     const s = this.sec; if (!s) return;
     s.tr.v -= 1.6 * mag; s.hd.v -= 3.2 * mag; s.trZ.v += (arm ? -1 : 1) * 1.2 * mag;
@@ -642,6 +651,7 @@ export class Player {
   hit() { if (this.mode !== 'idle') return; this.setMode('hit', 0.4); this.setExpr('shock', 0.5); }
   /** Відбір випадом: contact — за скільки секунд нога дістане м'яч; далі ~0.4 с відновлення стійки. */
   tackle(contact = 0.25) {
+    this.tkHit = false;
     this.tkC = contact / (contact + 0.4); this.tkSide = this.backLeg() === 0 ? 1 : 0;   // tkSide 1 — випад лівою
     this.setMode('tackle', contact + 0.4); this.modeT = this.modeD = contact + 0.4;           // без випадкового розкиду: контакт ноги — тоді ж, коли й у грі
     this.setExpr('angry', 0.5);
@@ -678,6 +688,8 @@ export class Player {
   }
   slideTackle() { this.setMode('slide', 1.6); this.setExpr('angry', 0.7); }
   kneel() { this.setMode('kneel', 1.5); this.setExpr('happy', 1.5); this.kSlide = 0; }
+  /** Після матчу на газоні: 0 — сів, руки на колінах; 1 — сів, відкинувшись на руки; 2 — ліг, руки під голову; 3 — ліг, руки розкинуті. */
+  rest(style = 0) { this.setMode('rest', 999); this.style = style; this.restHit = 0; this.vx = this.vz = 0; this.setExpr(style >= 2 ? 'shock' : 'neutral', 999); }
   /** Ковзання на колінах зсуває тіло візуально; коли воно закінчується (чи перервалось), зсув стає справжньою позицією — без ривка назад. */
   bakeSlide() { if (this.mode === 'kneel' && this.kSlide) { this.x += Math.sin(this.yaw) * this.kSlide; this.z += Math.cos(this.yaw) * this.kSlide; this.lpx = this.x; this.lpz = this.z; } this.kSlide = 0; }
   /** Обійми: руки обхоплюють партнера (yaw — до нього), корпус уперед, разом підстрибують. */
@@ -911,7 +923,7 @@ export class Player {
     let tiltX = 0, tiltZ = 0, tiltY = 0, flip = 0, slide = 0;
     let ankA = null, ankB = null, ankOwn = false, abdSA = 0, abdSB = 0, pelX = 0, pelY = 0, pelZ = 0, hdX = 0, hdY = 0, hdZ = 0;
     const loc = (this._loc ??= { legA: 0, legB: 0, kneeA: 0, kneeB: 0, on: false }); loc.legA = loc.legB = loc.kneeA = loc.kneeB = 0; loc.on = false;
-    const grounded = this.mode === 'slide' || this.mode === 'gkdive' || this.mode === 'stumble' || this.mode === 'kneel';
+    const grounded = this.mode === 'slide' || this.mode === 'gkdive' || this.mode === 'stumble' || this.mode === 'kneel' || this.mode === 'rest';
 
     // ---- фізична хода: коли тіло вільне від скриптової дії — стійка, переступання, хода, біг, повороти, гальмування.
     // Стопи стоять у світі, таз — маса на пружних ногах, кроки ставить регулятор рівноваги (див. gait.js).
@@ -1119,6 +1131,11 @@ export class Player {
         } else if (st === 10) {                                // показує партнерові й кричить: рука вперед, корпус за нею
           const a2 = accent(T * 1.8); armB = lerp(armB, 1.55 + 0.12 * a2, e); elbB = lerp(elbB, 0.06, e); sdB += 0.2 * e; armA = lerp(armA, 0.45, e); elbA = lerp(elbA, 1.0, e); leanX += 0.08 * a2 * e; hdX -= 0.12 * a2 * e;
           if (e > 0.5 && this.expr === 'neutral') this.setExpr('angry', 0.8);
+        } else if (st === 44) {                                // розмовляє на ходу: передпліччя перед собою, кисть «пояснює», голова киває
+          const a2 = accent(T * 1.4), w = Math.sin(T * 5.2), g = this.persona.power;   // хтось ледь ворушить кистю, хтось розмахує
+          if (this.persona.talkH) { armB = lerp(armB, 0.6 + 0.18 * a2 * g, e); elbB = lerp(elbB, 1.25 + 0.25 * w * g, e); sdB += 0.12 * e; armA = lerp(armA, 0.2, e); }
+          else { armA = lerp(armA, 0.6 + 0.18 * a2 * g, e); elbA = lerp(elbA, 1.25 + 0.25 * w * g, e); sdA += 0.12 * e; armB = lerp(armB, 0.2, e); }
+          hdX += (0.04 * w - 0.06) * e; leanY += 0.06 * a2 * g * e * (this.persona.talkH ? -1 : 1);
         } else if (st === 11) {                                // струшує руки, розслабляє
           const sh = Math.sin(T * 23), sh2 = Math.sin(T * 19 + 1); armA = lerp(armA, 0.12 + 0.08 * sh, e); armB = lerp(armB, 0.12 + 0.08 * sh2, e); elbA = lerp(elbA, 0.2, e); elbB = lerp(elbB, 0.2, e);
           sdA += (0.22 + 0.1 * sh2) * e; sdB += (0.22 + 0.1 * sh) * e; hdZ += 0.05 * sh * e; this.breathUp += 0.01 * Math.abs(sh) * e;
@@ -1280,6 +1297,7 @@ export class Player {
         // підтягується, потім викидається вперед низько над травою майже прямою — стопою до м'яча; руки розкинуті для рівноваги.
         // Після контакту — повернення в стійку. Тіло вперед несе сам випад (match.js), тож тут без зсуву
         const c = this.tkC ?? 0.4, load = smooth(clamp(mk / (c * 0.45), 0, 1)), strike = smooth(clamp((mk - c * 0.35) / (c * 0.65), 0, 1));
+        if (!this.tkHit && mk >= c) { this.tkHit = true; const m = this.persona.power; this.hit(1.1 * m, -2.2 * m, (this.tkSide ? -0.8 : 0.8) * m, 2.5 * m, 2.5 * m, 1.4 * m); }   // нога вдарилась у м'яч
         const rec = smooth(clamp((mk - c) / (1 - c), 0, 1)), on = load * (1 - rec), hit = strike * (1 - rec);
         const kick = -0.35 * on * (1 - strike) + 1.15 * hit, kKnee = 0.35 + 0.6 * on * (1 - strike) - 0.25 * hit, sup = -0.25 * hit, sKnee = 0.35 * on + 0.75 * hit;
         if (this.tkSide) { legA = kick; kneeA = kKnee; legB = sup; kneeB = sKnee; armA = -0.45 * hit; armB = 0.7 * hit; }
@@ -1313,6 +1331,26 @@ export class Player {
         else if (mk < 0.18) { const q = easeOut(mk / 0.18); tiltX = -1.05 * q; armA = armB = 1.9 * q; elbA = elbB = 0.4; spread = 0.7 * q; legA = 0.3 * q; kneeA = 0.4 * q; lift = 0.18 * Math.sin(q * Math.PI); }
         else if (mk < 0.42) { tiltX = -1.05; armA = armB = 0.6; spread = 0.4; leanX = 0.05; kneeA = kneeB = 0.5; }
         else { this.rise((mk - 0.42) / 0.58, this.riseT0 ?? -1.05, 0); tiltX = r.tx; leanX = r.leanX; legA = r.legs; legB = r.legs * 0.8; kneeA = r.legs * 1.15; kneeB = r.legs * 0.95; armA = armB = r.arms; spread = r.spread; drop = r.drop; }
+        break;
+      }
+      case 'rest': {
+        // спершу сідає (присід → таз на траву, коліна вгору), лежачи — далі відкидається на спину; дихає важко, грудьми
+        // кожен у своєму темпі: хтось падає на газон без сил, хтось сідає повільно; дихання спершу глибоке й часте, далі вгамовується
+        const PS = this.persona, tp = PS.tempo * this.vary, u = (md - this.modeT) * tp, st = this.style;
+        const sit = smooth(clamp(u / 1.1, 0, 1)), lie = st >= 2 ? smooth(clamp((u - 1.0) / 1.2, 0, 1)) : 0;
+        const calm = Math.exp(-u / 7), br = Math.sin(this.t * PS.breath * (1 + 0.6 * calm) + (this.ph0 ??= Math.random() * 20)) * PS.heave * (0.5 + calm);
+        if (this.restHit === 0 && u > 0.95) { this.restHit = 1; this.hit(-0.7, 1.6, 0, -1.5, -1.5, 2.4 * PS.power); }                     // сів — таз ударився об траву, тіло осідає
+        if (st >= 2 && this.restHit === 1 && u > 2.15) { this.restHit = 2; this.hit(0, 2.8, 0.3 * (Math.random() - 0.5), -3, -3, 0.9); }   // ліг — спина й голова на газон, руки відскакують
+        legA = legB = 2.2 * sit; kneeA = kneeB = 0.06 + 2.04 * sit; drop = (HIP - 0.27) * sit * (1 - lie);
+        if (st === 0) { leanX = 0.32 * sit + 0.03 * br; armA = armB = 0.95 * sit; elbA = elbB = 0.55; spread = 0.12; hdX = 0.3 * sit; }
+        else if (st === 1) { leanX = -0.45 * sit + 0.03 * br; armA = armB = -0.75 * sit; elbA = elbB = 0.08; spread = 0.3 * sit; hdX = -0.2 * sit; legB = 1.75 * sit; kneeB = 0.06 + 1.3 * sit; }
+        else {
+          tiltX = -1.5 * lie; leanX = 0.25 * sit * (1 - lie) + 0.03 * br * lie;
+          legA = lerp(legA, 0.55, lie); kneeA = lerp(kneeA, 1.1, lie); legB = lerp(legB, 0.05, lie); kneeB = lerp(kneeB, 0.1, lie);   // одне коліно зігнуте
+          if (st === 2) { armA = armB = lerp(0.9 * sit, 2.7, lie); elbA = elbB = lerp(0.55, 2.0, lie); spread = 0.35 * lie; }     // руки під голову
+          else { armA = armB = lerp(0.9 * sit, 0.3, lie); elbA = elbB = 0.3; spread = lerp(0.12, 1.35, lie); }                    // руки розкинуті
+        }
+        spread += 0.04 * br * sit; bob = 0;                                  // плечі ходять у такт диханню
         break;
       }
       case 'kneel': {
@@ -1495,6 +1533,11 @@ export class Player {
        */
       this.kicking += dt;
       const t = this.kicking, A = this.kickAmp, pw = this.kickPow, f = this.kickF ?? 1;
+      if (!this.kickHit && t >= 0.13) {
+        // контакт: тіло «віддає» — корпус кидає вперед над м'ячем, голова відстає, руки розлітаються, опорна нога просідає
+        this.kickHit = true; const m = (0.5 + 0.8 * pw) * this.persona.power, sd = this.kickSide === 0 ? -1 : 1;
+        this.hit(1.3 * m, -2.6 * m, 1.0 * sd * m, (sd > 0 ? 4 : -2) * m, (sd > 0 ? -2 : 4) * m, 1.1 * m);
+      }
       if (t >= 0.13 + 0.57 * f) this.kicking = 0;
       else {
         const s2 = (x) => smooth(clamp(x, 0, 1));

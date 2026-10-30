@@ -244,7 +244,7 @@ export class Penalties {
       if (this.out === 'goal' && this.announced) {
         if (t < this.tArr + 1.2) { kp.p.x += kp.p.vx * dt; kp.p.z += kp.p.vz * dt; const sp = Math.hypot(kp.p.vx, kp.p.vz); if (sp > 0.5) kp.p.yaw = Math.atan2(kp.p.vx, kp.p.vz); }
         else if (!this.cel) { this.cel = true; kp.p.vx = kp.p.vz = 0; kp.p.cheer(2.4); }
-      } else if (!this.kmode && this.kt > 0.55 && !this.kReact) { const q = kp.p; q.vx = -dir * 2.4; q.vz = 1.8; q.x += q.vx * dt; q.z += q.vz * dt; q.yaw = Math.atan2(q.vx, q.vz); }
+      } else if (!this.kmode && this.kt > 0.55 && !this.kReact) { const q = kp.p, kv = Math.min(1, dt * 4); q.vx += (-dir * 2.4 - q.vx) * kv; q.vz += (1.8 - q.vz) * kv; q.x += q.vx * dt; q.z += q.vz * dt; q.yaw = Math.atan2(q.vx, q.vz); }   // рушає з місця, а не одразу з 3 м/с
       // виконавець бачить результат: забив — радіє (кулак, руки в небо, рик), ні — руки на голову, обличчя в долонях, присів
       if (this.announced && !this.kReact && this.kt > 0.35) {
         this.kReact = true; const q = kp.p; q.vx = q.vz = 0; q.yaw = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
