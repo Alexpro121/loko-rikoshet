@@ -339,8 +339,8 @@ export class Team {
       const by = Math.atan2(b.x - p.x, b.z - p.z);
       if (s < 0.3) p.yaw = by;
       else {
-        const vy = Math.atan2(p.vx, p.vz), d = angDiff(by, vy), v0 = 1.3 + 1.9 * smooth(clamp((Math.abs(d) - 1.6) / 1.0, 0, 1));
-        p.yaw = by + d * smooth(clamp((s - v0) / 1.8, 0, 1));
+        const vy = Math.atan2(p.vx, p.vz), d = angDiff(by, vy), v0 = 0.8 + 1.0 * smooth(clamp((Math.abs(d) - 1.6) / 1.0, 0, 1));
+        p.yaw = by + d * smooth(clamp((s - v0) / 1.3, 0, 1));
       }
     }
     this.updateGK(dt, c, bs);

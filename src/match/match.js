@@ -466,8 +466,10 @@ export class Match {
       if (!(a.tkl > 0)) continue;
       if (a.p.downed) { a.tkl = 0; continue; }
       const dx = a.tklX - a.p.x, dz = a.tklZ - a.p.z, d = Math.hypot(dx, dz) || 1;
-      const lunge = Math.min(1.3, Math.max(0, d - 0.85)) / Math.max(0.05, a.tkl);   // стопа має дістати м'яч, тіло зупиняється ~0.85 м від нього
-      a.p.vx = (dx / d) * lunge; a.p.vz = (dz / d) * lunge; a.p.x += a.p.vx * dt; a.p.z += a.p.vz * dt;
+      // стопа має дістати м'яч, тіло зупиняється ~0.85 м від нього. Швидкість — не більше ~6 м/с (м'яч утік — під кінець
+      // випаду тіло не «вистрілює» вперед) і набирається з поточної за ~0.08 с, без стрибка
+      const lunge = Math.min(6, Math.min(1.3, Math.max(0, d - 0.85)) / Math.max(0.05, a.tkl)), kv = Math.min(1, dt * 12);
+      a.p.vx += ((dx / d) * lunge - a.p.vx) * kv; a.p.vz += ((dz / d) * lunge - a.p.vz) * kv; a.p.x += a.p.vx * dt; a.p.z += a.p.vz * dt;
       a.tkl -= dt;
       if (a.tkl <= 0) { a.tkl = 0; a.p.vx *= 0.3; a.p.vz *= 0.3; this.resolveTackle(a); }
     }
@@ -1230,7 +1232,7 @@ export class Match {
         const da = dyn(a), db = dyn(b); if (!da && !db) continue;
         let dx = b.p.x - a.p.x, dz = b.p.z - a.p.z, d = Math.hypot(dx, dz);
         if (d >= R) continue;
-        if (d < 1e-4) { dx = 1; dz = 0; d = 1e-4; }
+        if (d < 1e-4) { dx = d = 1e-4; dz = 0; }                                // збіглися — розводимо вздовж X (одиничний напрям, без множника 1/d)
         const pen = R - d, wa = da ? (db ? 0.5 : 1) : 0, wb = db ? (da ? 0.5 : 1) : 0;
         a.p.x -= (dx / d) * pen * wa; a.p.z -= (dz / d) * pen * wa; b.p.x += (dx / d) * pen * wb; b.p.z += (dz / d) * pen * wb;
         a.sync(); b.sync(); a._ix = a.p.x; a._iz = a.p.z; b._ix = b.p.x; b._iz = b.p.z;
@@ -1689,7 +1691,7 @@ export class Match {
       const a = this.actors[i], s = a.slide;
       if (!s) continue;
       s.t += dt;
-      const k = Math.max(0, 1 - (s.t / s.dur) * 0.65);
+      const k = 1.3 * Math.max(0, 1 - s.t / s.dur);                     // гальмує до нуля (раніше обривалось із ~⅓ швидкості)
       a.p.x += s.vx * dt * k; a.p.z += s.vz * dt * k; a.p.vx = a.p.vz = 0;
       if (s.t >= s.dur) {
         a.slide = null; a.sliding = false; a.body.r = a.baseR; a.frozen = 1.15; a.stun = 1.3; a.slideCool = 4;
@@ -2054,7 +2056,7 @@ export class Match {
       if (busy) { a.p.vx *= Math.exp(-dt * 10); a.p.vz *= Math.exp(-dt * 10); a.p.x += a.p.vx * dt; a.p.z += a.p.vz * dt; }
       else a.move(tx, tz, close ? 4.5 : 8.8 + (i % 4) * 0.5 + 1.2 * I, dt);
       const d = Math.hypot(sc.p.x - a.p.x, sc.p.z - a.p.z);
-      a.p.yaw = d > 3 ? Math.atan2(a.p.vx, a.p.vz) || a.p.yaw : Math.atan2(sc.p.x - a.p.x, sc.p.z - a.p.z);
+      a.p.yaw = d > 3 ? (Math.hypot(a.p.vx, a.p.vz) > 0.3 ? Math.atan2(a.p.vx, a.p.vz) : a.p.yaw) : Math.atan2(sc.p.x - a.p.x, sc.p.z - a.p.z);
       const scStill = Math.hypot(sc.p.vx, sc.p.vz) < 1 && c.st === 'act';
       if (d < 3.4 && !a.cheered) {
         a.cheered = true;
@@ -2076,7 +2078,7 @@ export class Match {
       for (let i = 0; i < other.length; i++) other[i].p.sad(4 + 3 * I, I > 0.6 ? pick([7, 0, 5, 6, 4]) : undefined);
       this.game.addTrauma(0.2 + 0.2 * I);
     }
-    for (let i = 1; i < other.length; i++) { const a = other[i]; a.move(a.p.x * 0.92, a.p.z, 2.1 - 0.8 * I, dt); a.p.yaw = Math.atan2(a.p.vx, a.p.vz) || a.p.yaw; }
+    for (let i = 1; i < other.length; i++) { const a = other[i]; a.move(a.p.x * 0.92, a.p.z, 2.1 - 0.8 * I, dt); if (Math.hypot(a.p.vx, a.p.vz) > 0.3) a.p.yaw = Math.atan2(a.p.vx, a.p.vz); }
     other[0].p.vx = other[0].p.vz = 0;
     // партнери, що радіють поруч один з одним, б'ють «п'ять» — кожен лише раз
     if (c.t > 1.0) {

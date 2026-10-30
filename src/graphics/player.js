@@ -451,7 +451,25 @@ export class Player {
 
   // ---------------------------------------------------------------- події (кожна запускається один раз)
   setMode(m, t = 0) { this.bakeSlide(); const k = 0.92 + 0.16 * Math.random(); t *= k; this.mode = m; this.modeT = t; this.modeD = t; this.vary = 0.9 + 0.2 * Math.random(); }
-  kick(power = 1) { this.kicking = 0.0001; this.kickPow = power; this.kickAmp = (0.6 + 0.6 * power) * (0.93 + 0.14 * Math.random()); this.setExpr('angry', 0.6); }
+  kick(power = 1) {
+    this.kicking = 0.0001; this.kickPow = power; this.kickAmp = (0.6 + 0.6 * power) * (0.93 + 0.14 * Math.random()); this.setExpr('angry', 0.6);
+    this.kickSide = this.backLeg();
+    // на бігу проводка й крок через м'яч коротші — тіло не «пливе» з застиглими ногами, хода підхоплює раніше
+    this.kickF = lerp(1, 0.6, smooth(clamp((Math.hypot(this.vx, this.vz) - 2) / 4, 0, 1)));
+  }
+  /**
+   * Якою ногою бити (0 — ліва, 1 — права): тією, що зараз позаду. На бігу це опорна нога наприкінці відштовхування —
+   * вона вже відведена назад, тож замах продовжує крок, а друга нога якраз стає опорною біля м'яча. Без ходи — частіше права.
+   */
+  backLeg() {
+    const gs = this.gaitSys;
+    if (this.gaitFree && gs.ready) {
+      const fx = Math.sin(this.bodyYaw), fz = Math.cos(this.bodyYaw), [a, b] = gs.feet;
+      const pa = (a.x - this.x) * fx + (a.z - this.z) * fz, pb = (b.x - this.x) * fx + (b.z - this.z) * fz;
+      if (Math.abs(pa - pb) > 0.06) return pa < pb ? 0 : 1;
+    }
+    return Math.random() < 0.8 ? 1 : 0;
+  }
   /** Радість; style — конкретна (або випадкова з набору). Лежить після стрибка — спершу підведеться. */
   cheer(t = 2.4, style) {
     if (this.mode === 'pdive' && this.dvPlan) { this.pendingCheer = t; this.pendingCheerStyle = style; this.setExpr('happy', t + 2); return; }
@@ -623,7 +641,11 @@ export class Player {
   block() { this.setMode('block', 0.5); this.setExpr('shock', 0.4); }
   hit() { if (this.mode !== 'idle') return; this.setMode('hit', 0.4); this.setExpr('shock', 0.5); }
   /** Відбір випадом: contact — за скільки секунд нога дістане м'яч; далі ~0.4 с відновлення стійки. */
-  tackle(contact = 0.25) { this.tkC = contact / (contact + 0.4); this.tkSide = Math.random() < 0.5 ? 0 : 1; this.setMode('tackle', contact + 0.4); this.setExpr('angry', 0.5); }
+  tackle(contact = 0.25) {
+    this.tkC = contact / (contact + 0.4); this.tkSide = this.backLeg() === 0 ? 1 : 0;   // tkSide 1 — випад лівою
+    this.setMode('tackle', contact + 0.4); this.modeT = this.modeD = contact + 0.4;           // без випадкового розкиду: контакт ноги — тоді ж, коли й у грі
+    this.setExpr('angry', 0.5);
+  }
   /** Збили (підкат, підсічка): падіння за фізикою ragdoll у напрямку руху, з легким випадковим відхиленням. */
   stumble() {
     const a = this.bodyYaw + (Math.random() - 0.5) * 0.9;
@@ -780,8 +802,11 @@ export class Player {
     } else this.hipSide = ar > 0.3 ? Math.sign(rel) : 0;
     // воротар довше тримає корпус на м'ячі (приставний, задній хід) — таз відкриває лише на справжньому бігу (~+0.25 м/с)
     const bk = smooth(clamp((ar - 2.55) / 0.4, 0, 1));                 // наскільки рух «назад» (там працює задній хід до ~4–4.4 м/с)
-    const v0 = lerp(2.0, 3.4, bk) + (this.look.gk ? 0.25 * (1 - bk) : 0), w = smooth(clamp((vh - v0) / 0.5, 0, 1));   // відкривається за ~0.5 м/с: проміжного «краба» (біг на 50–90° від тазу) майже нема
-    return w * (rel - Math.sign(rel) * Math.min(0.2, 0.1 * Math.abs(rel)));
+    // польовий гравець боком не ходить і не бігає: таз за рухом уже з ~0.7 м/с (назад — короткий задній хід до ~1.5 м/с);
+    // приставним кроком довше пересувається лише воротар у стійці (м'яч близько до його воріт)
+    const gkw = this.look.gk && !this.gaze && (this.mode === 'gkwait' || (this.gkAlertS ?? 1) > 0.3);
+    const v0 = gkw ? lerp(2.0, 3.4, bk) + 0.25 * (1 - bk) : lerp(0.55, 1.3, bk), w = smooth(clamp((vh - v0) / 0.4, 0, 1));
+    return w * (rel - Math.sign(rel) * Math.min(0.08, 0.05 * Math.abs(rel)));
   }
 
   /** Контакт тілом (плече в плече): (dx, dz) — до суперника, w 0..1 — наскільки щільно тиснуть. За кадр береться найсильніший. */
@@ -825,7 +850,9 @@ export class Player {
     const prevYaw = this.bodyYaw;
     {   // поворот корпусу: швидкість обмежена (повільніше на великій швидкості) — тіло має інерцію
       // ціль курсу згладжена: гра (ІІ) смикає напрям від кадру до кадру — тіло цього не повторює
-      this.yawF = this.yawF === undefined ? this.yaw : this.yawF + angDiff(this.yawF, this.yaw) * Math.min(1, dt * 7);
+      // в ударі, випаді й підкаті тіло розвертається різко — на опорній нозі, а не плавним поворотом бігу
+      const act = this.kicking > 0 || this.mode === 'tackle' || this.mode === 'slide' || this.mode === 'header';
+      this.yawF = this.yawF === undefined ? this.yaw : this.yawF + angDiff(this.yawF, this.yaw) * Math.min(1, dt * (act ? 25 : 7));
       // куди розвернути таз, коли гравець дивиться в одну сторону (на гру), а рухається в іншу — як футболіст:
       //  убік повільно — приставний крок (таз за поглядом); убік швидше — «відкриває стегна» в бік руху на 45–60°;
       //  назад повільно — задній хід (таз за поглядом); назад швидше ~3.5 м/с — розвертається й біжить, озираючись через плече.
@@ -833,7 +860,7 @@ export class Player {
       let hipT = 0;
       {
         const own = Math.abs(this.vx) + Math.abs(this.vz) > 0.01, vx = own ? this.vx : this.mvx || 0, vz = own ? this.vz : this.mvz || 0;
-        const vh = Math.hypot(vx, vz), free0 = (this.mode === 'idle' || this.mode === 'aim' || this.mode === 'gkwait') && !this.kicking;
+        const vh = Math.hypot(vx, vz), free0 = (this.mode === 'idle' || this.mode === 'aim' || this.mode === 'gkwait' || this.mode === 'gesture' || this.mode === 'sad') && !this.kicking && !this.holdFacing;
         if (free0 && vh > 0.6) hipT = this.hipTurn(Math.atan2(vx, vz), vh);
         else this.hipSide = 0;
       }
@@ -845,8 +872,8 @@ export class Player {
       }
       this.hipY = (this.hipY || 0) + (hipT - (this.hipY || 0)) * Math.min(1, dt * 5);
       this.bodyYawT = this.yawF + this.hipY;
-      const dy = angDiff(this.bodyYaw, this.bodyYawT), wmax = (9 - 4 * sp) * dt;
-      this.bodyYaw += clamp(dy * Math.min(1, dt * 8), -wmax, wmax);
+      const dy = angDiff(this.bodyYaw, this.bodyYawT), wmax = (act ? 16 : 9 - 4 * sp) * dt;
+      this.bodyYaw += clamp(dy * Math.min(1, dt * (act ? 20 : 8)), -wmax, wmax);
       // таз не обганяє стопи: відносно них він повертається лише на ~30° (у бігу ~45°), далі — тільки переступивши.
       // Тож ноги й тулуб рухаються разом, а поворот іде кроками, як у людини
       const gs = this.gaitSys;
@@ -1467,19 +1494,20 @@ export class Player {
        * завершення — нога опускається попереду (крок через м'яч). Протилежна рука відведена вбік для рівноваги.
        */
       this.kicking += dt;
-      const t = this.kicking, A = this.kickAmp, pw = this.kickPow;
-      if (t >= 0.7) this.kicking = 0;
+      const t = this.kicking, A = this.kickAmp, pw = this.kickPow, f = this.kickF ?? 1;
+      if (t >= 0.13 + 0.57 * f) this.kicking = 0;
       else {
         const s2 = (x) => smooth(clamp(x, 0, 1));
         const back = s2(t / 0.09) * (1 - s2((t - 0.09) / 0.05));         // замах
         const thigh = s2((t - 0.06) / 0.08);                                // стегно веде вперед
         const whip = s2((t - 0.09) / 0.045);                                // гомілка розгинається до контакту
-        const fol = s2((t - 0.13) / 0.17);                                  // проводка
-        const down = s2((t - 0.38) / 0.28);                                 // нога опускається попереду
+        const fol = s2((t - 0.13) / (0.17 * f));                            // проводка
+        const down = s2((t - 0.13 - 0.25 * f) / (0.28 * f));                // нога опускається попереду
+        const end = 1 - s2((t - 0.13 - 0.47 * f) / (0.1 * f));             // і стає на газон
         const hiF = (0.85 + 0.75 * pw) * A;                                 // висота проводки — за силою
-        legB = (lerp(lerp(-0.65 * A * back, 0.35 * A, thigh), hiF, fol) * (1 - down) + 0.25 * down * (1 - s2((t - 0.6) / 0.1))) * (pw < 0.4 ? 0.8 : 1);
-        kneeB = lerp(0.3 + 1.3 * A * s2(t / 0.08), 0.1, whip) + 0.2 * fol * (1 - down) + 0.25 * down * (1 - s2((t - 0.6) / 0.1));
-        legA = 0.15 + 0.1 * fol * (1 - down); kneeA = 0.4 - 0.2 * fol + 0.15 * down * (1 - s2((t - 0.6) / 0.1));   // опорна: м'яко, у проводці випрямляється
+        legB = (lerp(lerp(-0.65 * A * back, 0.35 * A, thigh), hiF, fol) * (1 - down) + 0.25 * down * end) * (pw < 0.4 ? 0.8 : 1);
+        kneeB = lerp(0.3 + 1.3 * A * s2(t / 0.08), 0.1, whip) + 0.2 * fol * (1 - down) + 0.25 * down * end;
+        legA = 0.15 + 0.1 * fol * (1 - down); kneeA = 0.4 - 0.2 * fol + 0.15 * down * end;   // опорна: м'яко, у проводці випрямляється
         drop = 0.04 * thigh * (1 - fol);
         lift = (pw > 0.7 ? 0.12 : 0.04) * Math.sin(Math.PI * clamp((t - 0.12) / 0.32, 0, 1));   // підйом на носок опорної
         // таз: на замаху праве стегно назад, в ударі — різко вперед; плечі крутяться назустріч
@@ -1491,6 +1519,10 @@ export class Player {
         armA = (0.5 * back + 0.9 * thigh) * (1 - down); sdA = 0.6 * Math.min(1, back + thigh) * (1 - down);
         armB = (-0.4 * back - 0.3 * thigh + 0.6 * fol) * (1 - down); sdB = 0.2 * (1 - down);
         elbA = elbB = 0.5; spread = 0.2;
+        if (this.kickSide === 0) {                                          // б'є лівою — дзеркально
+          [legA, legB] = [legB, legA]; [kneeA, kneeB] = [kneeB, kneeA]; [armA, armB] = [armB, armA]; [sdA, sdB] = [sdB, sdA];
+          pelY = -pelY; leanY = -leanY; leanZ = -leanZ;
+        }
       }
     }
 
@@ -1569,7 +1601,10 @@ export class Player {
     const locOn = !!G && legA === loc.legA && legB === loc.legB && kneeA === loc.kneeA && kneeB === loc.kneeB;
     const Lc = (this.lastLoc ??= { legA: 0, legB: 0, kneeA: 0, kneeB: 0, ankA: 0, ankB: 0, abdA: 0, abdB: 0, ftA: 0, ftB: 0, lift: 0, tilt: 0, roll: 0, pelX: 0, pelY: 0, pelZ: 0, hip: HIP, shX: 0, surX: 0 });
     if (locOn) Object.assign(Lc, { legA, legB, kneeA, kneeB, ankA, ankB, abdA: G.abdA, abdB: G.abdB, ftA: G.twA, ftB: G.twB, tilt: tiltX, roll: tiltZ, pelX, pelY, pelZ, hip: G.hip, shX: G.shX, surX: G.surX });
-    this.locW = clamp((this.locW || 0) + (locOn ? 1 : -1) * dt * 4, 0, 1);      // перехід фізика ↔ скриптова дія за ~0.25 с
+    // перехід фізика ↔ скриптова дія за ~0.25 с; в удар і випад — за ~0.1 с: контакт уже на 0.13 с, а пружини й так
+    // тягнулися за ходою, тож старт від пози бігу без ривка, і замах видно повністю
+    const fastIn = !locOn && (this.kicking > 0 || this.mode === 'tackle');
+    this.locW = clamp((this.locW || 0) + (locOn ? 1 : -1) * dt * (fastIn ? 10 : 4), 0, 1);
     const lw = smooth(this.locW);                                                // S-подібно: старт і фініш змішування без ривка
     // важкі сегменти повільніші (стегно, тулуб), легкі — швидші (передпліччя, голова)
     spring('legA', legA, 20, 0.72); spring('legB', legB, 20, 0.72); spring('kneeA', kneeA, 24, 0.7); spring('kneeB', kneeB, 24, 0.7);

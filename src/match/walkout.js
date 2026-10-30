@@ -80,9 +80,10 @@ export class Walkout {
     this.big = new Cloth(15, 9, 30, 18, flagTexture('#d4202c', '#1f8f3f', 'ЛОКО', 'КИЇВ · 1919'));
     this.big.mesh.rotation.x = -Math.PI / 2; this.group.add(this.big.mesh);
     this.bearers = [];
-    // 12 волонтерів по периметру: по 4 на довгих краях, по 2 на коротких; (u, v) — де тримають край
+    // 12 волонтерів по периметру: по 4 на довгих краях, по 2 на коротких; (u, v) — де тримають край.
+    // Вони тримають край прапора — лишаються обличчям до нього й ходять приставним кроком (holdFacing)
     const spots = [[0.12, 0], [0.37, 0], [0.63, 0], [0.88, 0], [0.12, 1], [0.37, 1], [0.63, 1], [0.88, 1], [0, 0.3], [0, 0.7], [1, 0.3], [1, 0.7]];
-    spots.forEach(([u, v], i) => { const b = bearer(i, view, shadowMat); b.u = u; b.v = v; this.bearers.push(b); this.group.add(b.p.root, b.sh); });
+    spots.forEach(([u, v], i) => { const b = bearer(i, view, shadowMat); b.u = u; b.v = v; b.p.holdFacing = true; this.bearers.push(b); this.group.add(b.p.root, b.sh); });
     // прапороносці колон: наш прапор і прапор гостей
     this.poles = [0, 1].map((k) => { const b = bearer(12 + k, view, shadowMat); this.group.add(b.p.root, b.sh); return b; });
     this.flags = [new PoleFlag(flagTexture('#d4202c', '#1f8f3f', 'ЛОКО', '1919')), new PoleFlag(flagTexture('#888', '#444', 'ГОСТІ', ''))];
