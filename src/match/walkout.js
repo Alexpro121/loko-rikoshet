@@ -98,7 +98,7 @@ export class Walkout {
     this.flags[1].cloth.mesh.material.needsUpdate = true;
     this.cx = 0; this.cz = 5; this.t = 0; this.carry = false; this.group.visible = true;
     this.bearers.forEach((b, i) => { b.p.root.visible = true; b.p.setMode('idle'); b.p.gaitSys.ready = false; });
-    for (const b of this.poles) b.p.root.visible = true;
+    for (let k = 0; k < 2; k++) { this.poles[k].p.root.visible = this.flags[k].group.visible = this.poles[k].sh.visible = true; }
   }
   hide() { this.group.visible = false; }
 
@@ -140,13 +140,16 @@ export class Walkout {
     // прапороносці колон
     for (let k = 0; k < 2; k++) {
       const b = this.poles[k], p = b.p, f = this.flags[k], at = poleAt(k, _w);
+      const vis = !at.hidden; p.root.visible = f.group.visible = b.sh.visible = vis; if (!vis) continue;
       p.x = at.x; p.z = at.z; p.vx = at.vx; p.vz = at.vz; p.yaw = at.yaw;
-      // древко — перед грудьми; полотно маяє назад, від напрямку руху
-      const y = p.bodyYaw ?? at.yaw, fx = Math.sin(y), fz = Math.cos(y), sp = Math.hypot(at.vx, at.vz);
-      const px = p.root.position.x + fx * 0.38, pz = p.root.position.z + fz * 0.38;
+      // древко — перед грудьми, трохи ближче до правої руки (вона тримає низько, ліва — на рівні плеча): обидва лікті
+      // зігнуті, руки дістають древко й тоді, коли тіло на ходу опускається. Позиція — з поточної (а не минулого кадру)
+      // позиції тіла, тож древко не відстає від рук. Полотно маяє назад, від напрямку руху
+      const y = p.bodyYaw ?? at.yaw, fx = Math.sin(y), fz = Math.cos(y), rx = Math.cos(y), rz = -Math.sin(y), sp = Math.hypot(at.vx, at.vz);
+      const px = p.x + fx * 0.3 + rx * 0.09, pz = p.z + fz * 0.3 + rz * 0.09;
       f.group.position.set(px, 0.42, pz); f.group.rotation.y = y + Math.PI / 2;
       f.update(t, clamp(sp / 2.5, 0, 1));
-      p.reach(0, px, 1.62, pz, 1); p.reach(1, px, 1.12, pz, 1);
+      p.reach(0, px, 1.5, pz, 1); p.reach(1, px, 1.1, pz, 1);
       p.animate(dt);
       b.sh.position.set(p.root.position.x + 0.3, 0.04, p.root.position.z - 0.2);
     }

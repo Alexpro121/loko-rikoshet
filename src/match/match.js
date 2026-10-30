@@ -1076,10 +1076,14 @@ export class Match {
     if (dt > 0) {
       const tz = v.tunnel.userData.startZ;
       const poleAt = (k, out) => {
-        const sd = k ? 1 : -1, sx = sd * 19.6;
+        const sd = k ? 1 : -1, sx = sd * 19.6; out.hidden = false;
         if (t < E_END) { this.procAt(sd, sx, lead + 2.5, lsp, out); if (out.hidden) { out.x = sd * 1.1; out.z = tz; } }
         else if (t < HS_T + 0.5) { out.x = sx; out.z = LZ; out.vx = out.vz = 0; out.yaw = 0; }
-        else { const u = t - HS_T - 0.5, e = Math.exp(-2 * u); out.x = sx; out.z = Math.max(tz, LZ - 1.7 * (u - 0.5 * (1 - e))); out.vx = 0; out.vz = out.z > tz ? -1.7 * (1 - e) : 0; out.yaw = Math.PI; }   // рушають до тунелю з розгону
+        else {                                                            // рушають з розгону до тунелю (а не прямо в трибуну) і зникають у ньому
+          const u = t - HS_T - 0.5, e = Math.exp(-2 * u), ex = sd * 1.1 - sx, ez = tz - LZ, el = Math.hypot(ex, ez), ux = ex / el, uz = ez / el;
+          const s = Math.min(el, 1.7 * (u - 0.5 * (1 - e))), v = s < el ? 1.7 * (1 - e) : 0;
+          out.x = sx + ux * s; out.z = LZ + uz * s; out.vx = ux * v; out.vz = uz * v; out.yaw = Math.atan2(ux, uz); out.hidden = s >= el;
+        }
         return out;
       };
       this.walk.update(dt, t, poleAt, t > E_END && t < HS_T ? 1 : t < A_END ? 1 : 0.3, t > HS_T);
@@ -1095,8 +1099,12 @@ export class Match {
     if (t - HS_T < i * 0.11 + 0.15 * (a._jr ?? 0)) { a.p.vx = a.p.vz = 0; a.sync(); return; }   // ще стоїть у своїй шерензі
     if (!L.inLane && Math.abs(a.p.z - LANE_Z) < 0.12) L.inLane = true;
     let tx = L.inLane ? -(2 + 11 * LINE_DX + 3) : a.p.x - 1.1, sp = L.v;                       // проміжок між командами — бадьоро
-    const ahead = i > 0 ? this.opp[i - 1] : null;
-    if (ahead && ahead.lane && ahead.lane.inLane && !ahead.post) { const gap = a.p.x - ahead.p.x, want = 1.6 + 0.8 * L.gp; if (gap < want + 0.6) sp = Math.min(sp, Math.max(0, (gap - want) * 2.2)); }   // кожен тримає свою дистанцію
+    // дистанція — до найближчого гостя попереду (за X), що вже в черзі чи на доріжці. Раніше — лише до гостя з номером i−1
+    // і лише коли той уже на доріжці: хто зупинявся перед нею, того наступні не бачили й обходили, а він стояв, доки
+    // не пропустить усіх
+    let gap = Infinity;
+    for (const o of this.opp) { if (o === a || !o.lane || o.post) continue; const g = a.p.x - o.p.x; if (g > 0 && g < gap) gap = g; }
+    { const want = 1.6 + 0.8 * L.gp; if (gap < want + 0.6) sp = Math.min(sp, Math.max(0, (gap - want) * 2.2)); }   // кожен тримає свою дистанцію
     if (t > L.slapT - 0.45 && t < L.slapT + 0.25) sp *= 0.8;                                    // на «п'ятірці» пригальмовує, далі йде своїм кроком
     // наступний господар. Гість іде вздовж −X: «попереду» — це менший X. Удар — поки господар ще трохи попереду
     // (~0.4 м до мить контакту): гість тягнеться вперед-убік, а не назад через плече, коли вже пройшов
@@ -1107,7 +1115,7 @@ export class Match {
       if (ahead - v * 0.65 * lead < 0.45 && this.slaps.add(m.p, a.p, lead, false, 1, 0, true)) { L.slapT = t + lead; L.j++; }   // господар — правою, не розвертаючись; гість — лівою
     }
     // на «п'ятірці» гість на крок подається до шеренги (на відстань руки), потім повертається на доріжку
-    const lean = L.inLane ? 0.45 * Math.max(0, 1 - Math.abs(t - L.slapT) / 0.55) : 0;
+    const lean = L.inLane ? 0.3 * Math.max(0, 1 - Math.abs(t - L.slapT) / 0.55) : 0;   // з півкроком господаря (0.3) — ще 0.85 м, розштовхування (0.8) не відкидає гостя
     a.move(tx, LANE_Z - lean, sp, dt); a.sync();
     const vy = Math.hypot(a.p.vx, a.p.vz) > 0.4 ? Math.atan2(a.p.vx, a.p.vz) : a.p.yaw;
     a.p.yaw = vy;                                                                                   // груди до господаря повертає сам жест (engage)
