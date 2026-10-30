@@ -30,7 +30,8 @@ const KIT_LIST = [
 ];
 const kitOf = (id) => KIT_LIST.find((k) => k[0] === id) || KIT_LIST[0];
 const T0 = 3.0;   // «рух по лінії»: час перебіжки від штанги до штанги, с
-const GK_ANIMS = ['gkwait', 'gkshuffle', 'catch', 'scoop', 'gkdive', 'pdive', 'gkjump', 'parry', 'throw'];
+const GK_ANIMS = ['gkwait', 'gkshuffle', 'catch', 'scoop', 'gkdive', 'pdive', 'gkjump', 'parry', 'gkpunch', 'gktip', 'gkfoot', 'gkstar', 'throw'];
+const GK_STRIKES = { gkpunch: 'gkPunch', gktip: 'gkTip', gkfoot: 'gkFoot', gkstar: 'gkStar' };
 /** Куди дивиться гравець відносно руху (для перевірки бігу боком, спиною, навскіс): зсув погляду від напрямку руху. */
 const FACES = [['move', 'Туди, куди біжить'], ['side', 'Біжить боком (праворуч)'], ['sideL', 'Біжить боком (ліворуч)'], ['back', 'Біжить спиною'],
   ['diag', 'Навскіс уперед'], ['diagback', 'Навскіс назад'], ['target', 'Дивиться на точку (м’яч)']];
@@ -41,7 +42,7 @@ const ANIMS = [
   ['idle', 'Стійка'], ['run', 'Біг'], ['aim', 'Прицілювання'], ['kick', 'Удар'], ['pkick', 'Пенальті: удар'], ['control', 'Прийом'], ['chest', 'Груди'],
   ['header', 'Удар головою'], ['block', 'Блок'], ['hit', 'Влучання м’ячем'], ['tackle', 'Відбір'], ['slide', 'Підкат'], ['stumble', 'Падіння'],
   ['kneel', 'Ковзання на колінах'], ['knock', 'Поштовх (рекдол)'], ['cheer', 'Радість'], ['sad', 'Розчарування'], ['gkwait', 'Воротар: стійка'], ['catch', 'Воротар: ловить'], ['scoop', 'Воротар: підбирає'],
-  ['gkdive', 'Воротар: стрибок'], ['pdive', 'Пенальті: стрибок'], ['gkjump', 'Воротар: вгору'], ['parry', 'Воротар: відбиває'], ['throw', 'Воротар: кидок'],
+  ['gkdive', 'Воротар: стрибок'], ['pdive', 'Пенальті: стрибок'], ['gkjump', 'Воротар: вгору'], ['parry', 'Воротар: відбиває'], ['gkpunch', 'Воротар: кулаками'], ['gktip', 'Воротар: через поперечину'], ['gkfoot', 'Воротар: ногою'], ['gkstar', 'Воротар: «зірочка»'], ['throw', 'Воротар: кидок'],
   ['gkshuffle', 'Воротар: рух по лінії'], ['stagger', 'Втримав рівновагу'], ['fend', 'Тримає суперника рукою'],
 ];
 const CHEERS = ['Стрибки з руками', 'Махає рукою', 'Літак з нахилом', 'Кулаки вгору', 'Танець', 'Сальто', '«Локомотив»', 'Оберт 360°', '«Тихо!»', 'Колиска', 'Літак', 'Віддає честь', 'Деб'];
@@ -148,6 +149,7 @@ function start(fresh) {
     else if (a === 'catch' || a === 'scoop') { if (p === players[0]) { gkShot(p); p.ballAt(gb.x, gb.y, gb.z, GB_R); } p.catchBall(); }
     else if (a === 'throw') p.throwBall();
     else if (a === 'gkjump') p.gkJump();
+    else if (GK_STRIKES[a]) { if (p === players[0]) gkShot(p); p[GK_STRIKES[a]]({ x: gb.cx, y: gb.yc, z: gb.cz }, gb.tc); }
     else if (a === 'parry') { p.mode = 'idle'; p.modeT = 0; }
     else if (a === 'stagger') { p.mode = 'idle'; p.modeT = 0; const ang = Math.random() * Math.PI * 2; p.stagger(Math.sin(ang), Math.cos(ang), 2 + Math.random() * 1.6); }
     else if (a === 'fend') { p.mode = 'idle'; p.modeT = 0; }
@@ -155,7 +157,7 @@ function start(fresh) {
     else if (a === 'knock') { const ang = Math.random() * Math.PI * 2; p.knock(Math.sin(ang), Math.cos(ang), 3 + Math.random() * 2, Math.random() < 0.6); }
     else if (typeof p[a] === 'function') p[a]();
   }
-  if (players[0] && GK_ANIMS.includes(S.anim) && S.anim !== 'throw' && !S.squad) { if (!['catch', 'scoop', 'pdive', 'gkdive'].includes(S.anim)) gkShot(players[0]); } else gb.on = false;
+  if (players[0] && GK_ANIMS.includes(S.anim) && S.anim !== 'throw' && !S.squad) { if (!['catch', 'scoop', 'pdive', 'gkdive', ...Object.keys(GK_STRIKES)].includes(S.anim)) gkShot(players[0]); } else gb.on = false;
   lastAnim = S.anim;
 }
 /** Стрибок у лабораторії йде вбік, як у грі: щоразу з того самого місця, на ~3 м у бік стрибка. */
@@ -177,6 +179,10 @@ function gkShot(p) {
   else if (a === 'scoop') { y = GB_R; y0 = GB_R; arc = 0; fwd = 0.8; tc = 0.42; stick = true; }
   else if (a === 'parry') { side = 0.6 * (Math.random() < 0.5 ? -1 : 1); y = 2.0; fwd = 0.55; tc = 0.45; parryAt = tc - 0.22; }
   else if (a === 'gkjump') { y = 2.95; fwd = 0.25; tc = 0.3; parryAt = tc; arc = 0.7; }
+  else if (a === 'gkpunch') { y = 2.35; fwd = 0.5; tc = 0.4; parryAt = tc; arc = 0.5; }
+  else if (a === 'gktip') { side = 0.45 * (Math.random() < 0.5 ? -1 : 1); y = 2.8; fwd = 0.2; tc = 0.45; parryAt = tc; arc = 0.8; }
+  else if (a === 'gkfoot') { side = 0.85 * (Math.random() < 0.5 ? -1 : 1); y = GB_R; y0 = GB_R; arc = 0; fwd = 0.3; tc = 0.3; parryAt = tc; }
+  else if (a === 'gkstar') { side = 0.6 * (Math.random() < 0.5 ? -1 : 1); y = 1.1; fwd = 0.5; tc = 0.25; parryAt = tc; arc = 0.2; }
   else if (a === 'gkdive' || a === 'pdive') {
     // як на пенальті: м'яч ~3 м убік від воротаря, долітає за ~0.55 с від початку стрибка
     side = -S.dir * 3.0; y = [2.2, 1.0, GB_R][S.dk]; fwd = 0.3; if (S.dk === 2) { y0 = GB_R; arc = 0; }

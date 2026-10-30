@@ -15,7 +15,7 @@ import { oppSquad, skillOf, gkBonus, gainXp, ovr, tierOf, keysFor, ROLE_UA, STAT
 import { Penalties } from './penalty.js';
 import { Replay, Slaps, shakeHands, patShoulder } from './cinema.js';
 import { Walkout } from './walkout.js';
-import { diveKin } from '../graphics/player.js';
+import { diveKin, GK_STRIKE } from '../graphics/player.js';
 const { L, W, G, R } = PITCH;
 // інтро (кат-сцена виходу), с: A — проліт над стадіоном; B — вихід із тунелю; C — камера задкує перед колонами;
 // D — бічний телеоб'єктив; E — шикування; далі гімн і «п'ятірки» (HS_T): кожен гість проходить усю шеренгу господарів;
@@ -342,7 +342,8 @@ export class Match {
       const sk = a.sk, limit = a.receiver ? 34 : PHYS.trapSpeed * (1.2 + 0.8 * sk.hands);
       // ловить, лише якщо м'яч прийшов у рукавиці; удар у ноги чи тулуб — відскік (повільний м'яч біля ніг — підбере сам)
       const outBox = (this.ball.x + a.side * L) * a.side > 17 || Math.abs(this.ball.z) > 17;   // поза штрафним — грає ногою, як польовий
-      if (speed < limit && a.noTrap <= 0 && (outBox || this.inGloves(a, 0.16) || (speed < 5 && this.facesBall(a)))) {
+      const strike = a.isGK && GK_STRIKE.has(a.p.mode) && speed > 5;   // кулаками, долонею, ногою, тілом — відбиває, а не ловить
+      if (!strike && speed < limit && a.noTrap <= 0 && (outBox || this.inGloves(a, 0.16) || (speed < 5 && this.facesBall(a)))) {
         if (a.side > 0) { this.trapMine(a, speed); return true; }
         if (a.receiver || (this.protectT <= 0 && Math.random() < (0.64 + 0.34 * this.oppTeam.press) * (0.7 + 0.6 * sk.hands))) { this.trapOpp(a, speed); return true; }
         a.noTrap = 0.45;
@@ -352,6 +353,7 @@ export class Match {
       this.saveReact(a);
       audio.save(); this.stats.saves += a.side < 0 ? 1 : 0;
       a.p.parry(); audio.thud(); if (a.side > 0) this.addXp(a, 25); if (speed > 18) this.view.stands.react('gasp');
+      { const k = clamp(speed / 25, 0.3, 1.4); a.p.impulse(-0.9 * k, 2.0 * k, 0, -3 * k, -3 * k, 0.7 * k); if (speed > 22) this.game.addTrauma(0.05 + 0.04 * k); }   // м'яч б'є в руки чи тіло — тіло «віддає»
       if (speed > 20 && this.shotBy === -a.side) this.markMoment('save');   // сильний удар відбито — у підбірку моментів тайму
       this.floatAt(a.p.x, a.p.z, a.side > 0 ? 'СЕЙВ!' : 'ВОРОТАР!', a.side > 0 ? 'good' : 'warn');
     } else {
@@ -1867,6 +1869,7 @@ export class Match {
     if (g.dive) return;                                               // упав на м'яч у стрибку — так і лежить із ним
     if (g.footBall) { g.p.receive(b.y, speed); return; }
     g.p.catchBall(b.y < 0.35 && (b.y < 0.1 || speed < 14));
+    { const k = clamp(speed / 22, 0.2, 1.3); g.p.impulse(-0.7 * k, 1.4 * k, 0, -2 * k, -2 * k, 0.9 * k); }   // ловить — гасить м'яч тілом: груди й руки подаються назад
   }
 
   /**
@@ -1951,29 +1954,48 @@ export class Match {
       // скільки воротар дістає руками, не стрибаючи: високий м'яч — ~0.7 м убік; на рівні пояса — ~0.5 м; низом по траві стоячи
       // руки до землі збоку не дістають — уже з ~0.35 м падає на бік (короткий стрибок низом)
       const handR = predY > 1.4 ? 0.7 : predY > 0.5 ? 0.5 : 0.35, need = Math.abs(lateral) - handR;
-      if (need <= 0) {                                                   // уже на лінії удару: чекає м'яч і ловить
-        if (eta > 0.45) continue;
-        g.decided = this.shotId;
-        if (predY > 1.4) g.p.gkJump(); else g.p.catchBall();             // високо по центру — вистрибує; інакше ловить, руки до м'яча
+      const at = { x: line, y: PITCH.BALL_VIS + predY, z: predZ }, bsp = Math.hypot(b.vx, b.vy || 0, b.vz), bar = PITCH.GOAL_H - predY;
+      // сейви без стрибка тримають воротаря на місці (ІІ не веде його, поки триває рух)
+      const strike = (fn) => { g.decided = this.shotId; g.frozen = Math.max(g.frozen, eta + 0.45); g.p.vx = g.p.vz = 0; fn(); };
+      // упритул сильно, а часу ні впасти, ні стрибнути нема: низом збоку — ногою, на рівні тіла — «зірочкою»
+      if (eta < 0.24 && bsp > 16 && need > 0 && Math.abs(lateral) < 1.25 && predY < 1.7) {
+        if (predY < 0.5 && Math.abs(lateral) > 0.3) strike(() => g.p.gkFoot(at, eta)); else strike(() => g.p.gkStar(at, eta));
         continue;
       }
+      if (need <= 0) {                                                   // уже на лінії удару: чекає м'яч
+        if (eta > 0.45) continue;
+        g.decided = this.shotId;
+        // під саму поперечину — переводить долонею; сильний високий — кулаками; високо по центру — вистрибує; інакше ловить
+        if (predY > 1.75 && bar < 0.5) strike(() => g.p.gkTip(at, eta));
+        else if (predY > 1.35 && bsp > 22 && Math.random() < 0.3 + 0.4 * (1 - g.sk.hands)) strike(() => g.p.gkPunch(at, eta));
+        else if (predY > 1.4) g.p.gkJump(); else g.p.catchBall();
+        continue;
+      }
+      // низом поруч, а впасти вже не встигне — ногою
+      if (predY < 0.5 && Math.abs(lateral) < 0.95 && eta <= 0.3) { strike(() => g.p.gkFoot(at, eta)); continue; }
+      // під поперечину трохи збоку — відштовхується й дотягується однією рукою, переводить через перекладину
+      if (predY > 1.8 && need < 0.4) { if (eta > 0.45) continue; strike(() => g.p.gkTip(at, eta)); continue; }
       // бігти чи стрибати — як справжній воротар: поки встигає ногами (приставним/бігом, team.js), біжить на лінію удару;
       // стрибає, лише коли ногами вже не встигне, — і саме тоді, коли стрибку лишається рівно стільки часу, скільки він триває
       // (не надто рано — тоді б завис у повітрі, і не в останню мить, коли м'яч уже поруч)
       const vRun = (side < 0 ? this.oppTeam.gkSpeed : this.myTeam.gkSpeed), vLeg = 6.2 + 1.8 * g.sk.reach;
       const runT = 0.18 + need / vRun, diveT = 0.22 + need / vLeg;
-      if (runT < eta - 0.1) continue;                                    // добіжить — біжить
-      if (eta > diveT + 0.15) continue;                                  // ще рано: біжить ближче, стрибне вчасно
+      // біжить, лише коли добіжить із запасом і встигне поставити ноги; інакше ставить ноги одразу (team.js) і стрибає
+      // вчасно — за ~0.3–0.45 с до м'яча, а не після спринту в останню мить
+      if (runT < eta - 0.35) continue;
+      if (eta > Math.max(diveT, 0.3) + 0.08) continue;
       g.decided = this.shotId;
       {
         const dir = Math.sign(lateral), reach = Math.min(Math.abs(lateral) + (Math.abs(lateral) < 0.8 ? 0.6 : 1.0), (2.2 + g.sk.reach * 3.4 + vRun * 0.12) * (G / 7.2));   // дотяжка в масштабі воріт
         // висота стрибка — за висотою м'яча: високий — угору-вбік, середній — у політ, низом (по траві чи нижче ~0.5 м) — низом,
         // навіть далеко (тоді витягнутим тілом уздовж газону), а не над м'ячем
-        const kind = predY > 1.3 ? 0 : predY > 0.45 ? 1 : 2;
+        const kind = predY > 1.3 ? 0 : predY > 0.6 ? 1 : 2;
         g.dive = { t: 0, dur: 0.9, z0: g.p.z, dist: dir * reach, kind };
         // стрибок за фізикою: воротар відштовхується так, щоб руки встигли туди, де м'яч перетне його лінію; сила ніг — за навичкою.
         // Не встигає (задалеко, запізно) — летить, скільки дозволяють ноги, як справжній
-        g.manual = true; g.p.yaw = g.p.bodyYaw = side > 0 ? Math.PI / 2 : -Math.PI / 2; g.p.gkDive(dir, kind, { x: line, y: PITCH.BALL_VIS + predY, z: predZ }, eta, vLeg);
+        // тіло — до м'яча (удар збоку — навскіс), а не різко прямо в поле
+        const st0 = side > 0 ? Math.PI / 2 : -Math.PI / 2, yb = Math.atan2(b.x - g.p.x, b.z - g.p.z), dy0 = Math.atan2(Math.sin(yb - st0), Math.cos(yb - st0));
+        g.manual = true; g.p.yaw = g.p.bodyYaw = st0 + clamp(dy0, -0.9, 0.9); g.p.gkDive(dir, kind, { x: line, y: PITCH.BALL_VIS + predY, z: predZ }, eta, vLeg);
         audio.slide(); this.floatAt(g.p.x, g.p.z, 'СТРИБОК!', side > 0 ? 'good' : 'warn');
       }
     }

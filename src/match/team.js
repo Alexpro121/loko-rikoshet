@@ -372,10 +372,13 @@ export class Team {
         shot = true;
         if (g.shotSeen !== c.shotId) { g.shotSeen = c.shotId; g.shotErr = (Math.random() * 2 - 1) * (0.15 + 0.3 * this.gkErr) * (1.2 - 0.6 * g.sk.iq); }
         const err = g.shotErr * clamp(cr.t / 0.8, 0, 1);
-        // повністю на лінію удару (з похибкою прочитання) і на повній швидкості — щоб не довелося стрибати в останню мить
-        tz = clamp(cr.z + err, -(G + 0.3), G + 0.3);
-        tx = goalX + side * clamp((p.x - goalX) * side, 1.2, 5);
-        speed = this.gkSpeed;
+        // м'яч долетить не скоро — зміщується на лінію удару (з похибкою прочитання) приставним кроком або бігом;
+        // лишилось менше ~0.55 с — бігти пізно: ставить ноги (стійка) і далі руки або стрибок (match.js)
+        if (cr.t > 0.55) {
+          tz = clamp(cr.z + err, -(G + 0.3), G + 0.3);
+          tx = goalX + side * clamp((p.x - goalX) * side, 1.2, 5);
+          speed = Math.abs(tz - p.z) < 1.6 ? Math.min(this.gkSpeed, 3.2) : this.gkSpeed;   // близько — приставним, далеко — бігом
+        } else { tx = p.x; tz = p.z; speed = this.gkSpeed; }
       }
     }
     // суперник із м'ячем ідe на ворота (будь-звідки, і збоку теж): воротар не відступає на лінію, а виходить назустріч по
@@ -408,6 +411,7 @@ export class Team {
     if (!shot && !g.gkMoving && off < dz) { tx = p.x; tz = p.z; }
     g.gkMoving = shot || (g.gkMoving ? off > 0.12 : off >= dz);
     speed = Math.min(speed, lerp(2.4, this.gkSpeed, Math.max(danger, smooth(clamp((off - 2) / 4, 0, 1)))));   // далеко й без поспіху — кроком
+    if (!shot) speed = Math.min(speed, 1.3 + 1.4 * off);                 // переставитись на пів метра — пара приставних кроків, а не ривок
     this.avoid(g, c.all);
     g.move(tx, tz, speed, dt);
     p.yaw = Math.atan2(b.x - p.x, b.z - p.z);
