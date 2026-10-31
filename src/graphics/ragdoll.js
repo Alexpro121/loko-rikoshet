@@ -9,7 +9,7 @@ import * as THREE from 'three';
 
 const _v = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _qi = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _qc = new THREE.Quaternion();
-const DOWN = new THREE.Vector3(0, -1, 0), UP = new THREE.Vector3(0, 1, 0);
+const UP = new THREE.Vector3(0, 1, 0);
 const G = 9.8, H0 = 1 / 240;
 
 // точки: [вузол скелета, локальне зміщення (одиниці моделі), радіус для зіткнення з газоном]
@@ -300,17 +300,6 @@ export class Ragdoll {
     const ka = f * (1 - wb) / (pa ? Math.max(0.3, sa) : (1 - sa) * (1 - sa) + sa * sa), kb = f * wb / (pb ? Math.max(0.3, tb) : (1 - tb) * (1 - tb) + tb * tb);
     if (!pa) this.nudge(a1, n, ka * (1 - sa)); this.nudge(a2, n, pa ? ka : ka * sa);
     if (!pb) this.nudge(b1, n, -kb * (1 - tb)); this.nudge(b2, n, pb ? -kb : -kb * tb);
-  }
-
-  /** Відрізок кінцівки a1–a2 не ближче d до нерухомого відрізка B1–B2 (тулуб, голова). */
-  segSepTo(a1, a2, B1, B2, d) {
-    const P = this.pos, n = this.closest(P[a1], P[a2], B1, B2), l = n.length();
-    if (l >= d) return;
-    if (l < 1e-6) n.set(0, 0, 1); else n.divideScalar(l);
-    const f = d - l, sa = _st.s;
-    if (SHOULDER(a1)) { this.nudge(a2, n, f / Math.max(0.3, sa)); return; }   // плече — частина тулуба: рухається лікоть
-    const ka = f / ((1 - sa) * (1 - sa) + sa * sa);
-    this.nudge(a1, n, ka * (1 - sa)); this.nudge(a2, n, ka * sa);
   }
 
   /**

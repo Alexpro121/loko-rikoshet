@@ -23,7 +23,7 @@ export class Game {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.1;
     this.coarse = coarse;
     this.res = coarse ? 0.85 : 1; this.ema = 16; this.evalT = 0; this.goodRuns = 0; this.pr = 0;
-    this.trauma = 0; this.fov = 0; this.time = 0; this.introK = 1; this.intro = false; this.celebK = 0; this.celebAng = 0;
+    this.trauma = 0; this.fov = 0; this.time = 0; this.celebK = 0; this.celebAng = 0;
     this.w = 1; this.h = 1;
 
     // меню: острів, що висить у небі
@@ -188,7 +188,6 @@ export class Game {
   }
   snapCamera() { if (this.mBase) { this.mBase.tx = 0; this.mBase.tz = 0; this.mBase.zoom = 1.8; } this.updateMatchCam(0, true); }
 
-  setIntroCam(on, k = 0) { this.intro = on; this.introK = on ? k : 1; }
   addTrauma(v) { this.trauma = Math.min(1, this.trauma + v); }
   fovKick(v) { this.fov = Math.min(8, this.fov + v); }
 
@@ -204,16 +203,14 @@ export class Game {
       b.gx = ball.x * 0.94 + Math.max(-7, Math.min(7, ball.vx * 0.22)) * lead; b.gz = ball.z * 0.55 + Math.max(-4, Math.min(4, ball.vz * 0.15)) * lead - 2.4;
     }
     if (b.gx === undefined) { b.gx = 0; b.gz = 0; }
-    const ie = this.intro ? 1 - Math.pow(1 - this.introK, 3) : 1;
     const cv = m && m.celebView ? m.celebView() : null;
     this.celebK += ((cv ? 1 : 0) - this.celebK) * Math.min(1, dt * 5);
     if (cv) { b.gx = cv.tx; b.gz = cv.tz; this.celebAng = cv.ang; }
-    const zoomT0 = (this.intro ? 1 + (1 - ie) * 1.1 : 1) * (aiming ? 1.16 : (m && m.slow ? 0.94 : 1));
+    const zoomT0 = aiming ? 1.16 : (m && m.slow ? 0.94 : 1);
     const hx = b.dist * b.zoom * 2 * b.half * b.asp / 2, hz = 18 * b.zoom;
     const maxX = Math.max(0, L + 7 - hx), maxZ = Math.max(0, W + 3 - hz);
-    const sweep = this.intro ? (1 - ie) * -26 : 0;
     const zoomT = cv ? cv.zoom : zoomT0;
-    const tx = cv ? cv.tx : Math.max(-maxX, Math.min(maxX, b.gx + sweep)), tz = cv ? cv.tz : Math.max(-maxZ, Math.min(maxZ, b.gz));
+    const tx = cv ? cv.tx : Math.max(-maxX, Math.min(maxX, b.gx)), tz = cv ? cv.tz : Math.max(-maxZ, Math.min(maxZ, b.gz));
     const fol = clamp((S.settings.camFollow ?? 100) / 100, 0.4, 2.5);   // швидкість слідкування з налаштувань
     const kf = snap ? 1 : 1 - Math.exp(-dt * (cv ? 4.5 : 2.8 * fol)), kz = snap ? 1 : 1 - Math.exp(-dt * (cv ? 3.8 : 3.2));
     b.tx += (tx - b.tx) * kf; b.tz += (tz - b.tz) * kf; b.zoom += (zoomT - b.zoom) * kz;

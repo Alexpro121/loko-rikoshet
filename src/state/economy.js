@@ -34,7 +34,6 @@ export const nextTierLevel = (level = S.up.stadium) => {
 
 export const striker = () => STRIKERS.find((s) => s.id === S.striker) || STRIKERS[0];
 export const keeper = () => KEEPERS.find((s) => s.id === S.keeper) || KEEPERS[0];
-export const strikerTier = () => STRIKERS.indexOf(striker());
 export const keeperTier = () => KEEPERS.indexOf(keeper());
 
 /** Каса стадіону: пасивний дохід, що копичиться між візитами. */

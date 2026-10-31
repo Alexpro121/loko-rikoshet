@@ -370,7 +370,7 @@ export class Gait {
     _q1.setFromEuler(_e.set(pitch, 0, roll, 'ZXY'));
     _q2.setFromEuler(_e.set(pelX, pelY, pelZ, 'ZYX'));
     _q1.multiply(_q2).invert();
-    const ik = { hip: 0, knee: 0 };
+    const ik = (this._ik ??= { hip: 0, knee: 0 });
     for (let i = 0; i < 2; i++) {
       const f = this.feet[i], wx = f.x - st.x, wz = f.z - st.z;
       _v.set((wx * cy - wz * sy - shX) / s, (YAw + this.liftOf(f.psi) * s + f.h) / s - yModel, (wx * sy + wz * cy - this.surX) / s).applyQuaternion(_q1);   // світ → тіло → таз (зі зміщенням)
@@ -430,14 +430,13 @@ export class Gait {
     const sqT = this.cycling ? clamp((this.ayV - 0.15 * G) / (1.3 * G), 0, 1) * 0.07 - (flight ? 0.025 : 0) : 0;
     const squash = osc(this.squash, sqT, 20, 0.55, dt);
 
-    Object.assign(out, {
-      hip: yModel, shX: shX / s, surX: this.surX / s, pitch, roll, pelX, pelY, pelZ, squash,
-      armA: this.arms[0].a, armB: this.arms[1].a, elbA: this.elb[0].a, elbB: this.elb[1].a,
-      armTwA: armRot(this.arms[0].a), armTwB: armRot(this.arms[1].a), sdA: armAbd(this.arms[0].a), sdB: armAbd(this.arms[1].a),
-      spread: 0.06 + 0.05 * sp + Math.abs(roll) * 0.4 + 0.22 * this.crouchS,
-      leanX: trunk, leanY: chestY, leanZ: -roll * 0.35 - pelZ * 0.6,
-      hdX: hd, hdY: -chestY * 0.6, hdZ,
-    });
+    // поля вихідного об'єкта — напряму (без тимчасового об'єкта щокадру на кожного гравця)
+    out.hip = yModel; out.shX = shX / s; out.surX = this.surX / s; out.pitch = pitch; out.roll = roll; out.pelX = pelX; out.pelY = pelY; out.pelZ = pelZ; out.squash = squash;
+    out.armA = this.arms[0].a; out.armB = this.arms[1].a; out.elbA = this.elb[0].a; out.elbB = this.elb[1].a;
+    out.armTwA = armRot(this.arms[0].a); out.armTwB = armRot(this.arms[1].a); out.sdA = armAbd(this.arms[0].a); out.sdB = armAbd(this.arms[1].a);
+    out.spread = 0.06 + 0.05 * sp + Math.abs(roll) * 0.4 + 0.22 * this.crouchS;
+    out.leanX = trunk; out.leanY = chestY; out.leanZ = -roll * 0.35 - pelZ * 0.6;
+    out.hdX = hd; out.hdY = -chestY * 0.6; out.hdZ = hdZ;
     this.measure(pitch + trunk, pitch);
     return out;
   }

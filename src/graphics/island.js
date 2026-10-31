@@ -5,7 +5,6 @@ import { netTexture, netPlane, signTexture } from './textures.js';
 
 const SEAT = ['#a8182b', '#1f7a4f', '#e4e2da'];
 const HX = 17.5, HZ = 15.5, R = 3.6, HALF = 19;      // колія навколо стадіону
-const easeBack = (t) => { const c1 = 0.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
 const glowTex = (() => { let t = null; return () => { if (t) return t; const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,246,214,1)'); gr.addColorStop(0.3, 'rgba(255,236,180,0.5)'); gr.addColorStop(1, 'rgba(255,230,170,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); t = new THREE.CanvasTexture(c); return t; }; })();
 

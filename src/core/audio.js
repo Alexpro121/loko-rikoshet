@@ -92,11 +92,6 @@ class AudioEngine {
     this.tone('square', 1318 * k, 1318 * k, 0.12, 0.16, 0.06);
   }
   pass() { this.tone('triangle', 520, 780, 0.1, 0.3); }
-  ram() {
-    this.tone('square', 120, 38, 0.3, 0.45);
-    this.hiss(500, 0.6, 0.25, 0.5);
-    this.tone('sawtooth', 700, 200, 0.18, 0.18);
-  }
   save() { this.tone('triangle', 330, 160, 0.14, 0.4); this.hiss(900, 0.7, 0.08, 0.25); }
   whistle(long = false) {
     if (!this.ctx) return;
@@ -150,7 +145,6 @@ class AudioEngine {
   slide() { this.hiss(1500, 0.5, 0.28, 0.34); this.tone('sine', 140, 70, 0.18, 0.2); }
   clap() { this.hiss(2300, 1.1, 0.06, 0.6); this.hiss(900, 0.9, 0.04, 0.35); this.tone('sine', 260, 120, 0.04, 0.18); }   // ляпас долонь
   thud() { this.tone('sine', 110, 50, 0.16, 0.4); this.hiss(400, 0.7, 0.1, 0.25); }
-  chug() { this.hiss(180, 0.6, 0.09, 0.5, 0, 'lowpass'); }
 
   startCrowd() {
     const c = this.ctx;

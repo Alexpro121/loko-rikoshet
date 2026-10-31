@@ -89,14 +89,6 @@ export function lambert(color, extra = {}) {
   return m;
 }
 
-const _bas = new Map();
-export function basic(color, extra = {}) {
-  const key = color + JSON.stringify(extra);
-  let m = _bas.get(key);
-  if (!m) { m = new THREE.MeshBasicMaterial({ color, ...extra }); _bas.set(key, m); }
-  return m;
-}
-
 export function shade(hex, f) {
   _c.set(hex);
   _c.multiplyScalar(f);

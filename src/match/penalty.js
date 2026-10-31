@@ -17,14 +17,14 @@ const easeOut = (q, p = 2.2) => 1 - Math.pow(1 - clamp(q, 0, 1), p);
  * Удар: ти ставиш кружечок у ворота. Захист: ти ставиш кружечок, куди стрибає воротар.
  */
 export class Penalties {
-  constructor(m) { this.m = m; this.ts = 1; }
+  constructor(m) { this.m = m; }
 
   start() {
     const m = this.m, ui = m.ui;
     document.querySelectorAll('#pen').forEach((e) => e.remove());
     m.phase = 'pens'; m.ts = 1; m.slow = false; m.slowT = 0; if (ui.setSlow) ui.setSlow(false); m.cancelAim();
     ui.setMatchUi(false); ui.hud.setTime('90+', false, 'Пенальті'); ui.hud.warn(null); ui.hud.hint(null); ui.hud.setCard(null);
-    this.k = 0; this.res = { me: [], opp: [] }; this.state = 'wait'; this.t = -1.6; this.mark = null; this.by = 0; this.bvy = 0; this.over = false; this.ts = 1; this.live = false;
+    this.k = 0; this.res = { me: [], opp: [] }; this.state = 'wait'; this.t = -1.6; this.mark = null; this.by = 0; this.bvy = 0; this.over = false; this.live = false;
     const order = (arr) => arr.slice(1).sort((x, y) => ovr(y.info) - ovr(x.info));
     this.orderMe = order(m.mine); this.orderOpp = order(m.opp);
     [...m.mine, ...m.opp].forEach((a, n) => { a.body.on = false; a.p.setMode('idle'); a.p.vx = a.p.vz = 0; a.p.dribble = false; a.p.x = (a.side > 0 ? -1 : 1) * (4 + (n % 5) * 1.6); a.p.z = -7 + (n % 11) * 1.4; a.p.yaw = a.side > 0 ? 1.2 : -1.2; });
@@ -176,7 +176,7 @@ export class Penalties {
       const tHit = TK + 0.224;                                       // мить контакту ноги з м'ячем
       this.gkStartT = tHit + this.gkAt - 0.25; this.ballArrT = tHit + this.tFly * (SPOT - 0.8) / SPOT;   // рушає, коли виконавець ставить опорну ногу
     }
-    Object.assign(this, { kmode: false, kicked: false, struck: false, arrived: false, announced: false, dust: false, cel: false, gkGo: false, gkDone: false, gkReact: false, kReact: false, slowUntil: 0, tArr: 0, gkTouch: false, postHit: false, inNet: false, curve: true, out: null });
+    Object.assign(this, { kmode: false, kicked: false, struck: false, arrived: false, announced: false, dust: false, cel: false, gkGo: false, gkDone: false, gkReact: false, kReact: false, tArr: 0, gkTouch: false, postHit: false, inNet: false, curve: true, out: null });
   }
 
   announce() {
@@ -205,12 +205,8 @@ export class Penalties {
   }
 
   // ---------------------------------------------------------------- головний цикл
-  /** Повертає масштабований dt для анімацій (сповільнення під час польоту). */
-  update(rawDt) {
-    // легке сповільнення в польоті м'яча (кіно-ефект), але не настільки, щоб воротар рухався як під водою
-    const slow = 1;                                                     // на пенальті без сповільнень
-    this.ts += (slow - this.ts) * Math.min(1, rawDt * 9);
-    const dt = rawDt * this.ts;
+  /** Повертає dt для анімацій. */
+  update(dt) {
     this.t += dt;
     if (this.state === 'wait') { if (this.t >= 0) this.begin(); }
     else if (this.state === 'aim') { this.placeMark(); this.keeperMove(dt); }
@@ -261,8 +257,7 @@ export class Penalties {
       const a = this.act, plane = this.gx, tz = a.z, ty = Math.max(a.y, 0.12);
       this.az = gauss() * 5;
       this.bvx = (plane - m.ball.x) / Tf; this.bvz = (tz - m.ball.z - 0.5 * this.az * Tf * Tf) / Tf; this.bvy = (ty - R + 0.5 * GRAV * Tf * Tf) / Tf;
-      this.by = 0.15 - R + R;           // висота центра над газоном = R + by; стартуємо з землі
-      this.by = 0; this.cy = R;
+      this.by = 0; this.cy = R;         // висота центра над газоном = R + by; стартуємо з землі
       this.tStrike = this.t; this.tFly = Tf;
     }
 
@@ -306,7 +301,7 @@ export class Penalties {
         this.gkReact = true; if (this.out === 'save') gk.p.react('save', 2.0); else if (this.out === 'goal') gk.p.react('concede', 1.9);
       }
       if (this.arrived && t > this.tArr + 2.6 && (this.gkDone || !this.gkGo)) this.endKick();
-      else if (!this.arrived && t > this.tStrike + 3.2) { this.out = this.gkTouch ? 'save' : this.postHit ? 'post' : 'miss'; this.arrived = true; this.tArr = t; this.slowUntil = t + 0.4; this.announced = true; this.announce(); }
+      else if (!this.arrived && t > this.tStrike + 3.2) { this.out = this.gkTouch ? 'save' : this.postHit ? 'post' : 'miss'; this.arrived = true; this.tArr = t; this.announced = true; this.announce(); }
     }
   }
 
@@ -416,7 +411,7 @@ export class Penalties {
     else if (depth < -2.8 && this.bvx * dir < 0) out = this.gkTouch ? 'save' : this.postHit ? 'post' : 'miss';
     else if (this.gkTouch && this.bvx * dir < 0 && depth < -0.6 && Math.hypot(this.bvx, this.bvz) > 2) out = 'save';
     if (!out) return;
-    this.out = out; this.arrived = true; this.tArr = this.t; this.slowUntil = this.t + 0.5;
+    this.out = out; this.arrived = true; this.tArr = this.t;
     if (out === 'goal') { this.m.view.ball.squash(dir, 0, 0.32); audio.wall(0, 12); this.m.view.particles.burst(this.gx + dir * 1.5, y, b.z, 10, 4, 0.6, 0.18, ['#ffffff', '#cde'], 10, 0.5); }
     this.announced = true; this.announce();
   }
@@ -432,6 +427,9 @@ export class Penalties {
     this.keeper.p.setMode('idle');
   }
 
+  /** Прибрати панель серії й клавіші (кінець серії або вихід із матчу посеред неї). */
+  dispose() { if (this.el) this.el.remove(); removeEventListener('keydown', this.kd); removeEventListener('keyup', this.ku); }
+
   /** Після syncView: висота м'яча (syncView її перезаписує). */
   post() { if (!this.over) { const b = this.m.view.ball; b.group.position.y = Math.max(R + this.by, b.rad); } }   // збільшений здалеку м'яч не провалюється в газон
 
@@ -439,7 +437,7 @@ export class Penalties {
     const m = this.m, g = (arr) => arr.filter(Boolean).length;
     this.over = true;
     m.penRes = { me: g(this.res.me), opp: g(this.res.opp), win };
-    this.el.remove(); removeEventListener('keydown', this.kd); removeEventListener('keyup', this.ku);
+    this.dispose();
     m.ui.hud.clearGoal();
     m.game.sm.go('MATCH', { resume: true });
     m.end();

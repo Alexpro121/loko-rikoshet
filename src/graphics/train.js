@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { VoxelBuilder, vcMat } from './voxel.js';
 
 export const LOCO_LEN = 5.4, WAGON_LEN = 5.0, GAP = 0.3;
-export const TRAIN_LEN = LOCO_LEN + GAP + (WAGON_LEN + GAP) * 2 - GAP;
 
 const wheel = new THREE.CylinderGeometry(0.58, 0.58, 0.3, 10);
 
@@ -33,13 +32,3 @@ export function wagonMesh(red = true) {
   return b.mesh(vcMat(), { static: false });
 }
 
-/** Увесь склад для «Експресу»: перед на z = 0, тіло простягається в -Z. */
-export function buildTrainGroup() {
-  const g = new THREE.Group();
-  const loco = locoMesh(); loco.position.z = -LOCO_LEN / 2; g.add(loco);
-  for (let i = 0; i < 2; i++) {
-    const w = wagonMesh(i === 0); w.position.z = -LOCO_LEN - GAP - WAGON_LEN / 2 - i * (WAGON_LEN + GAP);
-    g.add(w);
-  }
-  return g;
-}

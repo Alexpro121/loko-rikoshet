@@ -74,9 +74,6 @@ const head = (x) => `<g><clipPath id="ch"><path d="M${x} 44 H${x + 224} Q${x + 2
     <path d="M${x + 244} 77 L${x + 262} 66" stroke="#15181b" stroke-width="1.6"/>
     ${bogie(x + 62)}${bogie(x + 232)}
   </g>`;
-const WRED = '#d6282f', WDRED = '#a81c24', WGRN = '#3fae3c';
-const wwin = (x, y, w, h) => glass(x, y, w, h);
-const wheelN = (cx) => `<circle class="not_found_st6" cx="${cx}" cy="285.6" r="15.1"></circle><path class="not_found_st2" d="M${cx} 295.7c-5.6 0-10.1-4.5-10.1-10.1s4.5-10.1 10.1-10.1 10.1 4.5 10.1 10.1c0 5.5-4.6 10.1-10.1 10.1z"></path>`;
 /** Вагон 1:1 за зразком (плацкарт УЗ, вигляд збоку): рифлений корпус, 10 вікон (парні зі спущеною рамою), дві торцеві двері, чорна рама, два візки. Малюється в координатах зразка (x 38..1258, y 545..767), далі масштабується до локомотива. */
 const WK = 0.745;
 const wagon = (i) => {

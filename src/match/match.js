@@ -56,11 +56,11 @@ export class Match {
     this.actors = [...this.mine, ...this.opp];
     this.world.bodies = this.actors.map((a) => a.body);
     this.ball = this.world.ball;
-    this.ctx = { ball: this.ball, bs: 'ready', owner: 1, readyT: 0, stealTime: 6, opps: this.opp, all: this.actors };
+    this.ctx = { ball: this.ball, bs: 'ready', owner: 1, readyT: 0, opps: this.opp, all: this.actors };
     this.protectT = 0; this.receiverT = 0; this.passTarget = null; this.pressWarn = false;
     this.slow = false; this.slowT = 0; this.beatT = 0; this.danger = 0;
     this.kickoff = true; this.shotId = 0; this.slideT = 0; this.slideShotId = -1; this.slideTries = 0; this.slid = false;
-    this.glideT = 0; this.glideX = 0; this.glideZ = 0; this.tapT = 0; this.hopT = 0; this.celeb = null; this.shooter = null; this.lastOppTaker = null;
+    this.glideT = 0; this.glideX = 0; this.glideZ = 0; this.celeb = null; this.shooter = null; this.lastOppTaker = null;
 
     this.cb = {
       wall: (nx, nz, impact, e) => this.onWall(nx, nz, impact, e),
@@ -77,7 +77,7 @@ export class Match {
     // кінематографія: повтори голів, «драматична» камера на сейвах і штангах, перерви, рукостискання
     this.replay = new Replay(this.view); this.rp = null; this.walk = new Walkout(this.view);
     // «дай п'ять»: ляпас, легкий спалах білих іскор між долонями
-    this.slaps = new Slaps((c) => { audio.clap(); this.view.particles.burst(c.x, c.y, c.z, 7, 2.6, 0.22, 0.13, ['#ffffff', '#fff2c4'], 4, 0.5); }); this.drama = null; this.dramaCool = 0; this.brk = null; this.endPairs = null;
+    this.slaps = new Slaps((c) => { audio.clap(); this.view.particles.burst(c.x, c.y, c.z, 7, 2.6, 0.22, 0.13, ['#ffffff', '#fff2c4'], 4, 0.5); }); this.brk = null; this.endPairs = null;
   }
 
   // ------------------------------------------------------------------ старт
@@ -104,9 +104,9 @@ export class Match {
     this.opp[0].body.r = this.opp[0].baseR = Math.max(0.9, 0.7 + 0.6 * og.reach);
     this.score = { me: 0, opp: 0 };
     this.pens = null; this.penRes = null;
-    this.clock = spec.time; this.period = 1; this.periodEnd = false; this.golden = false; this.timeUp = false; this.timeUpWait = 0;
+    this.clock = spec.time; this.period = 1; this.periodEnd = false; this.timeUp = false; this.timeUpWait = 0;
     this.coins = 0; this.stats = { goals: 0, combo: 1, saves: 0 };
-    this.phase = 'intro'; this.introT = 0; this.introCheer = false; this.hitStop = 0; this.ts = 1; this.acc = 0;
+    this.phase = 'intro'; this.introT = 0; this.hitStop = 0; this.ts = 1; this.acc = 0;
     this.aiming = false; this.endT = 0; this.goalT = 0; this.resultSent = false;
     this.lastClock = -1;
     this.holder = null; this.taker = null;
@@ -118,12 +118,11 @@ export class Match {
     hud.banner(spec.club.name, spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of + (spec.final ? ' · ФІНАЛ' : ''), spec.note || CLUB.slogan);
     audio.music('match'); audio.crowd(0.7);
     this.game.renderer.toneMappingExposure = this.view.exposure || 1.1;
-    this.game.setIntroCam(false);
     this.introTgt = [this.mine, this.opp].map((arr) => arr.map((a) => ({ x: a.p.x, z: a.p.z })));
     this.introFlags = { wave: false, clap: false, cheer: false, roar: false, anthem: false, hs: false, fans: false };
-    this.introFrom = null; this.rp = null; this.hl = null; this.clips = []; this.moments = []; this.walk.start(spec.club);
+    this.rp = null; this.hl = null; this.clips = []; this.moments = []; this.walk.start(spec.club);
     for (const a of this.actors) { a.lane = null; a._st = 0; a.post = null; a._jr = Math.random(); a.p.gaze = true; }
-    this.introEndAt = null; this.skipEnd = false; this._cx = undefined; this._fx = undefined; this._h0 = null; this._hs = null; this._camT = undefined; this.drama = null; this.dramaCool = 0; this.brk = null; this.endPairs = null; this.replay.clear();
+    this.introEndAt = null; this.skipEnd = false; this._cx = undefined; this._camT = undefined; this.brk = null; this.endPairs = null; this.replay.clear();
     this.ui.hud.cine(true);
     this.driveIntro(0, 0);
     this.game.snapCamera();
@@ -158,7 +157,7 @@ export class Match {
           if (d < R0) { if (d < 0.01) { x = -side * R0; z = 0; } else { x *= R0 / d; z *= R0 / d; } }
         }
         a.place(x, z); a.kx = x; a.kz = z;
-        a.manual = false; a.cool = 0; a.noTrap = 0; a.stun = 0; a.receiver = false; a.hug = false; a.hugged = false; a.cheered = false; a.frozen = 0; a.slide = null; a.dive = null; a.sliding = false; a.slideCool = 0; a.decided = -1; a.body.r = a.baseR; a.p.dribble = false; a.p.setThreat(0, 0); a.body.on = true; a.p.setMode('idle');
+        a.manual = false; a.cool = 0; a.noTrap = 0; a.stun = 0; a.receiver = false; a.cheered = false; a.frozen = 0; a.slide = null; a.dive = null; a.sliding = false; a.slideCool = 0; a.decided = -1; a.body.r = a.baseR; a.p.dribble = false; a.p.setThreat(0, 0); a.body.on = true; a.p.setMode('idle');
       });
       t.gk.manual = false; t.gk.cool = 0; t.gk.noTrap = 0; t.gk.stun = 0; t.gk.frozen = 0; t.gk.slide = null; t.gk.dive = null; t.gk.sliding = false; t.gk.slideCool = 0; t.gk.decided = -1; t.gk.body.r = t.gk.baseR; t.gk.p.setMode('idle');
       for (const a of [t.gk, ...t.out]) a.p.yaw = side > 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -169,7 +168,7 @@ export class Match {
     else { this.trapOpp(hold, 0); this.ui.hud.warn(null); hold.p.yaw = -Math.PI / 2; }
     b.x = 0; b.z = 0; b.vx = b.vz = 0; this.glideT = 0;
     this.hideAim();
-    this.shotBy = 0; this.shotBounces = 0; this.counter = false; this.looseT = 0; this.protectT = 0; this.pressWarn = false;
+    this.shotBy = 0; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.pressWarn = false;
     for (const a of this.actors) { a.tkl = 0; a.nearT = 0; }       // випад, що не завершився до розстановки, не тягне гравця
   }
 
@@ -531,7 +530,7 @@ export class Match {
     if (this.taker) { this.taker.manual = false; this.taker.p.dribble = false; this.taker.cool = 0.3; this.taker = null; }
     this.telegraph = false;
     b.vx = vx; b.vz = vz;
-    this.bs = 'roll'; this.owner = 0; this.shotBy = 0; this.shotBounces = 0; this.looseT = 0; this.counter = false; this.protectT = 0; this.shotId++;
+    this.bs = 'roll'; this.owner = 0; this.shotBy = 0; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.shotId++;
     this.ui.hud.setCard(null); this.ui.hud.warn(null);
   }
 
@@ -561,12 +560,12 @@ export class Match {
 
   makeReady(a, kickoff) {
     this.pendKick = null;
-    this.bs = 'ready'; this.owner = 1; this.readyT = 0; this.counter = false; this.shotBy = 0;
+    this.bs = 'ready'; this.owner = 1; this.readyT = 0; this.shotBy = 0;
     if (this.holder && this.holder !== a) this.holder.manual = false;
     if (this.holder && this.holder !== a) this.holder.p.setThreat(0, 0);
     this.holder = a; a.manual = true;
     if (!a.isGK || kickoff) a.p.setMode('idle');
-    this.tapT = 0.5; this.hopT = 0; this.showCard(a);
+    this.showCard(a);
     if (this.taker) { this.taker.manual = false; this.taker = null; }
     this.hideAim();
     this.ui.hud.warn(null);
@@ -580,7 +579,7 @@ export class Match {
     this.pendKick = null; this.shotWound = false;
     this.placeBallAt(a, true);
     if (this.holder) this.holder.manual = false;
-    this.bs = 'held'; this.owner = -1; this.taker = a; a.manual = true; this.counter = true;
+    this.bs = 'held'; this.owner = -1; this.taker = a; a.manual = true;
     this.showCard(a);
     this.dribbleT = 0; this.tackleT = 0; this.telegraph = false; this.thinkT = 0.15; this.dribZ = a.p.z; this.clearReceivers();
     a.p.receive(this.ball.y, speed);
@@ -646,7 +645,6 @@ export class Match {
     return best;
   }
 
-  /** Віддати пас партнеру: м'яч летить на випередження, партнер біжить на прийом. */
   /**
    * Пас/кидок суперника — як у людини: гравець розвертається до адресата, робить замах (анімація удару чи кидка), і м'яч
    * летить лише в мить контакту (~0.13 с; кидок ~0.18). Раніше м'яч вилітав одразу, а нога ще не рушила — і пас убік
@@ -768,7 +766,7 @@ export class Match {
     a.cool = 0.35; a.noTrap = 1.3; a.manual = false; this.taker = null; this.lastOppTaker = a;
     best.receiver = true; this.passTarget = best; this.receiverT = 3.2;
     audio.pass();
-    this.bs = 'roll'; this.owner = 0; this.shotBy = -2; this.shotBounces = 0; this.looseT = 0; this.counter = true; this.protectT = 0; this.shotId++; this.ui.hud.setCard(null);
+    this.bs = 'roll'; this.owner = 0; this.shotBy = -2; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.shotId++; this.ui.hud.setCard(null);
     this.ui.hud.warn(null);
   }
 
@@ -784,7 +782,7 @@ export class Match {
   /** Підготувати удар у вибрану точку воріт (з попередженням-прицілом). */
   startShot(a, tz) {
     const b = this.ball, spec = this.spec;
-    this.telegraph = true; this.shootT = 0.5; this.shotWound = false; this.shotRun = false;
+    this.telegraph = true; this.shootT = 0.5; this.shotWound = false;
     const z = tz * (0.55 + 0.45 * this.kk.concede);
     const dx = -L - 1 - b.x, dz = z - b.z, d = Math.hypot(dx, dz) || 1;
     // сила удару — під відстань: м'яч у грі сильно гальмує (з 40 м удар у 40 м/с долітав ледь живим, ~10 м/с), тож бот
@@ -876,7 +874,6 @@ export class Match {
     for (let i = 1; i < this.mine.length; i++) { const m = this.mine[i].p, d = Math.hypot(m.x - a.p.x, m.z - a.p.z); if (d < pm) pm = d; }
     if (this.thinkT <= 0) { this.thinkT = 0.5 - 0.3 * a.sk.iq; this.takerThink(a, pm, toGoal); if (this.bs !== 'held') return; }
     if (!a.isGK && this.telegraph) {
-      // удар: м'яч після останнього дотику докочується, гравець стає за ним на лінії удару й розбігається
       // удар: веде м'яч далі, дотиком накочує його собі під удар і б'є з ходу — без зупинки
       const c = this.counterV, cl = Math.hypot(c.vx, c.vz) || 1, ux = c.vx / cl, uz = c.vz / cl;
       if (!this.shotWound) {
@@ -985,7 +982,7 @@ export class Match {
     this.bs = 'net'; this.owner = 0;                               // м'яч летить далі — у пружну сітку, відскакує й падає
     this.nextKick = mine ? -1 : 1;                                 // з центру розводить та команда, якій забили
     this.goalMine = mine; this.goalT = 0; this.goalTime = this.time; this.rp = null;
-    this.endDrama(); this.ui.hud.cine(true);
+    this.ui.hud.cine(true);
     this.hideAim(); this.ui.hud.warn(null); this.ui.hud.setCard(null);
     if (this.holder) this.holder.manual = false;
     if (this.taker) { this.taker.manual = false; this.taker = null; }
@@ -1037,7 +1034,7 @@ export class Match {
   }
   afterGoal() {
     this.ui.hud.clearGoal(); this.ui.hud.cine(false);
-    if (this.golden || this.timeUp) { this.game.sm.go('MATCH', { resume: true }); this.end(); return; }
+    if (this.timeUp) { this.game.sm.go('MATCH', { resume: true }); this.end(); return; }
     this.formation(this.nextKick || 1);
     this.game.sm.go('MATCH', { resume: true });
   }
@@ -1047,12 +1044,10 @@ export class Match {
     if (this.phase === 'pens') { const pd = this.pens.update(rawDt); this.syncView(pd); this.pens.post(); return; }
     if (this.phase === 'paused') { this.syncView(0); return; }
     if (this.phase === 'break') { this.updateBreak(rawDt); return; }
-    if (this.dramaCool > 0) this.dramaCool -= rawDt;
-    if (this.drama) { this.drama.t += rawDt; if (this.drama.t > this.drama.dur || this.bs !== 'roll' || this.phase !== 'play') this.endDrama(); }
     if (this.hitStop > 0) { this.hitStop -= rawDt; this.syncView(0); return; }
     this.updateSlow(rawDt);
-    const k = this.drama ? 0.3 : this.slow ? this.slowTarget : 1;      // драматичний момент — сповільнена зйомка
-    this.ts += (k - this.ts) * Math.min(1, rawDt * (this.slow || this.drama ? 14 : 20));
+    const k = this.slow ? this.slowTarget : 1;
+    this.ts += (k - this.ts) * Math.min(1, rawDt * (this.slow ? 14 : 20));
     const dt = rawDt * this.ts;
 
     if (this.phase === 'intro') {
@@ -1100,7 +1095,7 @@ export class Match {
     this.clock = this.spec.time * (1 - n / 4);
     audio.whistle(true);
     this.ui.hud.banner('Кінець ' + n + '-го тайму', this.score.me + ' : ' + this.score.opp, n === 2 ? 'Перерва — далі 3-й тайм' : 'Далі ' + (n + 1) + '-й тайм');
-    this.endDrama(); this.startBreak(n);
+    this.startBreak(n);
     this.ui.hud.setTime(this.timeText(), false, this.halfText());
   }
 
@@ -1231,7 +1226,7 @@ export class Match {
    * до того, хто попереду), а порівнявшись із черговим господарем, сповільнюється й дає йому «п'ять» з ляпасом.
    */
   laneStep(a, i, t, dt) {
-    const L = (a.lane ??= { j: 0, v: 1.35 + 0.45 * (a._jr ?? 0.5), gp: Math.random(), inLane: false, slapT: -9 });   // звичайний крок, у кожного свій
+    const L = (a.lane ??= { j: 0, v: 1.75 + 0.45 * (a._jr ?? 0.5), gp: Math.random(), inLane: false, slapT: -9 });   // звичайний крок, у кожного свій
     a._ix = a.p.x; a._iz = a.p.z; a.avx = a.avz = 0;
     if (t - HS_T < i * 0.11 + 0.15 * (a._jr ?? 0)) { a.p.vx = a.p.vz = 0; a.sync(); return; }   // ще стоїть у своїй шерензі
     if (!L.inLane && Math.abs(a.p.z - LANE_Z) < 0.12) L.inLane = true;
@@ -1241,7 +1236,7 @@ export class Match {
     // не пропустить усіх
     let gap = Infinity;
     for (const o of this.opp) { if (o === a || !o.lane || o.post) continue; const g = a.p.x - o.p.x; if (g > 0 && g < gap) gap = g; }
-    { const want = 1.6 + 0.8 * L.gp; if (gap < want + 0.6) sp = Math.min(sp, Math.max(0, (gap - want) * 2.2)); }   // кожен тримає свою дистанцію
+    { const want = 1.35 + 0.6 * L.gp; if (gap < want + 0.6) sp = Math.min(sp, Math.max(0, (gap - want) * 2.2)); }   // кожен тримає свою дистанцію
     if (t > L.slapT - 0.45 && t < L.slapT + 0.25) sp *= 0.8;                                    // на «п'ятірці» пригальмовує, далі йде своїм кроком
     // наступний господар. Гість іде вздовж −X: «попереду» — це менший X. Удар — поки господар ще трохи попереду
     // (~0.4 м до мить контакту): гість тягнеться вперед-убік, а не назад через плече, коли вже пройшов
@@ -1282,7 +1277,7 @@ export class Match {
       if (t - P.t0 > P.dur) { P.st = 'run'; P.t1 = t; }
     } else if (P.st === 'run') {
       const d = Math.hypot(tgt.x - a.p.x, tgt.z - a.p.z);
-      if (dt > 0) a.move(wp.x, wp.z, d > 5 ? 3.3 + 1.1 * jr : 2.0, dt);
+      if (dt > 0) a.move(wp.x, wp.z, d > 5 ? 4.6 + 1.4 * jr : 2.0, dt);   // підтюпцем-бігом: повільніше інтро тяглося до ~90 с
       if (d < 0.35) P.st = 'home';
     } else { const k = Math.exp(-dt * 6); a.p.vx *= k; a.p.vz *= k; a.p.x += a.p.vx * dt; a.p.z += a.p.vz * dt; }
     a._ix = a.p.x; a._iz = a.p.z; a.sync();
@@ -1390,7 +1385,7 @@ export class Match {
     this.view.pitch.decals.fadeOut();
     this.formation();
     for (const a of [...this.mine, ...this.opp]) { a._ix = undefined; a._iz = undefined; }
-    this.introFrom = null; this.ui.hud.cine(false); this.setGaze(false); this.walk.hide();
+    this.ui.hud.cine(false); this.setGaze(false); this.walk.hide();
     for (const a of this.actors) a.p.root.visible = true;
     audio.crowd(0.7); this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true);
     this.ui.hud.hint(S.tutorial ? null : (this.ui.useJoy() ? 'Час сповільнено: тягни джойстик у бік удару й відпусти' : 'Час сповільнено: відтягни від м’яча й відпусти'));
@@ -1532,7 +1527,6 @@ export class Match {
     if (this.rp && this.hl) { this.rp.t = this.rp.b; this.rp.hold = 1; return; }      // повтор — далі
     if (this.game.sm.name === 'GOAL' && this.goalT > 1.0) this.goalT = Math.max(this.goalT, this.celeb ? this.celeb.dur : 5);
   }
-  endDrama() { if (!this.drama) return; this.drama = null; this.ui.hud.cine(false); }
 
   /**
    * Перерва між таймами: гравці кроком розходяться на свої місця (хтось плескає, хтось махає трибунам), камера
@@ -1553,15 +1547,21 @@ export class Match {
   updateBreak(dt) {
     if (this.hl) { this.updateClip(dt); return; }
     const B = this.brk; B.t += dt;
+    // темп — щоб кожен устиг на своє місце до свистка (далекі — бігом); хто ще не дійшов, на того свисток чекає (до ~4 с).
+    // Раніше всі йшли однаково повільно, а за 4 с ті, хто був далеко, «телепортувались» на позицію (до 40 м)
+    let far = 0;
     this.actors.forEach((a, i) => {
       const to = this.brkTo[i], d = Math.hypot(to.x - a.p.x, to.z - a.p.z);
       a.avx = a.avz = 0;
-      if (d > 0.35) { a.move(to.x, to.z, d > 14 ? 6.5 : 3.4, dt); if (Math.hypot(a.p.vx, a.p.vz) > 0.6) a.p.yaw = Math.atan2(a.p.vx, a.p.vz); }
-      else { const k = Math.exp(-dt * 6); a.p.vx *= k; a.p.vz *= k; a.p.yaw = to.yaw; }
+      if (d > 0.35) {
+        far = Math.max(far, d);
+        a.move(to.x, to.z, clamp(1.3 * d / Math.max(0.8, BREAK_T - B.t), 3.4, 8.5), dt);
+        if (Math.hypot(a.p.vx, a.p.vz) > 0.6) a.p.yaw = Math.atan2(a.p.vx, a.p.vz);
+      } else { const k = Math.exp(-dt * 6); a.p.vx *= k; a.p.vz *= k; a.p.yaw = to.yaw; }
     });
     this.time += dt;
     this.syncView(dt);
-    if (B.t > BREAK_T) this.endBreak();
+    if (B.t > BREAK_T && (far < 0.4 || B.t > BREAK_T + 4)) this.endBreak();
   }
   endBreak() {
     this.actors.forEach((a, i) => { const to = this.brkTo[i]; a.place(to.x, to.z); a.p.yaw = to.yaw; });
@@ -1585,14 +1585,14 @@ export class Match {
    */
   assignEndRoles() {
     const R = Math.random, d2 = (a, b) => Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
-    for (const a of this.actors) { a.endRole = null; a.endPair = false; a.endDone = false; a.endAt = 0.8 + 1.6 * R(); }
+    for (const a of this.actors) { a.endRole = null; a.endDone = false; a.endAt = 0.8 + 1.6 * R(); }
     const cand = [];
     for (const a of this.mine) for (const b of this.opp) { const d = d2(a, b); if (d < 6 && !a.isGK && !b.isGK) cand.push([d, a, b]); }
     cand.sort((x, y) => x[0] - y[0]);
     const pairs = [];
     for (const [d, a, b] of cand) {
       if (a.endRole || b.endRole) continue;
-      a.endRole = b.endRole = 'pair'; a.endPair = b.endPair = true;
+      a.endRole = b.endRole = 'pair';
       const ok = d > 0.01, ux = ok ? (b.p.x - a.p.x) / d : 1, uz = ok ? (b.p.z - a.p.z) / d : 0;
       pairs.push({ a, b, d, mx: (a.p.x + b.p.x) / 2, mz: (a.p.z + b.p.z) / 2, ux, uz, gap: 0.42, off: 0.26, mt: 0, met: false, ready: false, after: 0, kind: R() < 0.3 ? 'hug' : R() < 0.5 ? 'pat' : 'shake' });
       if (a.p.mode === 'cheer' || a.p.mode === 'hug') a.p.setMode('idle');
@@ -2213,7 +2213,6 @@ export class Match {
     if (f > 0.85) { I += 0.35 * (f - 0.85) / 0.15; if (f > 0.93) tag = 'НА ОСТАННІХ ХВИЛИНАХ!'; }
     if (this.timeUp) { I += 0.25; tag = 'НА ОСТАННІХ СЕКУНДАХ!'; }
     if (sp.final) I += 0.12;
-    if (this.golden) { I = 1; tag = 'ЗОЛОТИЙ ГОЛ!'; }
     return { I: clamp(I, 0, 1), tag };
   }
 
@@ -2232,7 +2231,7 @@ export class Match {
     else if (kind === 'airplane') { tx = clamp(sc.p.x - side * 7, -L + 8, L - 8); tz = zs * (W - 9); }
     else if (kind === 'calm') { tx = sc.p.x - side * 9; tz = sc.p.z * 0.6; }
     this.celeb = { mine, scorer: sc, t: 0, kind, I, side, zs, tx, tz, dur: 4.4 + 4.2 * I, st: 'run', actT: 0, huggers: 0, hugOn: 0, maxHug: kind === 'pile' ? 6 : I > 0.6 ? 4 : 3, bursts: 0 };
-    for (const a of this.actors) { a.celebHug = false; a.hugOn = false; a.cheered = false; a.hugged = false; a.hf = false; a.celebJoin = false; a.hug = false; }
+    for (const a of this.actors) { a.celebHug = false; a.hugOn = false; a.cheered = false; a.hf = false; a.celebJoin = false; }
     // хто біжить до автора гола: найближчі (неважливий гол — двоє-троє, важливий — уся команда)
     const joinN = I < 0.35 ? 3 : I < 0.65 ? 6 : 10;
     team.slice(1).filter((a) => a !== sc).sort((a, b) => Math.hypot(a.p.x - sc.p.x, a.p.z - sc.p.z) - Math.hypot(b.p.x - sc.p.x, b.p.z - sc.p.z)).forEach((a, k) => { a.celebJoin = k < joinN; });
@@ -2313,7 +2312,6 @@ export class Match {
         a.move(a.p.x - c.side * 4, a.p.z, 2.4, dt); if (Math.hypot(a.p.vx, a.p.vz) > 0.4) a.p.yaw = Math.atan2(a.p.vx, a.p.vz);   // ціль на кілька метрів уперед (2.5·dt було ближче за поріг move — стояли)
         continue;
       }
-      a.hug = true;
       const close = a.celebHug, ang = close ? a.hugAng : i * 2.4 + c.t * 0.35, rad = close ? 0.75 : 1.8 + (i % 3) * 0.8;
       const tx = sc.p.x + Math.cos(ang) * rad, tz = sc.p.z + Math.sin(ang) * rad;
       const busy = a.p.mode === 'cheer' || a.p.mode === 'hug';
@@ -2604,8 +2602,8 @@ export class Match {
     audio.whistle(true); audio.crowd(0.35);
     const win = outcome === 'win';
     this.endWin = outcome === 'draw' ? null : win ? this.mine : this.opp; this.endLose = outcome === 'draw' ? null : win ? this.opp : this.mine;
-    for (const a of this.actors) { a.endHug = false; a.manual = false; a.frozen = 0; a.endPair = false; }
-    this.endPairs = null; this.endFeat = null; this.endHub = null; this.endDrama(); this.ui.hud.cine(true, 'КІНЕЦЬ МАТЧУ');
+    for (const a of this.actors) { a.endHug = false; a.manual = false; a.frozen = 0; }
+    this.endPairs = null; this.endFeat = null; this.endHub = null; this.ui.hud.cine(true, 'КІНЕЦЬ МАТЧУ');
     if (this.endWin) {
       let hx = 0, hz = 0; for (let i = 1; i < this.endWin.length; i++) { hx += this.endWin[i].p.x; hz += this.endWin[i].p.z; }
       this.endHub = { x: clamp(hx / 10, -L * 0.6, L * 0.6), z: clamp(hz / 10, -W * 0.6, W * 0.6) };
@@ -2652,7 +2650,8 @@ export class Match {
 
   exit() {
     this.phase = 'idle'; this.cancelAim(); this.game.renderer.toneMappingExposure = 1.1;
-    this.rp = null; this.drama = null; this.brk = null; this.ui.hud.cine(false); this.walk.hide();
+    this.rp = null; this.brk = null; this.ui.hud.cine(false); this.walk.hide();
+    if (this.pens) { this.pens.dispose(); this.pens = null; }   // вихід посеред серії: панель пенальті й клавіші не лишаються в меню
     for (const a of this.actors) a.p.root.visible = true;
     if (this.slow) { this.slow = false; this.ui.setSlow(false); }
     this.view.particles.clear();

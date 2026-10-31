@@ -15,7 +15,6 @@ const HIP_LIE = 0.22;                                // висота стего�
 const UPPER = 0.42;                                  // плече до ліктя
 const NECK = 0.85, WAIST = 0.25, CHEST = 0.5;                      // висота основи шиї й талії від стегон
 const SHOULDER_X = 0.32, SHOULDER_Y = 0.74, HIP_X = 0.14;   // плечові й тазостегнові суглоби
-const G_ACC = 9.8;
 const DEG = Math.PI / 180;
 const TAU = Math.PI * 2;
 export const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
@@ -1766,7 +1765,10 @@ export class Player {
     };
     const locOn = !!G && legA === loc.legA && legB === loc.legB && kneeA === loc.kneeA && kneeB === loc.kneeB;
     const Lc = (this.lastLoc ??= { legA: 0, legB: 0, kneeA: 0, kneeB: 0, ankA: 0, ankB: 0, abdA: 0, abdB: 0, ftA: 0, ftB: 0, lift: 0, tilt: 0, roll: 0, pelX: 0, pelY: 0, pelZ: 0, hip: HIP, shX: 0, surX: 0 });
-    if (locOn) Object.assign(Lc, { legA, legB, kneeA, kneeB, ankA, ankB, abdA: G.abdA, abdB: G.abdB, ftA: G.twA, ftB: G.twB, tilt: tiltX, roll: tiltZ, pelX, pelY, pelZ, hip: G.hip, shX: G.shX, surX: G.surX });
+    if (locOn) {
+      Lc.legA = legA; Lc.legB = legB; Lc.kneeA = kneeA; Lc.kneeB = kneeB; Lc.ankA = ankA; Lc.ankB = ankB; Lc.abdA = G.abdA; Lc.abdB = G.abdB; Lc.ftA = G.twA; Lc.ftB = G.twB;
+      Lc.tilt = tiltX; Lc.roll = tiltZ; Lc.pelX = pelX; Lc.pelY = pelY; Lc.pelZ = pelZ; Lc.hip = G.hip; Lc.shX = G.shX; Lc.surX = G.surX;
+    }
     // перехід фізика ↔ скриптова дія за ~0.25 с; в удар і випад — за ~0.1 с: контакт уже на 0.13 с, а пружини й так
     // тягнулися за ходою, тож старт від пози бігу без ривка, і замах видно повністю
     const fastIn = !locOn && (this.kicking > 0 || this.mode === 'tackle');
@@ -1786,7 +1788,8 @@ export class Player {
     spring('pelX', pelX, 18, 0.7); spring('pelY', pelY, 18, 0.7); spring('pelZ', pelZ, 18, 0.7);
     const hw = G ? 30 : 11; spring('hdX', hdX, hw, 0.55); spring('hdY', hdY, hw, 0.55); spring('hdZ', hdZ, hw, 0.55);
     spring('bob', bob, 18, 0.75); spring('lift', lift, 24, 0.8);   // стрибки скриптових дій теж без обриву, коли дія скінчилась
-    spring('abdA', locOn ? Lc.abdA : abdSA, 24); spring('abdB', locOn ? Lc.abdB : abdSB, 24);   // у діях — власне розведення ніг (стійка, крок убік) spring('ftA', locOn ? Lc.ftA : 0, 20); spring('ftB', locOn ? Lc.ftB : 0, 20);
+    spring('abdA', locOn ? Lc.abdA : abdSA, 24); spring('abdB', locOn ? Lc.abdB : abdSB, 24);   // у діях — власне розведення ніг (стійка, крок убік)
+    spring('ftA', locOn ? Lc.ftA : 0, 20); spring('ftB', locOn ? Lc.ftB : 0, 20);
     const J = (k) => (lw > 0.001 ? lerp(S[k], Lc[k], lw) : S[k]);    // показ: пружина ↔ точний IK бігу
     const jLegA = J('legA'), jLegB = J('legB'), jKneeA = J('kneeA'), jKneeB = J('kneeB'), jAnkA = J('ankA'), jAnkB = J('ankB');
     const jTilt = lerp(S.tiltX, Lc.tilt, lw), jRoll = lerp(S.tiltZ, Lc.roll, lw), jPelX = lerp(S.pelX, Lc.pelX, lw), jPelY = lerp(S.pelY, Lc.pelY, lw), jPelZ = lerp(S.pelZ, Lc.pelZ, lw);
@@ -2307,7 +2310,7 @@ export class Player {
     const s = this.root.scale.x || 0.82, ground = YA * s, STEP_T = 0.2;
     if (w < 0.01 || !allowed) { for (const q of P) { q.on = false; q.w = 0; q.step = 0; } return; }
     this.root.updateMatrixWorld(true);
-    const ik = { hip: 0, knee: 0 };
+    const ik = (this._pik ??= { hip: 0, knee: 0 });
     for (let i = 0; i < 2; i++) {
       const q = P[i], o = P[1 - i], leg = i ? this.legR : this.legL, shin = i ? this.shinR : this.shinL, foot = i ? this.footR : this.footL;
       foot.getWorldPosition(_w);
@@ -2330,11 +2333,13 @@ export class Player {
         q.step = Math.min(1, q.step + dt / STEP_T);
         const u = clamp((q.step - 0.18) / 0.64, 0, 1), m = u * u * (3 - 2 * u);
         tx = lerp(q.sx, fx, m); tz = lerp(q.sz, fz, m); ty = Math.max(fy, ground) + 0.13 * s * Math.pow(Math.sin(Math.PI * q.step), 0.6);
-        k = 1;
+        k = w;
         if (q.step >= 1) { q.step = 0; q.x = fx; q.z = fz; q.w = 1; q.rx = this.root.position.x; q.rz = this.root.position.z; q.on = fy < ground + 0.05; }   // якщо дія вже піднімає ногу — далі м'яко відпускається
       } else {
         q.w = q.on ? Math.min(1, q.w + dt * 8) : Math.max(0, q.w - dt * 4);
-        if (q.w > 0) { tx = q.x; ty = ground; tz = q.z; k = q.w * q.w * (3 - 2 * q.w); }   // вмикання й відпускання по S-кривій
+        // вмикання й відпускання по S-кривій; вага дії (w) — щоб на виході в біг стопа не лишалась прикута до старої точки
+        // (раніше нога махала до неї з повною вагою й провалювалась під газон, поки хода не забирала керування)
+        if (q.w > 0) { tx = q.x; ty = ground; tz = q.z; k = q.w * q.w * (3 - 2 * q.w) * w; }
         else if (fy < ground + 0.05) { tx = fx; ty = Math.max(fy, ground); tz = fz; k = w * clamp((ground + 0.05 - fy) / 0.04, 0, 1); }   // не провалюється в газон (плавно)
         else continue;
       }

@@ -52,8 +52,8 @@ export class Actor {
     this.p = player; this.side = side;                 // +1 мої (атакують +X), -1 суперник
     this.body = makeBody(side > 0 ? 'mine' : 'opp', r, 0.5, 1.5); this.body.ref = this;
     this.manual = false; this.isGK = false; this.role = null;
-    this.cool = 0; this.stealT = 0; this.err = 0; this.errT = 0;
-    this.tx = 0; this.tz = 0; this.sprint = false; this.avx = 0; this.avz = 0;
+    this.cool = 0;
+    this.tx = 0; this.tz = 0; this.avx = 0; this.avz = 0;
     this.receiver = false; this.stun = 0; this.noTrap = 0; this.kx = 0; this.kz = 0;
     this.sk = DEF_SK; this.info = null; this.thinkT = Math.random() * 0.8; this.runUntil = 0; this.runX = 0; this.runZ = 0;
     this.frozen = 0; this.sliding = false; this.slide = null; this.dive = null; this.slideCool = 0; this.decided = -1; this.baseR = r;
@@ -172,7 +172,7 @@ export class Team {
     if (best) { a.runX = bx; a.runZ = bz; a.runUntil = (c.t || 0) + 0.9 + iq * 1.0; }
   }
 
-  /** ctx: { ball, bs, owner(+1/-1/0), readyT, stealTime, opps, all, shotBy, t } */
+  /** ctx: { ball, bs, owner(+1/-1/0), readyT, opps, all, shotBy, shotId, t, plan, gkHands } */
   update(dt, c) {
     const b = c.ball, side = this.side, owns = c.owner === side;
     PLAN = c.plan || null;
@@ -232,7 +232,7 @@ export class Team {
       if (a.frozen > 0 || a.p.downed) { a.p.vx = a.p.vz = 0; continue; }           // лежить, підводиться або ловить рівновагу — сам не біжить
       if (a.manual) continue;
       if (c.kickoff) {                                  // стартовий: усі чекають на перший удар
-        a.tx = a.kx; a.tz = a.kz; a.sprint = false; a.avx = a.avz = 0;
+        a.tx = a.kx; a.tz = a.kz; a.avx = a.avz = 0;
         a.move(a.kx, a.kz, this.speed * 0.8, dt);
         continue;
       }
@@ -338,7 +338,7 @@ export class Team {
         sp = Math.min(sp, lerp(2.3, sp, Math.max(inv, smooth(clamp((off - 3) / 7, 0, 1)))));
       } else a.calmMove = true;
       sp *= 0.84 + 0.34 * a.sk.pace;
-      a.tx = tx; a.tz = tz; a.sprint = chase; a.spT = sp;
+      a.tx = tx; a.tz = tz; a.spT = sp;
       if (chase && Math.hypot(a.p.x - b.x, a.p.z - b.z) < 6) { a.avx = 0; a.avz = 0; } else this.avoid(a, c.all);   // біля м'яча не відштовхуємось
       a.move(tx, tz, sp, dt);
     }

@@ -19,7 +19,6 @@ function tex(c, { repeat = false, mip = true, aniso = 16 } = {}) {
 
 // ---------------------------------------------------------------- атлас гравців: обличчя + номери
 const CELL = 64, COLS = 8, ROWS = 32, AW = COLS * CELL, AH = ROWS * CELL;
-export const ATLAS = { cell: CELL, cols: COLS, rows: ROWS, w: AW, h: AH };
 const FACES = ['neutral', 'happy', 'shock', 'angry'];
 const NUMS = 100;            // номери 0..99 у двох варіантах (темний/світлий напис)
 
@@ -28,7 +27,6 @@ export function cellRect(cx, cy) {
   const e = CELL / 32 * 0.8;
   return [(cx * CELL + e) / AW, 1 - ((cy + 1) * CELL - e) / AH, ((cx + 1) * CELL - e) / AW, 1 - (cy * CELL + e) / AH];
 }
-export const WHITE_CELL = cellRect(0, 0);
 export const faceCell = (expr, beard = 0) => {
   const k = Math.max(0, FACES.indexOf(expr));
   if (!beard) return cellRect(1 + k, 0);
@@ -243,16 +241,6 @@ export function shadowTexture() {
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
   _shadow = tex(c, { aniso: 1 });
   return _shadow;
-}
-
-/** Банер для табло на острові. */
-export function bannerTexture(words, bg = '#0e5a38') {
-  const c = canvas(2048, 64), g = c.getContext('2d');
-  g.fillStyle = bg; g.fillRect(0, 0, 2048, 64);
-  g.font = '800 38px Rubik, "Arial Black", sans-serif'; g.textBaseline = 'middle';
-  let x = 24, i = 0;
-  while (x < 2048) { const w = words[i % words.length]; g.fillStyle = '#f1efe8'; g.fillText(w, x, 34); x += g.measureText(w).width + 46; i++; }
-  return tex(c);
 }
 
 /** Вивіска: текст на однотонному тлі з рамкою. */
