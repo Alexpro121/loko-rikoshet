@@ -110,7 +110,8 @@ export class Match {
     this.aiming = false; this.endT = 0; this.goalT = 0; this.resultSent = false;
     this.lastClock = -1;
     this.holder = null; this.taker = null;
-    this.formation();
+    this.firstKick = Math.random() < 0.5 ? 1 : -1;     // жереб: хто розводить 1-й тайм (далі — по черзі)
+    this.formation(this.kickFor(1));
     const hud = this.ui.hud;
     hud.show(spec);
     hud.setScore(0, 0); hud.setTime(this.timeText(), false, this.halfText()); hud.setCoins(0);
@@ -171,6 +172,9 @@ export class Match {
     this.shotBy = 0; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.pressWarn = false;
     for (const a of this.actors) { a.tkl = 0; a.nearT = 0; }       // випад, що не завершився до розстановки, не тягне гравця
   }
+
+  /** Хто розводить тайм n (1..4): за жеребом перший, далі команди по черзі, як у футболі. 1 — ми, −1 — суперник. */
+  kickFor(n) { return (n % 2 ? 1 : -1) * (this.firstKick || 1); }
 
   /** Час як на ТБ: стиснутий 90-хвилинний матч, «45:00», у доданий час «90+N». */
   timeText() {
@@ -1388,8 +1392,8 @@ export class Match {
   /** Кат-сцени: гравці роззираються довкола (у грі погляд — на м'яч). */
   setGaze(on) { for (const a of this.actors) a.p.gaze = on; }
   endIntro() {
-    this.view.pitch.decals.fadeOut();
-    this.formation();
+    this.view.pitch.decals.fadeOut(); this.view.tunnel.userData.carpet.visible = false;   // доріжку прибрали — на газоні лише гра
+    this.formation(this.kickFor(1));
     for (const a of [...this.mine, ...this.opp]) { a._ix = undefined; a._iz = undefined; }
     this.ui.hud.cine(false); this.setGaze(false); this.walk.hide();
     for (const a of this.actors) a.p.root.visible = true;
@@ -1540,7 +1544,7 @@ export class Match {
    */
   startBreak(n) {
     const from = this.actors.map((a) => ({ x: a.p.x, z: a.p.z }));
-    this.formation();
+    this.formation(this.kickFor(n + 1));
     this.brkTo = this.actors.map((a) => ({ x: a.p.x, z: a.p.z, yaw: a.p.yaw }));
     this.actors.forEach((a, i) => { a.place(from[i].x, from[i].z); if (!a.isGK && Math.random() < 0.5) a.p.gesture(1.8, [1, 2, 5, 6, 7, 8, 11, 12, 16][(Math.random() * 9) | 0]); });
     this.brk = { t: 0, n }; this.setGaze(true);
@@ -1577,7 +1581,7 @@ export class Match {
   breakCam() {
     const t = this.brk.t;
     if (t < 2.5) { const a = 0.5 + t * 0.16; return { p: _c1.set(Math.sin(a) * 50, 24, Math.cos(a) * 40), l: _c2.set(0, 0, 0), fov: 40, shot: 'brk1', rate: 4 }; }
-    const h = (this.holder || this.mine[1]).p;
+    const h = ((this.bs === 'held' && this.taker) || this.holder || this.mine[1]).p;   // крупно той, хто розводить (і суперник)
     return { p: _c1.set(h.x - 4.2, 1.45, h.z + 3.6), l: _c2.set(h.x + 0.4, 1.15, h.z), fov: 32, shot: 'brk2', rate: 5, dof: 0.016 };
   }
 

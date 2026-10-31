@@ -26,13 +26,15 @@ export function buildTunnel() {
   // дах-козирьок та бічні парапети
   b.box(0, hh + 0.9, zc, wd + 1.6, 0.3, depth + 0.6, '#2b3236');
   for (const sx of [-1, 1]) b.box(sx * (wd / 2 + 1.1), 0.7, z0 - 0.9, 0.5, 1.4, 2.2, '#262c30');
-  // червона доріжка до поля
-  b.box(0, 0.045, z0 + 2.2, 3.4, 0.05, 5.2, '#a8182b');
-  b.box(-1.7, 0.05, z0 + 2.2, 0.12, 0.06, 5.2, '#e8b923'); b.box(1.7, 0.05, z0 + 2.2, 0.12, 0.06, 5.2, '#e8b923');
   group.add(b.mesh());
+  // червона доріжка до поля — окремо: її кладуть лише на церемонію виходу (вона заходить на газон), у грі її немає
+  const cb = new VoxelBuilder(0.2);
+  cb.box(0, 0.045, z0 + 2.2, 3.4, 0.05, 5.2, '#a8182b');
+  cb.box(-1.7, 0.05, z0 + 2.2, 0.12, 0.06, 5.2, '#e8b923'); cb.box(1.7, 0.05, z0 + 2.2, 0.12, 0.06, 5.2, '#e8b923');
+  const carpet = cb.mesh(); group.add(carpet);
   // вивіска над аркою
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 1.05), new THREE.MeshBasicMaterial({ map: signTexture('ВИХІД ГРАВЦІВ', '#0e5a38', '#f1efe8') }));
   sign.position.set(0, hh + 0.42, z0 + 0.5); group.add(sign);
-  group.userData = { mouthZ: z0, startZ: z0 - 2.5, backZ: z0 - depth, halfW: wd / 2 + 0.8, roofY: hh + 1.05 };
+  group.userData = { mouthZ: z0, startZ: z0 - 2.5, backZ: z0 - depth, halfW: wd / 2 + 0.8, roofY: hh + 1.05, carpet };
   return group;
 }
