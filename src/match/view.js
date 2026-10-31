@@ -107,10 +107,12 @@ export class MatchView {
 
   setup(spec, myFormation, mySquad, oppSq) {
     const pick = (v, list) => (v === 'random' ? list[(Math.random() * list.length) | 0] : v);
-    this.setEnv(pick(S.settings.timeOfDay, ['day', 'dusk', 'night']), pick(S.settings.weather, ['clear', 'clear', 'cloudy', 'rain', 'snow', 'fog']));
-    const k = keeper();
-    this.mine[0].setLook(this.look(KIT_GK_LOKO, true, squadLook(mySquad[0]), 1));
-    this.mine.forEach((p, i) => { if (i === 0) return; const e = mySquad[i], L = squadLook(e); p.setLook(this.look(myKit(), false, L, L.num)); });
+    // онлайн: погода й час доби — як вибрав господар (spec.env), форма господарів — його онлайн-клубу (spec.home)
+    if (spec.env) this.setEnv(spec.env.time, spec.env.weather);
+    else this.setEnv(pick(S.settings.timeOfDay, ['day', 'dusk', 'night']), pick(S.settings.weather, ['clear', 'clear', 'cloudy', 'rain', 'snow', 'fog']));
+    const H = spec.home;
+    this.mine[0].setLook(this.look(H ? H.gk : KIT_GK_LOKO, true, squadLook(mySquad[0]), mySquad[0].num || 1));
+    this.mine.forEach((p, i) => { if (i === 0) return; const e = mySquad[i], L = squadLook(e); p.setLook(this.look(H ? H.kit : myKit(), false, L, L.num)); });
     const c = spec.club;
     this.stands.setOpponent(c); this.stands.particles = this.particles; this.pitch.boards.redraw(c); this.pitch.decals.setOpponent(c); this.pitch.decals.show(); this.tunnel.userData.carpet.visible = true;
     this.opp[0].setLook(this.look(c.gk, true, oppSq[0], 1));

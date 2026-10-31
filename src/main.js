@@ -6,6 +6,7 @@ import './style.css';
 import { UI } from './ui/ui.js';
 import { Game } from './core/game.js';
 import { ensureSquad } from './state/squad.js';
+import { OnlineScreen } from './online/screen.js';
 
 async function boot() {
   try {
@@ -17,6 +18,7 @@ async function boot() {
   ensureSquad();
   const ui = new UI(document.getElementById('ui'));
   const game = new Game(document.getElementById('gl'), ui);
+  ui.online = new OnlineScreen(ui, game);
   window.__loko = game;
 }
 

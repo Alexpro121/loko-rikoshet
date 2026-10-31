@@ -69,7 +69,8 @@ export class Game {
     return true;
   }
 
-  ensureMatch() { if (!this.match) { this.match = new Match(this); this.computeMatchBase(); } return this.match; }
+  /** Звичайний матч (і сцена матчу, яку позичає онлайн-гість). */
+  ensureMatch() { if (!this.solo) { this.solo = new Match(this); this.match = this.solo; this.computeMatchBase(); } if (!this.match) this.match = this.solo; return this.solo; }
 
   // ---------------------------------------------------------------- стани
   buildStates() {
@@ -77,6 +78,7 @@ export class Game {
     this.sm.add('MENU', {
       enter(_, from) {
         if (g.match) g.match.exit();
+        g.match = g.solo || null; g.link = null; g.flipCam = false;
         g.ui.hud.hide(); g.ui.showMenu();
         g.island.setTier(stadiumTier(), false); g.island.setTrophies(S.trophies);
         audio.music('menu');
@@ -93,7 +95,8 @@ export class Game {
       enter(data) {
         if (data && data.resume) return;
         g.ui.hideMenu();
-        g.ensureMatch().start(data.spec);
+        if (data.guest) { g.ensureMatch(); g.match = data.guest; data.guest.start(data.spec, data.hudSpec); return; }   // онлайн-гість: показ гри господаря
+        g.match = g.ensureMatch(); g.match.start(data.spec);
       },
       update(dt) { g.time += dt; g.match.update(dt); g.updateMatchCam(dt); },
     });
@@ -114,7 +117,7 @@ export class Game {
     this.sm.go('MATCH', { spec });
   }
   toMenu() { this.sm.go('MENU'); }
-  quitMatch() { if (this.match) this.match.exit(); this.ui.hud.hide(); this.sm.go('MENU'); }
+  quitMatch() { if (this.online && this.online.inMatch()) { this.online.leave(); return; } if (this.match) this.match.exit(); this.ui.hud.hide(); this.sm.go('MENU'); }
 
   onStadiumUpgraded() {
     this.island.setTier(stadiumTier(), true);
@@ -160,7 +163,8 @@ export class Game {
   }
 
   onVisibility() {
-    if (document.hidden) { audio.suspend(); if (this.match && this.match.isPlaying()) this.ui.pause(); }
+    // онлайн-матч не стає на паузу (час спільний) — меню паузи не вискакує
+    if (document.hidden) { audio.suspend(); if (this.match && this.match.isPlaying() && !(this.online && this.online.inMatch())) this.ui.pause(); }
     else { audio.resume(); this.last = performance.now(); if (this.ui.started) this.acquireWake(); }
   }
 
@@ -220,6 +224,8 @@ export class Game {
     const ang = (this.celebAng || 0) * this.celebK;
     cam.position.set(b.tx + sx + Math.sin(ang) * b.dirZ * dist, b.dirY * dist + sy, b.tz + Math.cos(ang) * b.dirZ * dist);
     cam.lookAt(b.tx, 0, b.tz);
+    // онлайн-гість дивиться з протилежного боку (поворот на 180°): його команда атакує зліва направо, як і в господаря
+    if (this.flipCam) { cam.position.x = -cam.position.x; cam.position.z = -cam.position.z; cam.lookAt(-b.tx, 0, -b.tz); }
     const f = b.fov - this.fov;
     if (Math.abs(cam.fov - f) > 0.01) { cam.fov = f; cam.updateProjectionMatrix(); }
     const ov = m && m.camOverride ? m.camOverride() : null;
@@ -368,6 +374,7 @@ export class Game {
     if (this.lost) return;
     this.governor(dt);
     this.sm.update(dt);
+    if (this.link) this.link.frame();                 // онлайн-господар: кадр поз гостю
     const menu = this.sm.name === 'MENU';
     // кінофокус; якщо пристрій його не тягне (буфер чи шейдер) — той самий кадр звичайним рендером
     let done = false;

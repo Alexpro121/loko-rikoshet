@@ -17,6 +17,7 @@ import { Replay, Slaps, shakeHands, patShoulder } from './cinema.js';
 import { Walkout } from './walkout.js';
 import { diveKin, GK_STRIKE, angDiff } from '../graphics/player.js';
 import { evolveSpec, recordMatch } from '../state/rivals.js';
+import { ONLINE_AIM, ONLINE_GK } from '../online/profile.js';
 const { L, W, G, R } = PITCH;
 // інтро (кат-сцена виходу), с: A — проліт над стадіоном; B — вихід із тунелю; C — камера задкує перед колонами;
 // D — бічний телеоб'єктив; E — шикування; далі гімн і «п'ятірки» (HS_T): кожен гість проходить усю шеренгу господарів;
@@ -82,18 +83,22 @@ export class Match {
 
   // ------------------------------------------------------------------ старт
   start(spec) {
-    spec = evolveSpec(spec);                           // стиль клубу, реванш і вивчена ними наша гра (rivals.js)
+    const on = spec.online;                            // онлайн: суперник — жива людина (гість), склади й форма — онлайн-клубів
+    if (!on) spec = evolveSpec(spec);                  // стиль клубу, реванш і вивчена ними наша гра (rivals.js)
     this.spec = spec; this.scoutLog = { shots: [], aims: [] };
+    if (this.link && (!on || this.link !== on.link)) this.link.uninstall();   // попередній онлайн-матч (реванш)
+    this.link = on ? on.link : null; this.netCmd = null; this.netAim = null; this.netWaitT = 0; this.netAuto = false;
     const v = this.view;
-    this.mySquad = S.squad; this.oppSq = oppSquad(spec);
+    this.mySquad = on ? spec.mySquad : S.squad; this.oppSq = on ? spec.oppSquad : oppSquad(spec);
     v.setup(spec, MY_FORMATION, this.mySquad, this.oppSq);
-    const gb = gkBonus();
+    if (this.link) this.link.install(this);            // з цієї миті табло, звуки й ефекти віддзеркалюються гостю
+    const gb = on ? 0 : gkBonus();
     this.mine.forEach((a, i) => { a.info = this.mySquad[i]; a.sk = skillOf(a.info, i === 0 ? gb : 0); });
     this.opp.forEach((a, i) => { a.info = this.oppSq[i]; a.sk = skillOf(a.info); });
     // воротарі — як люди: час реакції (≈0.26 с у новачка → 0.13 с у топа, «Реакція») і швидкість рук (~5.5–9 м/с, «Ловля»)
     for (const g of [this.mine[0], this.opp[0]]) { g.p.reactT = 0.26 - 0.13 * g.sk.react; g.p.handV = 5.5 + 3.5 * g.sk.hands; }
     this.xp = new Array(11).fill(0); this.levelUps = [];
-    this.kk = keeper(); this.st = striker();
+    this.kk = on ? ONLINE_GK : keeper(); this.st = on ? ONLINE_AIM : striker();
     this.myTeam.setFormation(MY_FORMATION); this.oppTeam.setFormation(spec.formation);
     const mg = this.mine[0].sk, og = this.opp[0].sk;
     Object.assign(this.myTeam, { speed: 9.2, gkSpeed: 6 + 7 * mg.react, gkTrack: 0.35 + 0.6 * mg.iq, gkErr: (1.15 - mg.react) * 3.0 });
@@ -105,6 +110,7 @@ export class Match {
     this.score = { me: 0, opp: 0 };
     this.pens = null; this.penRes = null;
     this.clock = spec.time; this.period = 1; this.periodEnd = false; this.timeUp = false; this.timeUpWait = 0;
+    this.periodGoals = 0; this.addMin = 0; this.addShown = false; this.scorers = [];
     this.coins = 0; this.stats = { goals: 0, combo: 1, saves: 0 };
     this.phase = 'intro'; this.introT = 0; this.hitStop = 0; this.ts = 1; this.acc = 0;
     this.aiming = false; this.endT = 0; this.goalT = 0; this.resultSent = false;
@@ -114,14 +120,15 @@ export class Match {
     this.formation(this.kickFor(1));
     const hud = this.ui.hud;
     hud.show(spec);
-    hud.setScore(0, 0); hud.setTime(this.timeText(), false, this.halfText()); hud.setCoins(0);
+    hud.setScore(0, 0); hud.setTime(this.timeText(), false, this.halfText(), null); hud.addedTime(null); hud.setCoins(0);
     hud.warn(null); hud.hint(null);
-    hud.banner(spec.club.name, spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of + (spec.final ? ' · ФІНАЛ' : ''), spec.note || CLUB.slogan);
+    if (on) hud.banner(spec.club.name, 'Онлайн-матч · ти граєш удома', 'Суперник: ' + spec.club.name);
+    else hud.banner(spec.club.name, spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of + (spec.final ? ' · ФІНАЛ' : ''), spec.note || CLUB.slogan);
     audio.music('match'); audio.crowd(0.7);
     this.game.renderer.toneMappingExposure = this.view.exposure || 1.1;
     this.introTgt = [this.mine, this.opp].map((arr) => arr.map((a) => ({ x: a.p.x, z: a.p.z })));
     this.introFlags = { wave: false, clap: false, cheer: false, roar: false, anthem: false, hs: false, fans: false };
-    this.rp = null; this.hl = null; this.clips = []; this.moments = []; this.walk.start(spec.club);
+    this.rp = null; this.hl = null; this.clips = []; this.moments = []; this.walk.start(spec.club, spec.home);
     for (const a of this.actors) { a.lane = null; a._st = 0; a.post = null; a._jr = Math.random(); a.p.gaze = true; }
     this.introEndAt = null; this.skipEnd = false; this._cx = undefined; this._camT = undefined; this.brk = null; this.endPairs = null; this.replay.clear();
     this.ui.hud.cine(true);
@@ -176,16 +183,55 @@ export class Match {
   /** Хто розводить тайм n (1..4): за жеребом перший, далі команди по черзі, як у футболі. 1 — ми, −1 — суперник. */
   kickFor(n) { return (n % 2 ? 1 : -1) * (this.firstKick || 1); }
 
-  /** Час як на ТБ: стиснутий 90-хвилинний матч, «45:00», у доданий час «90+N». */
+  /** Час як на ТБ: стиснутий 90-хвилинний матч. У доданий час головний годинник стоїть на межі тайму («45:00»), а поруч біжить «+1:20». */
   timeText() {
-    const f = clamp(1 - this.clock / this.spec.time, 0, 1), gs = Math.floor(f * 5400), m = (gs / 60) | 0, r = gs % 60;
-    if (this.timeUp && f >= 1) return '90+' + (1 + ((this.timeUpWait * 1.5) | 0));
+    const f = clamp(1 - this.clock / this.spec.time, 0, 1), cap = Math.round(5400 * Math.min(4, this.period || 1) / 4);
+    const gs = Math.min(Math.floor(f * 5400), cap), m = (gs / 60) | 0, r = gs % 60;
     return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r;
+  }
+  /** Межа поточного тайму на годиннику-зворотнику і скільки реальних секунд триває хвилина гри. */
+  periodBound() { return this.spec.time * (1 - Math.min(4, this.period) / 4); }
+  gameMin() { return this.spec.time / 90; }
+  /** Скільки хвилин гри минуло понад межу тайму (0 — ще основний час). */
+  overMin() { return this.periodEnd ? Math.max(0, (this.periodBound() - this.clock) / this.gameMin()) : 0; }
+  extraText() {
+    if (!this.periodEnd) return null;
+    const gs = Math.floor(this.overMin() * 60), m = (gs / 60) | 0, r = gs % 60;
+    return '+' + m + ':' + (r < 10 ? '0' : '') + r;
+  }
+  /** Хвилина події для табло: «34'» або «45+2'». */
+  minuteLabel() {
+    if (this.periodEnd) return Math.round(22.5 * Math.min(4, this.period)) + '+' + Math.max(1, Math.ceil(this.overMin())) + "'";
+    const f = clamp(1 - this.clock / this.spec.time, 0, 1);
+    return Math.max(1, Math.ceil(f * 90)) + "'";
+  }
+  /** Скільки додати: наприкінці половин більше, кожен гол у таймі — ще трохи (святкування), плюс випадок. */
+  stoppage() {
+    const n = this.period, base = n === 2 || n === 4 ? 2 : 1;
+    return clamp(base + Math.round(this.periodGoals * 0.6 + Math.random() * 1.3), 1, 5);
+  }
+  /** М'яч летить (удар, прострiл) — свисток у цю мить украв би момент. */
+  ballFlying() { return this.bs === 'roll' && Math.hypot(this.ball.vx, this.ball.vz) > 7; }
+  /** Спокійна мить для свистка: м'яч у руках воротаря або в середній зоні й ніхто не б'є. */
+  calmBall() {
+    if (this.bs === 'net') return false;
+    const gk = ((this.bs === 'ready' || this.bs === 'aim' || this.bs === 'wind') && this.holder && this.holder.isGK) || (this.bs === 'held' && this.taker && this.taker.isGK);
+    if (gk) return true;
+    if (this.ballFlying()) return false;
+    return Math.abs(this.ball.x) < L * 0.42;
+  }
+  /** Свисток на кінець тайму: перерва або кінець матчу. */
+  whistlePeriod() { if (this.period < 4) this.nextPeriod(); else this.timeOver(); }
+  setClockHud(held = false) {
+    const hud = this.ui.hud, P = this.spec.time / 4, start = this.spec.time * (1 - (Math.min(4, this.period) - 1) / 4);
+    hud.setTime(this.timeText(), this.period === 4 && this.periodEnd, this.halfText(), this.extraText());
+    // смужка тайму під годинником; у доданий час — заповнюється червоним до кінця доданого
+    hud.setProg(this.periodEnd ? clamp(this.overMin() / Math.max(1, this.addMin), 0, 1) : clamp((start - this.clock) / P, 0, 1), this.periodEnd, held);
   }
   halfText() {
     if (this.phase === 'pens') return 'Пенальті';
     const f = clamp(1 - this.clock / this.spec.time, 0, 1);
-    return f >= 1 ? 'Дод. час' : Math.min(4, (this.period || 1)) + '-й тайм';
+    return Math.min(4, (this.period || 1)) + '-й тайм';
   }
 
   // ------------------------------------------------------------------ керування
@@ -599,7 +645,8 @@ export class Match {
     this.dribbleT = 0; this.tackleT = 0; this.telegraph = false; this.thinkT = 0.15; this.dribZ = a.p.z; this.clearReceivers();
     a.p.receive(this.ball.y, speed);
     a.p.dribble = !a.isGK;
-    this.ui.hud.warn('КОНТРАТАКА!');
+    this.netCmd = null; this.netAim = null; this.netWaitT = 0; this.netAuto = false;
+    this.ui.hud.warn(this.link ? 'М’ЯЧ У СУПЕРНИКА' : 'КОНТРАТАКА!');
     a.p.setExpr('angry', 1);
     if (a.isGK) { this.gkReceive(a, speed); if (!a.footBall) audio.save(); this.gkHoldT = a.footBall ? 0.3 : 0.7 + Math.random() * 0.4; }   // коротко: прийняв, притиснув — і грає далі
     this.aiming = false; this.hideAim();
@@ -858,8 +905,11 @@ export class Match {
       }
       return;
     }
+    const rc = this.remoteCtl();                                   // онлайн: цим гравцем керує гість — ІІ лише веде й тримає м'яч
+    if (rc && this.netCmd && this.remoteWaiting()) { const c = this.netCmd; this.netCmd = null; this.remoteKick(a, c); return; }
     if (this.kickoff) {                                            // розведення суперника: мить постоїть у центрі, потім гра пішла
       this.kickT = (this.kickT || 0) + dt; a.p.vx = a.p.vz = 0;
+      if (rc) { this.remoteAimPose(a); return; }                    // гість розводить сам
       if (this.kickT < 1.0) return;
       this.kickoff = false;
       // розведення як у футболі: перший пас своєму — назад або вбік (на свою половину), а не біг із м'ячем уперед
@@ -887,7 +937,7 @@ export class Match {
     const toGoal = a.p.x + L;
     let pm = 99;
     for (let i = 1; i < this.mine.length; i++) { const m = this.mine[i].p, d = Math.hypot(m.x - a.p.x, m.z - a.p.z); if (d < pm) pm = d; }
-    if (this.thinkT <= 0) { this.thinkT = 0.5 - 0.3 * a.sk.iq; this.takerThink(a, pm, toGoal); if (this.bs !== 'held') return; }
+    if (this.thinkT <= 0 && !rc) { this.thinkT = 0.5 - 0.3 * a.sk.iq; this.takerThink(a, pm, toGoal); if (this.bs !== 'held') return; }
     if (!a.isGK && this.telegraph) {
       // удар: веде м'яч далі, дотиком накочує його собі під удар і б'є з ходу — без зупинки
       const c = this.counterV, cl = Math.hypot(c.vx, c.vz) || 1, ux = c.vx / cl, uz = c.vz / cl;
@@ -897,6 +947,8 @@ export class Match {
           this.shotWound = true; this.shotWT = 0.13; a.p.yaw = Math.atan2(ux, uz); a.p.dribble = false; a.p.kick(0.9); a.kickV = null;
         }
       } else this.kickFollow(a, ux, uz, dt, this.shotWT);
+    } else if (!a.isGK && rc) {
+      this.remoteHold(a, dt);
     } else if (!a.isGK) {
       // ведення дотиками (dribble.js): бажаний напрямок — до мети; гравець біжить до точки трохи позаду м'яча на цьому
       // напрямку (наздоганяє його), а дотиком ноги скеровує м'яч. Поворот — ногою: м'яч котиться старим курсом, доки
@@ -912,6 +964,7 @@ export class Match {
     } else {
       a.p.vx = a.p.vz = 0; if (!a.dive) a.p.yaw = -Math.PI / 2;
       const kf = Math.min(1, dt * 22); b.x += (a.p.x - 1.15 - b.x) * kf; b.z += (a.p.z - b.z) * kf; b.vx = b.vz = 0;
+      if (rc) this.remoteAimPose(a);
     }
     this.glideT = 0;
     // наші захисники: стоять у стійці перед дриблером і в слушну мить роблять випад (результат — у resolveTackle)
@@ -942,6 +995,79 @@ export class Match {
     audio.kick(0.8);
     this.bs = 'roll'; this.owner = 0; this.shotBy = -1; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.shotId++; this.ui.hud.setCard(null);
     this.hideAim(); this.ui.hud.warn(null);
+  }
+
+  // ------------------------------------------------------------------ онлайн: гравець гостя
+  /** Чи керує зараз м'ячем гість онлайн-матчу (його гравець із м'ячем, ще не б'є). 14 с без удару — далі ІІ. */
+  remoteCtl() { return !!this.link && !this.netAuto && this.phase === 'play' && this.bs === 'held' && !!this.taker && !this.pendKick && !this.telegraph; }
+  /** Воротар гостя тримає м'яч, поки наші не відійшли (як і наш) — бити ще не можна. */
+  gkHoldNow() { const a = this.taker; return !!a && a.isGK && (this.gkHoldT > 0 || (!a.footBall && !this.gkClear && this.gkHoldT > -0.8)); }
+  remoteWaiting() { return this.remoteCtl() && !this.gkHoldNow(); }
+
+  /** Гість цілиться: його гравець розвертається в бік удару й заносить ногу (поза прицілу), як наш. */
+  remoteAimPose(a) {
+    const ai = this.netAim, p = a.p;
+    if (ai) { if (!a.isGK || a.footBall) p.setMode('aim'); p.power = ai.pw; if (a.isGK && !a.footBall) p.yaw = Math.atan2(ai.dx, ai.dz); }
+    else if (p.mode === 'aim') p.setMode('idle');
+  }
+
+  /** Гість думає над ударом: гравець гальмує з м'ячем у ногах; цілиться — обходить м'яч і стає на лінію удару. */
+  remoteHold(a, dt) {
+    const p = a.p, b = this.ball, ai = this.netAim;
+    p.dribble = false;
+    if (ai) { this.kickApproach(a, ai.dx, ai.dz, 1.0 + 0.5 * ai.pw, 3.2, dt, false, ai.pw < 0.45 ? 1.25 : 0.65); this.remoteAimPose(a); b.vx = b.vz = 0; return; }
+    this.remoteAimPose(a);
+    const k = Math.exp(-dt * 3.2); p.vx *= k; p.vz *= k; p.x += p.vx * dt; p.z += p.vz * dt;
+    const sp = Math.hypot(p.vx, p.vz);
+    if (sp > 0.3) {                                                  // ще котиться з розгону — м'яч попереду біля ноги
+      const hd = Math.atan2(p.vx, p.vz), kf = Math.min(1, dt * 14); p.yaw = hd;
+      b.x += (p.x + Math.sin(hd) * 0.62 - b.x) * kf; b.z += (p.z + Math.cos(hd) * 0.62 - b.z) * kf;
+    } else p.yaw = Math.atan2(b.x - p.x, b.z - p.z);
+    b.vx = b.vz = 0;
+  }
+
+  /** Команда гостя: удар чи пас у напрямку (dx, dz) із силою pw — та сама формула, що й для нашого удару. */
+  remoteKick(a, c) {
+    const hands = a.isGK && !a.footBall, l = Math.hypot(c.dx, c.dz) || 1, dx = c.dx / l, dz = c.dz / l, pw = clamp(c.pw, 0, 1);
+    const speed = hands ? (9 + 17 * pw) * GK_THROW : Math.min(PHYS.maxSpeed, PHYS.baseShot * (0.28 + 0.72 * pw) * (pw >= 0.45 ? 0.9 + 0.2 * a.sk.shoot : 1));
+    this.kickoff = false; this.netAim = null; this.netWaitT = 0;
+    a.p.dribble = false; if (a.p.mode === 'aim') a.p.setMode('idle');
+    const swing = () => { if (hands) a.p.throwBall(); else a.p.kick(pw); };
+    this.pendKick = { dx, dz, hands, run: false, w: 0, t: hands ? 0.18 : -1, pw: Math.max(0.35, pw), swing, fn: () => this.remoteRelease(a, dx * speed, dz * speed, pw) };
+    if (hands) { a.p.yaw = Math.atan2(dx, dz); swing(); }
+  }
+
+  remoteRelease(a, vx, vz, pw) {
+    const b = this.ball, j = rand(-1, 1) * this.st.jitter * (1.5 - 0.9 * (pw >= 0.45 ? a.sk.shoot : a.sk.pass)) * DEG, cs = Math.cos(j), sn = Math.sin(j);
+    b.vx = vx * cs - vz * sn; b.vz = vx * sn + vz * cs; ground(b);
+    a.p.dribble = false; a.cool = 0.35; a.noTrap = 1.4; a.manual = false; this.taker = null; this.lastOppTaker = a;
+    audio.kick(pw);
+    this.bs = 'roll'; this.owner = 0; this.shotBounces = 0; this.looseT = 0; this.protectT = 2.2; this.shotId++; this.kickoff = false;
+    this.ui.hud.setCard(null); this.ui.hud.warn(null); this.hideAim();
+    // у створ наших воріт — це удар (наш воротар реагує); інакше пас: свій найкращий на лінії м'яча біжить приймати
+    const v = Math.hypot(b.vx, b.vz) || 1, ux = b.vx / v, uz = b.vz / v, zAt = ux < -0.05 ? b.z + uz * (-L - b.x) / ux : 99;
+    const onT = ux < -0.05 && Math.abs(zAt) < G + 1.2 && b.x + L < 60;
+    this.shotBy = onT ? -1 : -2;
+    if (!onT) this.pickOppReceiver(a); else this.clearReceivers();
+    for (let i = 0; i < this.actors.length; i++) { const q = this.actors[i]; if (q !== a && Math.hypot(q.p.x - b.x, q.p.z - b.z) < 1.9) { q.ghostBall = 0.22; q.body.on = false; } }
+    this.view.particles.burst(b.x, 0.3, b.z, 6, 3 + pw * 4, 0.45, 0.24, ['#8fb98a', '#f2f5ee'], 8, 0.5);
+  }
+
+  /** Пас гостя: приймач — партнер, що найкраще стоїть на лінії м'яча й встигає до неї (дзеркально до pickMyReceiver). */
+  pickOppReceiver(h) {
+    const b = this.ball, v = Math.hypot(b.vx, b.vz) || 1, ux = b.vx / v, uz = b.vz / v;
+    this.clearReceivers();
+    let best = null, bs = 1e9;
+    for (let i = 1; i < this.opp.length; i++) {
+      const q = this.opp[i]; if (q === h || q.stun > 0 || q.frozen > 0 || q.p.downed) continue;
+      const rx = q.p.x - b.x, rz = q.p.z - b.z, along = rx * ux + rz * uz, perp = Math.abs(rx * uz - rz * ux);
+      if (along < 3) continue;
+      const tBall = (along / v) * 1.4 + 0.15;
+      if (perp >= 1.2 + 7.5 * tBall * (0.84 + 0.34 * q.sk.pace)) continue;
+      const sc = perp * 1.6 + along * 0.08;
+      if (sc < bs) { bs = sc; best = q; }
+    }
+    if (best) { best.receiver = true; this.passTarget = best; this.receiverT = 3; }
   }
 
   /**
@@ -1011,7 +1137,7 @@ export class Match {
       const c = Math.round(50 * spec.scale * mult);
       this.coins += c; this.ui.hud.setCoins(this.coins);
       if (this.shooter && this.mine.indexOf(this.shooter) >= 0) { this.addXp(this.shooter, 60 + (bn >= 2 ? 20 : 0)); if (this.shooter.info) this.shooter.info.goals++; }
-      gt = ['ГОЛ!', (bn >= 2 ? 'РИКОШЕТ ×' + mult + ' · ' : '') + '+' + c, 'me'];
+      gt = ['ГОЛ!', spec.online ? (bn >= 2 ? 'РИКОШЕТ ×' + mult : 'у сітці!') : (bn >= 2 ? 'РИКОШЕТ ×' + mult + ' · ' : '') + '+' + c, 'me'];
       v.stands.react('goal', { mine: true });
       for (let i = 0; i < this.opp.length; i++) this.opp[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 60, 11, 1.8, 0.4, ['#b3162a', '#117a4a', '#f1efe8', '#e8b923'], 12, 1.0);
@@ -1019,7 +1145,7 @@ export class Match {
       this.ui.flash('rgba(255,255,255,.4)');
     } else {
       this.score.opp++;
-      gt = ['ПРОПУСТИЛИ', 'контратака спрацювала', 'opp']; v.stands.react('goal', { mine: false });
+      gt = ['ПРОПУСТИЛИ', spec.online ? 'суперник забив' : 'контратака спрацювала', 'opp']; v.stands.react('goal', { mine: false });
       for (let i = 0; i < this.mine.length; i++) this.mine[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 24, 8, 1.4, 0.35, ['#9ca3af', '#4b5563', '#f1efe8'], 12, 1.0);
       audio.concede(); this.game.addTrauma(0.4); vibrate(80);
@@ -1029,6 +1155,10 @@ export class Match {
     this.setupCelebration(mine, sc, side, I);
     this.ui.hud.goal(gt[0], tag ? tag + ' · ' + gt[1] : gt[1], gt[2]);
     if (I > 0.55) { v.stands.react('goal', { mine, dur: 3.8 + 3 * I }); audio.crowd(1); this.walk.fireworks(3 + Math.round(4 * I)); this.game.addTrauma(0.25 * I); }
+    this.periodGoals++;
+    const scName = sc && sc.info ? String(sc.info.name).split(' ').slice(-1)[0] : (mine ? (spec.home ? spec.home.name : 'Локомотив') : spec.club.name);
+    this.scorers.push({ mine, name: scName, min: this.minuteLabel() });
+    this.ui.hud.scored({ mine, name: scName, min: this.minuteLabel() });
     this.ui.hud.setScore(this.score.me, this.score.opp);
     this.ts = 0.28;
     this.game.sm.go('GOAL', { mine });
@@ -1049,7 +1179,7 @@ export class Match {
   }
   afterGoal() {
     this.ui.hud.clearGoal(); this.ui.hud.cine(false);
-    if (this.timeUp) { this.game.sm.go('MATCH', { resume: true }); this.end(); return; }
+    if (this.periodEnd && this.overMin() >= this.addMin) { this.game.sm.go('MATCH', { resume: true }); this.whistlePeriod(); return; }   // гол у доданий час, що вже вийшов — свисток після повтору
     this.formation(this.nextKick || 1);
     this.game.sm.go('MATCH', { resume: true });
   }
@@ -1082,22 +1212,19 @@ export class Match {
       return;
     }
     if (this.phase === 'play') {
-      this.clock -= dt;                  // годинник іде в темпі гри: у сповільненні він теж повільніший
-      const s = Math.ceil(Math.max(0, this.clock));
-      if (s !== this.lastClock) {
-        this.lastClock = s; this.ui.hud.setTime(this.timeText(), this.clock <= 10, this.halfText());
-        if (s <= 5 && s > 0) audio.click();
-      }
-      // кінець тайму (їх 4): свисток у першу паузу (м'яч у нас) або за ~4 с, коротка перерва, новий тайм — з центру
-      if (this.period < 4 && !this.timeUp && this.clock <= this.spec.time * (1 - this.period / 4)) {
-        if (!this.periodEnd) { this.periodEnd = true; this.periodWait = 0; }
-        this.periodWait += rawDt;
-        if (this.bs === 'ready' || this.bs === 'aim' || this.periodWait > 4) { this.cancelAim(); this.nextPeriod(); return; }
-      }
-      if (this.clock <= 0 && !this.timeUp) { this.timeUp = true; this.timeUpWait = 0; }
-      if (this.timeUp) {
-        this.timeUpWait += rawDt;
-        if (this.bs === 'ready' || this.bs === 'aim' || this.timeUpWait > 5) { this.cancelAim(); this.timeOver(); return; }
+      // годинник іде в темпі гри (у сповільненні теж повільніший) і стоїть, доки м'яч не розвели з центру
+      const held = this.kickoff;
+      if (!held) this.clock -= dt;
+      const bound = this.periodBound(), gm = this.gameMin();
+      // за хвилину до кінця тайму резервний суддя піднімає табличку з доданим часом
+      if (!this.addShown && this.clock <= bound + gm) { this.addShown = true; this.addMin = this.stoppage(); this.ui.hud.addedTime(this.addMin); }
+      if (this.clock <= bound && !this.periodEnd) { this.periodEnd = true; if (this.period === 4) this.timeUp = true; }
+      this.setClockHud(held);                                       // щокадру: секунди біжать рівно, без стрибків по 7 с
+      // доданий час вийшов — суддя чекає спокійної миті: не свистить посеред атаки чи коли м'яч летить у ворота.
+      // Якщо атака затяглася на ~1.5 хв понад додане — свисток, щойно м'яч не в польоті; за 3 хв — будь-як
+      if (this.periodEnd) {
+        const over = this.overMin();
+        if (over >= this.addMin && (this.calmBall() || (over >= this.addMin + 1.5 && !this.ballFlying()) || over >= this.addMin + 3)) { this.cancelAim(); this.whistlePeriod(); return; }
       }
     }
     this.tick(dt, rawDt);
@@ -1106,17 +1233,20 @@ export class Match {
   /** Перерва між таймами: свисток, табличка, розстановка з центру; годинник — рівно на межі тайму. */
   nextPeriod() {
     const n = this.period;
-    this.period++; this.periodEnd = false;
+    this.period++; this.periodEnd = false; this.periodGoals = 0; this.addShown = false; this.addMin = 0;
     this.clock = this.spec.time * (1 - n / 4);
     audio.whistle(true);
-    this.ui.hud.banner('Кінець ' + n + '-го тайму', this.score.me + ' : ' + this.score.opp, n === 2 ? 'Перерва — далі 3-й тайм' : 'Далі ' + (n + 1) + '-й тайм');
+    this.ui.hud.addedTime(null);
+    this.ui.hud.scoreCard({ title: 'Кінець ' + n + '-го тайму', me: this.score.me, opp: this.score.opp, scorers: this.scorers, note: n === 2 ? 'Перерва · далі 3-й тайм' : 'Далі ' + (n + 1) + '-й тайм' }, 3.4);
     this.startBreak(n);
-    this.ui.hud.setTime(this.timeText(), false, this.halfText());
+    this.setClockHud();
   }
 
   timeOver() {
     if (this.phase === 'pens') return;
-    if (this.score.me === this.score.opp && !this.penRes) {
+    if (this.score.me === this.score.opp && !this.penRes && !this.spec.online) {   // онлайн: нічия — це нічия
+      audio.whistle(true);
+      this.ui.hud.scoreCard({ title: 'Кінець основного часу', me: this.score.me, opp: this.score.opp, scorers: this.scorers, note: 'Нічия · серія пенальті' }, 3);
       this.pens = new Penalties(this); this.pens.start();
       return;
     }
@@ -1403,7 +1533,8 @@ export class Match {
     this.ui.hud.cine(false); this.setGaze(false); this.walk.hide();
     for (const a of this.actors) a.p.root.visible = true;
     audio.crowd(0.7); this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true);
-    this.ui.hud.hint(S.tutorial ? null : (this.ui.useJoy() ? 'Час сповільнено: тягни джойстик у бік удару й відпусти' : 'Час сповільнено: відтягни від м’яча й відпусти'));
+    // онлайн: розводить гість — підказка про приціл не нам
+    this.ui.hud.hint(S.tutorial || (this.link && this.bs === 'held') ? null : (this.ui.useJoy() ? 'Час сповільнено: тягни джойстик у бік удару й відпусти' : 'Час сповільнено: відтягни від м’яча й відпусти'));
   }
   /**
    * Кадри інтро: переліт над стадіоном, супровід виходу, проїзд камери вздовж облич обох шеренг під гімн, низька камера,
@@ -1450,6 +1581,7 @@ export class Match {
 
   /** Запуск серії пенальті достроково (з паузи). */
   startPens() {
+    if (this.link) return;
     if (this.phase === 'pens' || this.phase === 'end' || this.phase === 'idle') return;
     this.cancelAim(); this.penRes = null; this.timeUp = false;
     this.pens = new Penalties(this); this.pens.start();
@@ -1557,11 +1689,12 @@ export class Match {
     this.view.stands.react('clap', { dur: 3 });
     this.ui.hud.cine(true, n === 2 ? 'ПЕРЕРВА' : null);
     this.takeMoments();
-    if (this.clips.length) this.startHighlights(n);
+    if (this.clips.length) this.brk.hlAt = 3.4;                       // спершу табло з рахунком тайму, потім підбірка моментів
   }
   updateBreak(dt) {
     if (this.hl) { this.updateClip(dt); return; }
     const B = this.brk; B.t += dt;
+    if (B.hlAt != null && B.t >= B.hlAt) { B.hlAt = null; this.startHighlights(B.n); return; }
     // темп — щоб кожен устиг на своє місце до свистка (далекі — бігом); хто ще не дійшов, на того свисток чекає (до ~4 с).
     // Раніше всі йшли однаково повільно, а за 4 с ті, хто був далеко, «телепортувались» на позицію (до 40 м)
     let far = 0;
@@ -1702,7 +1835,10 @@ export class Match {
     // сповільнення — лише коли ви справді прицілюєтесь. Поки ваш воротар тримає м'яч і суперники відходять (цілитись ще не
     // можна), гра йде в звичайному темпі — інакше вони відходили в 7 разів повільніше, і гра ніби завмирала після сейву
     const gkWait = this.holder && this.holder.isGK && !this.holder.footBall && !this.gkClear;
-    const want = this.phase === 'play' && (this.bs === 'ready' || this.bs === 'aim') && !gkWait;
+    // онлайн: гість думає над ударом — сповільнення таке саме (час гри спільний); 14 с без удару — його гравцем грає ІІ
+    const remote = !!this.link && this.remoteWaiting();
+    if (remote) { this.netWaitT += rawDt; if (this.netWaitT > 14) this.netAuto = true; }
+    const want = this.phase === 'play' && (((this.bs === 'ready' || this.bs === 'aim') && !gkWait) || remote);
     if (want !== this.slow) {
       this.slow = want; this.slowT = 0; this.beatT = 0;
       this.ui.setSlow(want); audio.slowmo(want);
@@ -2237,7 +2373,7 @@ export class Match {
     else if (d === 1) { I += them > 0 || f > 0.5 ? 0.25 : 0.12; if (them > 0) tag = 'ВИХІД УПЕРЕД!'; }
     else if (d >= 3) I -= 0.15;
     if (f > 0.85) { I += 0.35 * (f - 0.85) / 0.15; if (f > 0.93) tag = 'НА ОСТАННІХ ХВИЛИНАХ!'; }
-    if (this.timeUp) { I += 0.25; tag = 'НА ОСТАННІХ СЕКУНДАХ!'; }
+    if (this.timeUp) { I += 0.25; tag = 'У ДОДАНИЙ ЧАС!'; }
     if (sp.final) I += 0.12;
     return { I: clamp(I, 0, 1), tag };
   }
@@ -2557,7 +2693,7 @@ export class Match {
   floatAt(x, z, text, kind) { this.game.floatWorld(x, 1.9, z, text, kind); }
 
   // ------------------------------------------------------------------ завершення
-  pause() { if (this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens' || this.phase === 'break') { this.prevPhase = this.phase; this.phase = 'paused'; this.cancelAim(); audio.crowd(0.2); } }
+  pause() { if (this.link) return; if (this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens' || this.phase === 'break') { this.prevPhase = this.phase; this.phase = 'paused'; this.cancelAim(); audio.crowd(0.2); } }
   resume() { if (this.phase === 'paused') { this.phase = this.prevPhase; audio.crowd(0.7); } }
   isPlaying() { return this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens' || this.phase === 'break'; }
 
@@ -2632,6 +2768,8 @@ export class Match {
     this.endWin = outcome === 'draw' ? null : win ? this.mine : this.opp; this.endLose = outcome === 'draw' ? null : win ? this.opp : this.mine;
     for (const a of this.actors) { a.endHug = false; a.manual = false; a.frozen = 0; }
     this.endPairs = null; this.endFeat = null; this.endHub = null; this.ui.hud.cine(true, 'КІНЕЦЬ МАТЧУ');
+    this.ui.hud.addedTime(null);
+    this.ui.hud.scoreCard({ title: 'Фінальний свисток', me, opp, scorers: this.scorers, pens: this.penRes, note: outcome === 'win' ? 'Перемога' : outcome === 'loss' ? 'Поразка' : 'Нічия', final: true }, END_T - 1.2);
     if (this.endWin) {
       let hx = 0, hz = 0; for (let i = 1; i < this.endWin.length; i++) { hx += this.endWin[i].p.x; hz += this.endWin[i].p.z; }
       this.endHub = { x: clamp(hx / 10, -L * 0.6, L * 0.6), z: clamp(hz / 10, -W * 0.6, W * 0.6) };
@@ -2640,6 +2778,11 @@ export class Match {
     this.assignEndRoles();
     if (win) this.view.stands.react('wave'); else if (outcome === 'loss') this.view.stands.react('groan');
     if (this.holder) this.holder.manual = false;
+    if (this.spec.online) {                                        // онлайн не чіпає кар'єру: нагороди — онлайн-клубу (session.js)
+      this.result = { online: true, outcome, me, opp, spec, scorers: this.scorers.slice() };
+      if (win) audio.win(); else if (outcome === 'loss') audio.lose();
+      return;
+    }
 
     const lines = [];
     const base = Math.round((win ? 120 : outcome === 'draw' ? 45 : 20) * spec.scale);
@@ -2677,6 +2820,7 @@ export class Match {
   }
 
   exit() {
+    if (this.link) { this.link.uninstall(); this.link = null; }
     this.phase = 'idle'; this.cancelAim(); this.game.renderer.toneMappingExposure = 1.1;
     this.rp = null; this.brk = null; this.ui.hud.cine(false); this.walk.hide();
     if (this.pens) { this.pens.dispose(); this.pens = null; }   // вихід посеред серії: панель пенальті й клавіші не лишаються в меню

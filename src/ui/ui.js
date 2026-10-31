@@ -3,6 +3,7 @@ import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_T
 import { stadiumCost, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
 import { audio } from '../core/audio.js';
 import { I, crest, lokoCrest } from './icons.js';
+import { VOX } from './vox.js';
 import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact } from '../club.js';
 import { Hud } from './hud.js';
 import { playIntro } from './intro.js';
@@ -55,10 +56,11 @@ export class UI {
       <button class="card" id="m-stad" data-act="up-stadium"><span class="card-ic">${I.stadium}</span><span class="card-t"><b>Стадіон</b><em id="m-stad-v"></em></span><span class="card-p" id="m-stad-c"></span></button>
     </div>
     <nav class="nav" id="m-nav">
-      <button class="nb on" data-act="nav-match"><i>${I.ball}</i><span>Матч</span></button>
-      <button class="nb" data-act="nav-transfers"><i>${I.shirt}</i><span>Команда</span></button>
-      <button class="nb" data-act="nav-academy"><i>${I.team}</i><span>Академія</span><u id="m-acad-dot" hidden></u></button>
-      <button class="nb" data-act="nav-stadium"><i>${I.stadium}</i><span>Стадіон</span></button>
+      <button class="nb on" data-act="nav-match"><span class="nb-face"><i class="nb-glint"></i></span><i class="nb-sh"></i><span class="nb-ic">${VOX.match}</span><span class="nb-t">Матч</span></button>
+      <button class="nb" data-act="nav-transfers"><span class="nb-face"><i class="nb-glint"></i></span><i class="nb-sh"></i><span class="nb-ic">${VOX.team}</span><span class="nb-t">Команда</span></button>
+      <button class="nb" data-act="nav-academy"><span class="nb-face"><i class="nb-glint"></i></span><i class="nb-sh"></i><span class="nb-ic">${VOX.academy}</span><span class="nb-t">Академія</span><u id="m-acad-dot" hidden></u></button>
+      <button class="nb" data-act="nav-stadium"><span class="nb-face"><i class="nb-glint"></i></span><i class="nb-sh"></i><span class="nb-ic">${VOX.stadium}</span><span class="nb-t">Стадіон</span></button>
+      <button class="nb nb-online" data-act="nav-online"><span class="nb-face"><i class="nb-glint"></i></span><i class="nb-sh"></i><span class="nb-ic">${VOX.online}</span><span class="nb-t">Онлайн</span><u class="nb-live" aria-hidden="true"></u></button>
     </nav>
     <button class="cta" id="m-cta" data-act="play" aria-label="Почати матч">
       <span class="go-tag"><em>Матч</em><strong id="m-cta-n"></strong><small id="m-cta-s"></small></span>
@@ -111,6 +113,7 @@ export class UI {
     const q = (id) => root.querySelector('#' + id);
     this.el = { joy: q('joy'), menu: q('menu'), panel: q('panel'), result: q('result'), pause: q('pause'), settings: q('settings'), custom: q('custom'), reveal: q('reveal'), splash: q('splash'), toast: q('toast'), flash: q('flash'), league: q('m-league'), club: q('m-club'), next: q('m-next'), coins: q('m-coins'), tickets: q('m-tickets'), cash: q('m-cash'), cta: q('m-cta'), ctaS: q('m-cta-s'), stad: q('m-stad'), stadV: q('m-stad-v'), stadC: q('m-stad-c'), nav: q('m-nav'), acadDot: q('m-acad-dot') };
     root.addEventListener('input', (e) => {
+      if (this.online && this.online.input(e.target)) return;
       const nm = e.target.closest('[data-cname]');
       if (nm && this.cu != null) { const pl = allPlayers()[this.cu]; if (pl) { pl.name = nm.value.slice(0, 22) || pl.name; pl.custom = true; commit(); } return; }
       const t = e.target.closest('[data-range]'); if (!t) return;
@@ -126,6 +129,7 @@ export class UI {
     });
     this.hud.onShow = () => this.setMatchUi(true);
     this.hud.onHide = () => this.setMatchUi(false);
+    this.tiltNav();
     this.hud.onCine = (on) => { if (this.cineOn !== on) { this.cineOn = on; this.applyControls(); } };
     this.initJoy();
     this.applyControls();
@@ -142,12 +146,18 @@ export class UI {
     const rot = h > w * 1.02;
     if (this.rotated !== rot) {
       this.rotated = rot;
-      if (rot && this.game && this.game.match && this.game.match.isPlaying()) this.pause();
+      if (rot && this.game && this.game.match && this.game.match.isPlaying() && !(this.game.online && this.game.online.inMatch())) this.pause();
     }
   }
 
   key(e) {
     if (e.repeat) return;
+    // у полі вводу (назва, код кімнати) літери — це текст, а не гарячі клавіші; Enter у полі коду — увійти
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+      if (e.key === 'Enter' && e.target.matches('[data-ocode]') && this.online) this.online.act('on-join', e.target);
+      if (e.key === 'Enter' || e.key === 'Escape') e.target.blur();
+      return;
+    }
     const g = this.game;
     if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
       if (g.sm.name === 'MATCH') { if (!this.el.pause.hidden) this.act('resume'); else this.pause(); }
@@ -238,7 +248,7 @@ export class UI {
       case 'cash': return this.claimCash();
       case 'up-stadium': return this.buyStadium();
       case 'nav-match': audio.click(); return this.closePanel();
-      case 'nav-transfers': case 'nav-academy': case 'nav-stadium': audio.click(); return this.openPanel(a.slice(4));
+      case 'nav-transfers': case 'nav-academy': case 'nav-stadium': case 'nav-online': audio.click(); return this.openPanel(a.slice(4));
       case 'close-panel': audio.back(); return this.closePanel();
       case 'tab-st-info': case 'tab-st-chron': case 'tab-st-sym': audio.click(); this.stTab = a.slice(7); return this.renderPanel();
       case 'tab-squad': case 'tab-strikers': case 'tab-keepers': audio.click(); this.tab = a.slice(4); return this.renderPanel();
@@ -263,6 +273,7 @@ export class UI {
       case 'q-auto': case 'q-high': case 'q-low': S.settings.quality = a.slice(2); g.res = 1; g.applyPixelRatio(true); commit(); audio.click(); return this.renderSettings();
       case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
       default:
+        if (a.startsWith('on-')) return this.online && this.online.act(a, el);
         if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); return this.renderPanel(); }
         if (a.startsWith('cam-')) { const v = CAM_VIEWS[a.slice(4)]; if (v) { Object.assign(S.settings, { camView: a.slice(4), camTilt: v.tilt, camZoom: v.zoom }); commit(); g.computeMatchBase(); audio.click(); return this.renderSettings(); } }
         if (a.startsWith('set-tab:')) { this.setTab = a.slice(8); audio.click(); return this.renderSettings(); }
@@ -304,6 +315,19 @@ export class UI {
     clearTimeout(this._enterT); this._enterT = setTimeout(() => m.classList.remove('enter'), 2600);
     this.refresh(true);
     this.rollFlaps();
+    if (this.online) this.online.onMenu();
+  }
+
+  /** Вкладки-плити нахиляються за курсором, іконка «висить» над плитою й зсувається сильніше — об'ємний паралакс. */
+  tiltNav() {
+    const nav = this.el.nav;
+    nav.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      const b = e.target.closest('.nb'); if (!b) return;
+      const r = b.getBoundingClientRect(), px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5;
+      b.style.setProperty('--rx', (-py * 22).toFixed(1) + 'deg'); b.style.setProperty('--ry', (px * 26).toFixed(1) + 'deg');
+    });
+    nav.addEventListener('pointerout', (e) => { const b = e.target.closest('.nb'); if (b && !b.contains(e.relatedTarget)) { b.style.removeProperty('--rx'); b.style.removeProperty('--ry'); } });
   }
 
   /** Табло «перебирає» літери, як справжнє розкидне табло, і зупиняється по черзі зліва направо. */
@@ -436,7 +460,7 @@ export class UI {
   openPanel(name) {
     this.panel = name;
     this.el.panel.hidden = false; this.el.menu.classList.add('panel-open');
-    this.el.nav.querySelectorAll('.nb').forEach((b, i) => b.classList.toggle('on', ['match', 'transfers', 'academy', 'stadium'][i] === name));
+    this.el.nav.querySelectorAll('.nb').forEach((b, i) => b.classList.toggle('on', ['match', 'transfers', 'academy', 'stadium', 'online'][i] === name));
     this.renderPanel();
   }
   closePanel(silent) {
@@ -447,7 +471,7 @@ export class UI {
   renderPanel() {
     if (!this.panel) return;
     const p = this.panel;
-    const html = p === 'transfers' ? this.transfersHtml() : p === 'academy' ? this.academyHtml() : this.stadiumHtml();
+    const html = p === 'transfers' ? this.transfersHtml() : p === 'academy' ? this.academyHtml() : p === 'online' ? this.online.html() : this.stadiumHtml();
     const keep = this.el.panel.querySelector('.scroller');
     const sl = keep ? keep.scrollLeft : 0;
     this.el.panel.innerHTML = html;
@@ -688,12 +712,18 @@ export class UI {
     const g = this.game;
     if (g.sm.name !== 'MATCH' || !g.match.isPlaying()) return;
     g.match.pause(); this.el.pause.hidden = false;
+    // онлайн: гра не зупиняється (час спільний), пенальті немає, а вихід — це здача матчу
+    const on = !!(g.online && g.online.inMatch());
+    this.el.pause.querySelector('[data-act="pens"]').hidden = on;
+    this.el.pause.querySelector('[data-act="quit"] b').textContent = on ? 'Здатися (0:3)' : 'В меню';
+    { const t = this.el.pause.querySelector('.pz-t'); t.textContent = t.dataset.t = on ? 'МЕНЮ' : 'ПАУЗА'; }
     const pf = this.root.querySelector('#p-fact'); if (pf) pf.textContent = randomFact();
     const tx = (id) => { const e = this.root.querySelector('#' + id); return e ? e.textContent : ''; };
-    this.root.querySelector('#p-score').innerHTML = `<span>ЛОК</span><b>${tx('h-sc-me')}</b><i>:</i><b>${tx('h-sc-opp')}</b><span>${tx('h-opp-name')}</span><em>${tx('h-time')} · ${tx('h-half')}</em>`;
+    this.root.querySelector('#p-score').innerHTML = `<span>${tx('h-me-name')}</span><b>${Math.max(0, this.hud.last.me)}</b><i>:</i><b>${Math.max(0, this.hud.last.opp)}</b><span>${tx('h-opp-name')}</span><em>${this.hud.last.time || ''} · ${this.hud.last.half || ''}</em>`;   // з табло — без цифр, що саме перегортаються
   }
 
   showResult(r) {
+    if (r.online) return this.online.showResult(r);
     const spec = r.spec, win = r.outcome === 'win', draw = r.outcome === 'draw';
     const title = win ? 'ПЕРЕМОГА!' : draw ? 'НІЧИЯ' : 'ПОРАЗКА';
     const rows = r.lines.map((l, i) => `<li style="--i:${i}"><span>${l.label}</span><b>+${fmt(l.value)}</b>${I.coin}</li>`).join('');

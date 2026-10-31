@@ -1,0 +1,152 @@
+// Мережа онлайн-матчу: кімната за кодом через PeerJS (публічний сервер лише знайомить двох гравців), далі — пряме
+// WebRTC-з'єднання. Два канали в одному з'єднанні:
+//  ctl — надійний і впорядкований (JSON): привітання, старт, події матчу, команди удару, кінець;
+//  st  — ненадійний і невпорядкований (бінарний): кадри поз 20 разів на секунду; загублений кадр не гальмує наступні.
+// Пінг раз на секунду дає затримку (RTT) і пульс: 6 с тиші — з'єднання вважаємо втраченим.
+
+const PREFIX = 'lokorush-v1-';
+const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';     // без 0/O, 1/I — код легко продиктувати
+export const PROTO = 1;
+export const makeCode = () => Array.from({ length: 5 }, () => ALPH[(Math.random() * ALPH.length) | 0]).join('');
+export const cleanCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+
+const PEER_CFG = {
+  config: {
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+    ],
+  },
+  debug: 0,
+};
+
+let PeerCls = null;
+async function loadPeer() { if (!PeerCls) PeerCls = (await import('peerjs')).Peer; return PeerCls; }
+
+function openPeer(Peer, id) {
+  return new Promise((res, rej) => {
+    const p = id ? new Peer(id, PEER_CFG) : new Peer(PEER_CFG);
+    const to = setTimeout(() => { rej(Object.assign(new Error('timeout'), { type: 'timeout' })); try { p.destroy(); } catch (_) { /* ignore */ } }, 12000);
+    p.once('open', () => { clearTimeout(to); res(p); });
+    p.once('error', (e) => { clearTimeout(to); try { p.destroy(); } catch (_) { /* ignore */ } rej(e); });
+  });
+}
+
+export class Net {
+  constructor() {
+    this.h = {}; this.peer = null; this.conn = null; this.st = null; this.role = null; this.code = '';
+    this.open = false; this.rtt = 0; this.lastRx = 0; this.closed = false; this._ping = 0; this.retry = 0;
+  }
+  on(ev, fn) { (this.h[ev] ??= []).push(fn); return this; }
+  emit(ev, ...a) { for (const f of this.h[ev] || []) { try { f(...a); } catch (e) { console.error(e); } } }
+
+  /** Створити кімнату: повертає код. Якщо код зайнятий — пробуємо інший. */
+  async host() {
+    const Peer = await loadPeer(); this.role = 'host';
+    let last;
+    for (let i = 0; i < 5; i++) {
+      const code = makeCode();
+      try { this.peer = await openPeer(Peer, PREFIX + code); this.code = code; break; } catch (e) { last = e; if (e.type !== 'unavailable-id') throw e; }
+    }
+    if (!this.peer) throw last;
+    this.peer.on('connection', (c) => {
+      // кімната на двох: поки суперник на зв'язку, інших не пускаємо; втрачений суперник може повернутися з тим самим кодом
+      if (this.open) { c.on('open', () => { try { c.send({ t: 'full' }); } catch (_) { /* ignore */ } setTimeout(() => c.close(), 400); }); return; }
+      this.attach(c);
+    });
+    this.peer.on('disconnected', () => { if (!this.closed) try { this.peer.reconnect(); } catch (_) { /* ignore */ } });
+    this.peer.on('error', (e) => { if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error') this.emit('warn', e.type); });
+    return this.code;
+  }
+
+  /** Приєднатися за кодом. */
+  async join(code) {
+    const Peer = await loadPeer(); this.role = 'guest'; this.code = cleanCode(code);
+    if (!this.peer || this.peer.destroyed) this.peer = await openPeer(Peer);
+    return new Promise((res, rej) => {
+      const fail = (e) => { cleanup(); rej(e); };
+      const onErr = (e) => { if (e.type === 'peer-unavailable') fail(Object.assign(new Error('no-room'), { type: 'no-room' })); else fail(e); };
+      const to = setTimeout(() => fail(Object.assign(new Error('timeout'), { type: 'timeout' })), 15000);
+      const cleanup = () => { clearTimeout(to); this.peer.off('error', onErr); };
+      this.peer.on('error', onErr);
+      const c = this.peer.connect(PREFIX + this.code, { label: 'ctl', reliable: true, serialization: 'json', metadata: { v: PROTO } });
+      this.attach(c, () => { cleanup(); res(); });
+    });
+  }
+
+  attach(c, onOpen) {
+    if (this.conn && this.conn !== c) { try { this.conn.close(); } catch (_) { /* ignore */ } }
+    this.conn = c;
+    c.on('open', () => {
+      if (this.conn !== c) return;
+      this.setupStream(c.peerConnection);
+      const back = this.wasOpen; this.open = true; this.wasOpen = true; this.lastRx = performance.now(); this.retry = 0;
+      this.startPing();
+      if (onOpen) onOpen();
+      this.emit(back ? 'back' : 'open');
+    });
+    c.on('data', (m) => { if (this.conn !== c) return; this.lastRx = performance.now(); this.onMsg(m); });
+    c.on('close', () => { if (this.conn === c) this.lost(); });
+    c.on('error', () => { if (this.conn === c) this.lost(); });
+  }
+
+  /** Другий канал у тому ж з'єднанні: узгоджений (negotiated) — обидві сторони створюють його самі, без сигналізації. */
+  setupStream(pc) {
+    this.st = null;
+    try {
+      const st = pc.createDataChannel('st', { negotiated: true, id: 33, ordered: false, maxRetransmits: 0 });
+      st.binaryType = 'arraybuffer';
+      st.onmessage = (e) => { this.lastRx = performance.now(); this.emit('frame', e.data); };
+      this.st = st;
+      pc.addEventListener('iceconnectionstatechange', () => { if (pc.iceConnectionState === 'failed' && this.conn && this.conn.peerConnection === pc) this.lost(); });
+    } catch (_) { this.st = null; }
+  }
+
+  onMsg(m) {
+    if (!m || typeof m !== 'object') return;
+    if (m.t === 'ping') { this.send({ t: 'pong', s: m.s }); return; }
+    if (m.t === 'pong') { const r = performance.now() - (+m.s || 0); if (r >= 0 && r < 10000) this.rtt = this.rtt ? this.rtt * 0.8 + r * 0.2 : r; return; }
+    this.emit('msg', m);
+  }
+
+  startPing() {
+    clearInterval(this._ping);
+    this._ping = setInterval(() => {
+      if (!this.open) return;
+      this.send({ t: 'ping', s: performance.now() });
+      // тиша — ще не обрив: згорнута вкладка суперника шле пінги рідко (браузер гальмує таймери). Обрив — коли й саме
+      // з'єднання не «connected» (закрита вкладка й зникла мережа ловляться окремо: close / ICE failed)
+      const pc = this.conn && this.conn.peerConnection, st = pc ? pc.connectionState || pc.iceConnectionState : 'closed';
+      if (performance.now() - this.lastRx > 8000 && st !== 'connected' && st !== 'completed') this.lost();
+    }, 1000);
+  }
+
+  send(m) { if (this.open && this.conn && this.conn.open) { try { this.conn.send(m); } catch (_) { /* ignore */ } } }
+  /** Кадр поз: лише ненадійним каналом; якщо черга росте (повільна мережа) — кадр пропускаємо, наступний буде свіжіший. */
+  sendFrame(buf) {
+    const st = this.st;
+    if (st && st.readyState === 'open' && st.bufferedAmount < 192e3) { try { st.send(buf); } catch (_) { /* ignore */ } }
+  }
+
+  lost() {
+    if (!this.open || this.closed) return;
+    this.open = false; clearInterval(this._ping); this.st = null;
+    this.emit('lost');
+    if (this.role === 'guest') this.rejoin();
+  }
+
+  /** Гість сам перепідключається до тієї ж кімнати (до ~25 с): вайфай моргнув, телефон перейшов на мобільний. */
+  async rejoin() {
+    if (this.closed || this.open) return;
+    if (++this.retry > 8) { this.emit('gone'); return; }
+    try { await this.join(this.code); } catch (_) { setTimeout(() => this.rejoin(), 2500); }
+  }
+
+  close() {
+    this.closed = true; this.open = false; clearInterval(this._ping);
+    try { if (this.conn) this.conn.close(); } catch (_) { /* ignore */ }
+    try { if (this.peer) this.peer.destroy(); } catch (_) { /* ignore */ }
+    this.conn = null; this.peer = null; this.st = null; this.h = {};
+  }
+}
