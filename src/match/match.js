@@ -2815,7 +2815,7 @@ export class Match {
     if (S.academy.progress >= ACADEMY.need) S.academy.ready = true;
     commit();
     recordMatch(spec, me, opp, this.scoutLog); commit();
-    this.result = { pens: this.penRes, outcome, me, opp, spec, lines, total, tickets, cup, promoted, newSeason, academyReady: S.academy.ready, stats: this.stats, levelUps: this.levelUps, chapter };
+    this.result = { pens: this.penRes, outcome, me, opp, spec, scorers: this.scorers.slice(), lines, total, tickets, cup, promoted, newSeason, academyReady: S.academy.ready, stats: this.stats, levelUps: this.levelUps, chapter };
     if (win) audio.win(); else if (outcome === 'loss') audio.lose();
   }
 

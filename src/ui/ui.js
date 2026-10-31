@@ -1,7 +1,7 @@
 import { S, commit, resetAll, subscribe } from '../state/save.js';
 import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, KITS, matchSpec, CAM_VIEWS } from '../config.js';
 import { stadiumCost, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
-import { audio } from '../core/audio.js';
+import { audio, vibrate } from '../core/audio.js';
 import { I, crest, lokoCrest } from './icons.js';
 import { VOX } from './vox.js';
 import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact } from '../club.js';
@@ -725,28 +725,79 @@ export class UI {
   showResult(r) {
     if (r.online) return this.online.showResult(r);
     const spec = r.spec, win = r.outcome === 'win', draw = r.outcome === 'draw';
-    const title = win ? 'ПЕРЕМОГА!' : draw ? 'НІЧИЯ' : 'ПОРАЗКА';
-    const rows = r.lines.map((l, i) => `<li style="--i:${i}"><span>${l.label}</span><b>+${fmt(l.value)}</b>${I.coin}</li>`).join('');
     const extras = [];
-    if (r.cup) extras.push(`<div class="chip gold">${I.trophy}<span>Кубок ${spec.leagueName.toLowerCase()} завойовано</span></div>`);
-    if (r.promoted != null) extras.push(`<div class="chip green">${I.up}<span>Підвищення: ${LEAGUES[r.promoted].name}</span></div>`);
-    if (r.newSeason) extras.push(`<div class="chip green">${I.up}<span>Новий сезон: суперники сильніші</span></div>`);
-    if (r.tickets) extras.push(`<div class="chip mint">${I.ticket}<span>+${r.tickets} ${r.tickets === 1 ? 'квиток' : 'квитки'}</span></div>`);
-    if (r.academyReady) extras.push(`<div class="chip blue">${I.team}<span>Випускник академії чекає</span></div>`);
-    if (r.chapter) extras.push(`<div class="chip gold">${I.trophy}<span>Нова сторінка хроніки: ${r.chapter}</span></div>`);
-    for (const lu of (r.levelUps || []).slice(0, 5)) extras.push(`<div class="chip blue">${I.up}<span>${lu.name.split(' ')[0]} ${lu.lvl} рів.: ${STAT_NAMES[lu.key]} +1</span></div>`);
-    if (r.stats.saves) extras.push(`<div class="chip red">${I.bolt}<span>Сейви воротаря: ${r.stats.saves}</span></div>`);
+    if (r.cup) extras.push(['gold', I.trophy, `Кубок ${spec.leagueName.toLowerCase()} завойовано`]);
+    if (r.promoted != null) extras.push(['green', I.up, `Підвищення: ${LEAGUES[r.promoted].name}`]);
+    if (r.newSeason) extras.push(['green', I.up, 'Новий сезон: суперники сильніші']);
+    if (r.tickets) extras.push(['mint', I.ticket, `+${r.tickets} ${r.tickets === 1 ? 'квиток' : 'квитки'}`]);
+    if (r.academyReady) extras.push(['blue', I.team, 'Випускник академії чекає']);
+    if (r.chapter) extras.push(['gold', I.trophy, `Нова сторінка хроніки: ${r.chapter}`]);
+    for (const lu of (r.levelUps || []).slice(0, 5)) extras.push(['blue', I.up, `${lu.name.split(' ')[0]} ${lu.lvl} рів.: ${STAT_NAMES[lu.key]} +1`]);
+    if (r.stats.saves) extras.push(['red', I.bolt, `Сейви воротаря: ${r.stats.saves}`]);
     const next = FIXTURES[S.fixture];
-    this.el.result.innerHTML = `<div class="res ${r.outcome}">
-      <div class="res-l"><h1>${title}</h1>
-        <div class="res-score"><span>ЛОКОМОТИВ</span><b>${r.me}</b><i>:</i><b>${r.opp}</b><span>${spec.club.name}</span></div>${r.pens ? `<div class="res-pens">Пенальті ${r.pens.me}:${r.pens.opp}</div>` : ''}
-        <div class="chips">${extras.join('')}</div><p class="fact">Знали? ${randomFact()}</p></div>
-      <div class="res-r"><ul class="lines">${rows}</ul>
-        <div class="total"><span>Разом</span><b id="r-total" data-v="0">0</b>${I.coin}</div>
-        <div class="res-btns">${win ? `<button class="big go" data-act="result-next">${I.play}<b>ДАЛІ: ${next.club.name}</b></button>` : `<button class="big go" data-act="result-retry">${I.play}<b>РЕВАНШ</b></button>`}<button class="big alt" data-act="result-menu"><b>В МЕНЮ</b></button></div></div>
-    </div>`;
-    this.el.result.hidden = false;
-    setTimeout(() => { const t = document.getElementById('r-total'); if (t) countTo(t, r.total, 900); }, 500 + r.lines.length * 120);
+    this.renderResult({
+      outcome: r.outcome, title: win ? 'ПЕРЕМОГА!' : draw ? 'НІЧИЯ' : 'ПОРАЗКА', tag: spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of,
+      me: { name: 'Локомотив', crest: lokoCrest() }, opp: { name: spec.club.name, crest: crest(spec.club.kit, spec.club.name.slice(0, 2)) },
+      score: [r.me, r.opp], pens: r.pens, scorers: r.scorers, chips: extras, fact: 'Знали? ' + randomFact(),
+      head: 'Каса матчу', lines: r.lines.map((l) => ({ label: l.label, value: l.value, coin: true })), total: r.total,
+      buttons: [win ? ['go', 'result-next', `ДАЛІ: ${next.club.name}`, I.play] : ['go', 'result-retry', 'РЕВАНШ', I.play], ['alt', 'result-menu', 'В МЕНЮ']],
+    });
   }
-  hideResult() { this.el.result.hidden = true; }
+
+  /**
+   * Екран результату (кар'єра й онлайн) у лівреї меню: заголовок падає по літері, табло з гербами й рахунком «грюкає»,
+   * автори голів, досягнення, каса матчу рахується рядок за рядком і «зараховується» печаткою; на перемогу — конфеті й промені.
+   * d: { outcome, title, tag, me/opp: {name, crest}, score, pens, scorers, chips: [[колір, іконка, текст]], fact, head,
+   *      lines: [{label, value | text, coin, sub}], total, buttons: [[вид, дія, напис, іконка]] }
+   */
+  renderResult(d) {
+    for (const t of this._resT || []) clearTimeout(t);
+    this._resT = [];
+    const e = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const o = d.outcome, [a, b] = d.score, win = o === 'win';
+    const letters = [...d.title].map((ch, i) => `<span style="--i:${i}">${ch === ' ' ? '&nbsp;' : e(ch)}</span>`).join('');
+    const COLS = ['#d4202c', '#1f8f3f', '#f6f4ec', '#ffc61a', '#3fb7d8'];
+    const conf = win ? `<div class="rs-conf" aria-hidden="true">${Array.from({ length: 46 }, (_, i) => `<i style="--x:${(Math.random() * 100).toFixed(1)}%;--dx:${((Math.random() - 0.5) * 30).toFixed(1)}vw;--d:${(Math.random() * 3).toFixed(2)}s;--t:${(2.8 + Math.random() * 2.4).toFixed(2)}s;--r:${(Math.random() * 1080 - 540) | 0}deg;--s:${(0.6 + Math.random() * 0.9).toFixed(2)};--c:${COLS[i % COLS.length]}"></i>`).join('')}</div>` : '';
+    const goals = (mine) => (d.scorers || []).filter((g) => !!g.mine === mine).slice(0, 6).map((g, i) => `<li style="--i:${i}">${I.ball}<span>${e(g.name)}</span><em>${e(g.min)}</em></li>`).join('');
+    const gl = goals(true), go = goals(false);
+    const chips = (d.chips || []).map(([c, ic, t], i) => `<div class="chip ${c}" style="--i:${i}">${ic}<span>${e(t)}</span></div>`).join('');
+    const lines = (d.lines || []).map((l, i) => `<li style="--i:${i}"><span>${e(l.label)}</span>${l.text != null ? `<b>${e(l.text)}</b>` : `<b data-to="${l.value}">0</b>`}${l.coin ? I.coin : ''}${l.sub != null ? `<em>${e(l.sub)}</em>` : ''}</li>`).join('');
+    const btns = d.buttons.map(([k, act, t, ic], i) => `<button class="rs-b ${k}" style="--i:${i}" data-act="${act}">${ic || ''}<b>${e(t)}</b></button>`).join('');
+    const pens = d.pens ? `<div class="rs-pens">Пенальті <b>${d.pens.me}</b>:<b>${d.pens.opp}</b></div>` : '';
+    const nl = (d.lines || []).length;
+    this.el.result.innerHTML = `<div class="sp-bg rs-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></div>
+    <div class="rs-glow" aria-hidden="true">${win ? '<u class="rs-rays"></u>' : ''}</div>${conf}
+    <div class="rs ${o}" style="--nl:${nl}">
+      <div class="rs-l">
+        <small class="rs-tag">${e(d.tag)}</small>
+        <h1 class="rs-t" data-t="${e(d.title)}" aria-label="${e(d.title)}">${letters}</h1>
+        <div class="rs-board">
+          <div class="rs-team me ${a > b ? 'w' : ''}"><span class="rs-cr">${d.me.crest}</span><b>${e(d.me.name)}</b></div>
+          <div class="rs-score"><b class="${a > b ? 'w' : ''}">${a}</b><i>:</i><b class="${b > a ? 'w' : ''}">${b}</b></div>
+          <div class="rs-team opp ${b > a ? 'w' : ''}"><b>${e(d.opp.name)}</b><span class="rs-cr">${d.opp.crest}</span></div>
+        </div>
+        ${pens}
+        ${gl || go ? `<div class="rs-goals"><ul class="me">${gl}</ul><ul class="opp">${go}</ul></div>` : ''}
+        ${chips ? `<div class="rs-chips">${chips}</div>` : ''}
+        ${d.fact ? `<p class="rs-fact">${e(d.fact)}</p>` : ''}
+      </div>
+      <div class="rs-r">
+        <h3 class="rs-h">${e(d.head || 'Підсумок')}</h3>
+        <ul class="rs-lines">${lines}</ul>
+        ${d.total != null ? `<div class="rs-total"><span>Разом</span><b id="r-total" data-v="0">0</b>${I.coin}<em class="rs-stamp">ЗАРАХОВАНО</em></div>` : ''}
+        <div class="rs-btns">${btns}</div>
+      </div>
+    </div>`;
+    const el = this.el.result; el.hidden = false; el.className = 'overlay result ' + o;
+    // каса: кожен рядок дораховується, коли виїхав; потім «Разом» і печатка
+    const T = (ms, f) => this._resT.push(setTimeout(f, ms));
+    el.querySelectorAll('.rs-lines b[data-to]').forEach((b, i) => T(1150 + i * 170, () => { countTo(b, +b.dataset.to, 520); audio.coin(Math.min(2, i)); }));
+    const tot = el.querySelector('#r-total');
+    if (tot) {
+      const t0 = 1250 + nl * 170;
+      T(t0, () => countTo(tot, d.total, 900));
+      T(t0 + 950, () => { el.querySelector('.rs-total').classList.add('paid'); audio.coin(3); vibrate([12, 30, 12]); });
+    }
+  }
+  hideResult() { for (const t of this._resT || []) clearTimeout(t); this._resT = []; this.el.result.hidden = true; }
 }

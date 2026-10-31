@@ -189,26 +189,26 @@ export class OnlineScreen {
   // ------------------------------------------------------------------ результат
   showResult(r) {
     const rew = this.s.finish(r), win = r.outcome === 'win', draw = r.outcome === 'draw';
-    const title = r.void ? 'МАТЧ НЕ ЗАРАХОВАНО' : win ? 'ПЕРЕМОГА!' : draw ? 'НІЧИЯ' : 'ПОРАЗКА';
-    const sp = r.spec || {}, myN = sp.home ? sp.home.name : OP.club.name, opN = sp.club ? sp.club.name : 'СУПЕРНИК';
+    const sp = r.spec || {}, flag = (c) => (c && c.crest) || flagSvg((c && c.flag) || OP.club.flag, 'oflag crest');
     const lines = [], chips = [];
     if (rew) {
-      lines.push(`<li style="--i:0"><span>${win ? 'Перемога' : draw ? 'Нічия' : 'Участь'}${r.me ? ' і голи' : ''}</span><b>+${fmt(rew.coins)}</b>${I.coin}</li>`);
-      lines.push(`<li style="--i:1"><span>Рейтинг</span><b>${rew.dR >= 0 ? '+' : ''}${rew.dR}</b><em>${OP.rating}</em></li>`);
-      lines.push(`<li style="--i:2"><span>Досвід клубу</span><b>+${rew.xp}</b></li>`);
-      if (rew.clubUp) chips.push(`<div class="chip gold">${I.up}<span>Клуб досяг ${rew.lvl} рівня: +100 монет</span></div>`);
-      for (const u of rew.ups.slice(0, 5)) chips.push(`<div class="chip blue">${I.up}<span>${esc(u.name.split(' ')[0])} ${u.lvl} рів.: ${STAT_NAMES[u.key]} +1</span></div>`);
+      const goals = r.me * 15;
+      lines.push({ label: win ? 'Перемога' : draw ? 'Нічия' : 'Участь', value: rew.coins - goals, coin: true });
+      if (goals) lines.push({ label: 'Голи · ' + r.me + ' × 15', value: goals, coin: true });
+      lines.push({ label: 'Рейтинг', text: (rew.dR >= 0 ? '+' : '') + rew.dR, sub: String(OP.rating) });
+      lines.push({ label: 'Досвід клубу', text: '+' + rew.xp, sub: 'рів. ' + rew.lvl });
+      if (rew.clubUp) chips.push(['gold', I.up, `Клуб досяг ${rew.lvl} рівня: +100 монет`]);
+      for (const u of rew.ups.slice(0, 5)) chips.push(['blue', I.up, `${u.name.split(' ')[0]} ${u.lvl} рів.: ${STAT_NAMES[u.key]} +1`]);
     }
-    if (r.forfeit) chips.push(`<div class="chip ${r.forfeit === 'opp' ? 'green' : 'red'}">${I.bolt}<span>${r.forfeit === 'opp' ? 'Суперник вийшов — технічна перемога' : 'Ти вийшов — технічна поразка'}</span></div>`);
-    if (r.void) chips.push(`<div class="chip">${I.bolt}<span>Зв’язок обірвався — рейтинг не змінився</span></div>`);
+    if (r.forfeit) chips.push([r.forfeit === 'opp' ? 'green' : 'red', I.bolt, r.forfeit === 'opp' ? 'Суперник вийшов — технічна перемога' : 'Ти вийшов — технічна поразка']);
+    if (r.void) chips.push(['mint', I.bolt, 'Зв’язок обірвався — рейтинг не змінився']);
     const can = this.s.net && this.s.net.open && !r.forfeit;
-    this.ui.el.result.innerHTML = `<div class="res ${r.void ? 'draw' : r.outcome}">
-      <div class="res-l"><h1>${title}</h1>
-        <div class="res-score"><span>${esc(myN)}</span><b>${r.me}</b><i>:</i><b>${r.opp}</b><span>${esc(opN)}</span></div>
-        <div class="chips">${chips.join('')}</div><p class="fact">Онлайн-матч · твій рейтинг ${OP.rating} · монети ${fmt(OP.coins)}</p></div>
-      <div class="res-r"><ul class="lines">${lines.join('')}</ul>
-        <div class="res-btns">${can ? `<button class="big go" data-act="on-rematch">${I.play}<b>РЕВАНШ</b></button>` : ''}<button class="big alt" data-act="on-menu"><b>${can ? 'В ЛОБІ' : 'ДО ОНЛАЙНУ'}</b></button></div></div>
-    </div>`;
-    this.ui.el.result.hidden = false;
+    this.ui.renderResult({
+      outcome: r.void ? 'void' : r.outcome, title: r.void ? 'НЕ ЗАРАХОВАНО' : win ? 'ПЕРЕМОГА!' : draw ? 'НІЧИЯ' : 'ПОРАЗКА', tag: 'Онлайн-матч · рейтинг ' + OP.rating,
+      me: { name: sp.home ? sp.home.name : OP.club.name, crest: flag(sp.home) }, opp: { name: sp.club ? sp.club.name : 'СУПЕРНИК', crest: flag(sp.club) },
+      score: [r.me, r.opp], scorers: r.scorers, chips, fact: 'Монети онлайн-клубу: ' + fmt(OP.coins),
+      head: 'Нагороди клубу', lines, total: rew ? rew.coins : null,
+      buttons: [...(can ? [['go', 'on-rematch', 'РЕВАНШ', I.play]] : []), ['alt', 'on-menu', can ? 'В ЛОБІ' : 'ДО ОНЛАЙНУ']],
+    });
   }
 }
