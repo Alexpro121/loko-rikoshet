@@ -43,8 +43,8 @@ export class UI {
     <div class="top-l"><button class="sq btn-dark" data-act="settings" aria-label="Налаштування">${I.gear}</button><button class="sq btn-dark" data-act="fs" aria-label="На весь екран">${I.full}</button></div>
     <div class="league" id="m-league"></div>
     <div class="wallet">
-      <button class="pill gold" ${TEST_MODE ? 'data-act="test-coins"' : ''}><b id="m-coins" data-v="0">0</b>${I.coin}</button>
-      <div class="pill mint"><b id="m-tickets" data-v="0">0</b>${I.ticket}</div>
+      <button class="purse gold" ${TEST_MODE ? 'data-act="test-coins"' : ''}><b id="m-coins" data-v="0">0</b>${I.coin}</button>
+      <div class="purse mint"><b id="m-tickets" data-v="0">0</b>${I.ticket}</div>
       <button class="cash" id="m-cash" data-act="cash" hidden></button>
     </div>
   </header>
@@ -52,15 +52,18 @@ export class UI {
   <aside class="m-side m-right" id="m-next"></aside>
   <footer class="bottom">
     <div class="cards">
-      <button class="card" id="m-stad" data-act="up-stadium"><span class="card-ic">${I.stadium}</span><span class="card-t"><b>СТАДІОН</b><em id="m-stad-v"></em></span><span class="card-p" id="m-stad-c"></span></button>
+      <button class="card" id="m-stad" data-act="up-stadium"><span class="card-ic">${I.stadium}</span><span class="card-t"><b>Стадіон</b><em id="m-stad-v"></em></span><span class="card-p" id="m-stad-c"></span></button>
     </div>
-    <button class="cta" id="m-cta" data-act="play"><span class="tk-main"><small>КВИТОК · ЛОКО</small><b>ВПЕРЕД!</b><i class="tk-bar"></i></span><span class="tk-stub"><em>РЕЙС</em><strong id="m-cta-n"></strong><small id="m-cta-s"></small></span></button>
     <nav class="nav" id="m-nav">
-      <button class="nb on" data-act="nav-match"><i>${I.ball}</i><span>МАТЧ</span><s>1</s></button>
-      <button class="nb" data-act="nav-transfers"><i>${I.shirt}</i><span>КОМАНДА</span><s>2</s></button>
-      <button class="nb" data-act="nav-academy"><i>${I.team}</i><span>АКАДЕМІЯ</span><s>3</s><u id="m-acad-dot" hidden></u></button>
-      <button class="nb" data-act="nav-stadium"><i>${I.stadium}</i><span>СТАДІОН</span><s>4</s></button>
+      <button class="nb on" data-act="nav-match"><i>${I.ball}</i><span>Матч</span></button>
+      <button class="nb" data-act="nav-transfers"><i>${I.shirt}</i><span>Команда</span></button>
+      <button class="nb" data-act="nav-academy"><i>${I.team}</i><span>Академія</span><u id="m-acad-dot" hidden></u></button>
+      <button class="nb" data-act="nav-stadium"><i>${I.stadium}</i><span>Стадіон</span></button>
     </nav>
+    <button class="cta" id="m-cta" data-act="play" aria-label="Почати матч">
+      <span class="go-tag"><em>Матч</em><strong id="m-cta-n"></strong><small id="m-cta-s"></small></span>
+      <span class="go-body"><b class="go-t">ВПЕРЕД!</b><svg class="go-chev" viewBox="0 0 40 24" aria-hidden="true"><path d="M2 3l11 9-11 9V3zM15 3l11 9-11 9V3zM28 3l11 9-11 9V3z"/></svg><i class="go-sweep" aria-hidden="true"></i></span>
+    </button>
   </footer>
 </section>
 <section class="panel" id="panel" hidden></section>`);
@@ -68,11 +71,19 @@ export class UI {
     root.insertAdjacentHTML('beforeend', `
 <section class="overlay result" id="result" hidden></section>
 <section class="overlay pause" id="pause" hidden>
-  <div class="card-box">
-    <h2>ПАУЗА</h2><p class="fact" id="p-fact"></p>
-    <button class="big go" data-act="resume">${I.play}<b>ПРОДОВЖИТИ</b></button>
-    <button class="big alt" data-act="pens">${I.ball}<b>ПЕНАЛЬТІ</b></button>
-    <div class="row2"><button class="big alt" data-act="settings">${I.gear}<b>НАЛАШТУВАННЯ</b></button><button class="big red" data-act="quit">${I.close}<b>В МЕНЮ</b></button></div>
+  <div class="sp-bg pz-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></div>
+  <div class="pz">
+    <div class="pz-l">
+      <h2 class="pz-t" data-t="ПАУЗА">ПАУЗА</h2>
+      <div class="pz-sc" id="p-score"></div>
+      <div class="pz-fact"><b>Знали?</b><p class="fact" id="p-fact"></p></div>
+    </div>
+    <div class="pz-r">
+      <button class="pz-b go" data-act="resume">${I.play}<b>Продовжити</b></button>
+      <button class="pz-b" data-act="pens">${I.ball}<b>Пенальті</b></button>
+      <button class="pz-b" data-act="settings">${I.gear}<b>Налаштування</b></button>
+      <button class="pz-b red" data-act="quit">${I.close}<b>В меню</b></button>
+    </div>
   </div>
 </section>
 <section class="overlay settings" id="settings" hidden></section>
@@ -115,6 +126,7 @@ export class UI {
     });
     this.hud.onShow = () => this.setMatchUi(true);
     this.hud.onHide = () => this.setMatchUi(false);
+    this.hud.onCine = (on) => { if (this.cineOn !== on) { this.cineOn = on; this.applyControls(); } };
     this.initJoy();
     this.applyControls();
     this.iosHint();
@@ -162,7 +174,16 @@ export class UI {
   }
   setMatchUi(on) { this.matchActive = on; this.applyControls(); }
   applyControls() {
-    this.el.joy.hidden = !((this.matchActive && this.useJoy()) || this.joyEdit);
+    // джойстик плавно проявляється й ховається; у катсценах його не видно
+    const jel = this.el.joy, want = (this.matchActive && this.useJoy()) || this.joyEdit, show = want && (this.joyEdit || !this.cineOn);
+    clearTimeout(this._joyT);
+    if (show) {
+      if (jel.hidden) { jel.classList.add('off'); jel.hidden = false; void jel.offsetWidth; }
+      jel.classList.remove('off');
+    } else if (!jel.hidden) {
+      jel.classList.add('off'); jel.querySelector('.joy-knob').style.transform = '';
+      this._joyT = setTimeout(() => { if (jel.classList.contains('off')) jel.hidden = true; }, 400);
+    }
     const js = this.el.joy.style, st0 = S.settings, custom = st0.joyX >= 0 && st0.joyY >= 0;
     js.left = custom ? st0.joyX * 100 + '%' : ''; js.top = custom ? st0.joyY * 100 + '%' : '';
     js.right = js.bottom = custom ? 'auto' : ''; js.transform = custom ? 'translate(-50%, -50%)' : '';
@@ -244,6 +265,7 @@ export class UI {
       default:
         if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); return this.renderPanel(); }
         if (a.startsWith('cam-')) { const v = CAM_VIEWS[a.slice(4)]; if (v) { Object.assign(S.settings, { camView: a.slice(4), camTilt: v.tilt, camZoom: v.zoom }); commit(); g.computeMatchBase(); audio.click(); return this.renderSettings(); } }
+        if (a.startsWith('set-tab:')) { this.setTab = a.slice(8); audio.click(); return this.renderSettings(); }
         if (a.startsWith('tod-')) { S.settings.timeOfDay = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
         if (a.startsWith('wth-')) { S.settings.weather = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
         if (a.startsWith('cust:')) return this.openCustom(+a.slice(5));
@@ -257,7 +279,8 @@ export class UI {
 
   menuTap() {
     const g = this.game; this.el.cta.classList.remove('punch'); void this.el.cta.offsetWidth; this.el.cta.classList.add('punch');
-    if (g.sm.name !== 'MENU' || this.panel || !this.el.splash.hidden || !this.el.settings.hidden || !this.el.reveal.hidden) return;
+    if (g.sm.name !== 'MENU' || !this.el.splash.hidden || !this.el.settings.hidden || !this.el.reveal.hidden) return;
+    if (this.panel) this.closePanel(true);                                             // локомотив видно й над панеллю: їде одразу
     audio.click(); audio.unlock();
     g.play();
   }
@@ -276,21 +299,46 @@ export class UI {
   // ---------------------------------------------------------------- меню
   showMenu() {
     if (!this.started) return;
-    this.el.menu.hidden = false; this.el.menu.classList.remove('hide');
+    const m = this.el.menu;
+    m.hidden = false; m.classList.remove('hide', 'enter'); void m.offsetWidth; m.classList.add('enter');
+    clearTimeout(this._enterT); this._enterT = setTimeout(() => m.classList.remove('enter'), 2600);
     this.refresh(true);
+    this.rollFlaps();
+  }
+
+  /** Табло «перебирає» літери, як справжнє розкидне табло, і зупиняється по черзі зліва направо. */
+  rollFlaps() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cells = [...this.el.next.querySelectorAll('.flap s')]; if (!cells.length) return;
+    const AB = 'АБВГДЕЄЖЗИІКЛМНОПРСТУФХЦЧШЮЯ0123456789';
+    const fin = cells.map((c) => c.innerHTML), stop = cells.map((c) => 260 + (+c.style.getPropertyValue('--i') || 0) * 55 + Math.random() * 120);
+    const t0 = performance.now(), id = (this._flapId = (this._flapId || 0) + 1);
+    const step = (now) => {
+      if (id !== this._flapId) return;
+      const t = now - t0; let busy = false;
+      cells.forEach((c, i) => {
+        if (t >= stop[i]) { if (c.dataset.r) { c.innerHTML = fin[i]; delete c.dataset.r; c.classList.remove('set'); void c.offsetWidth; c.classList.add('set'); } return; }
+        busy = true; c.dataset.r = 1; if (fin[i] !== '&nbsp;') c.textContent = AB[(Math.random() * AB.length) | 0];
+      });
+      if (busy) setTimeout(() => requestAnimationFrame(step), 45);
+    };
+    requestAnimationFrame(step);
   }
   hideMenu() { this.el.menu.hidden = true; this.closePanel(true); }
 
   leagueStrip() {
     const spec = matchSpec(S.fixture, S.season), lg = LEAGUES[spec.league];
     const next = LEAGUES[spec.league + 1];
+    const n = lg.clubs.length;
     const chips = lg.clubs.map((c, i) => {
       const st = i < spec.no - 1 ? 'done' : i === spec.no - 1 ? 'cur' : 'todo';
-      const fin = i === lg.clubs.length - 1;
-      return `<div class="stn ${st} ${fin ? 'fin' : ''}">${fin ? `<i class="stn-cup">${I.trophy}</i>` : ''}<span class="stn-n">${st === 'done' ? I.check : i + 1}</span><em>${c.name}</em></div>`;
+      const fin = i === n - 1;
+      return `<div class="stn ${st} ${fin ? 'fin' : ''}" style="--i:${i}">${fin ? `<i class="stn-cup">${I.trophy}</i>` : ''}<span class="stn-n">${st === 'done' ? I.check : i + 1}</span><em>${c.name}</em></div>`;
     }).join('');
-    const sh = (txt, name, cls) => `<div class="shield ${cls}"><svg viewBox="0 0 50 58"><path d="M4 4h42v26c0 11-11 20-21 24C15 50 4 41 4 30z"/></svg><b>${txt}</b><i>${name}</i></div>`;
-    this.el.league.innerHTML = sh(lg.short, lg.name, 'cur') + `<div class="rail"><svg class="rail-bg" preserveAspectRatio="none" viewBox="0 0 100 10"><rect y="2.4" width="100" height="1.2"/><rect y="6.4" width="100" height="1.2"/><path d="M0 5H100" stroke-dasharray="1.2 2.6"/></svg><div class="stns">${chips}</div></div>` + (next ? sh(next.short, next.name, 'next') : sh('' + (S.season + 2), 'Сезон ' + (S.season + 2), 'next'));
+    const sh = (txt, name, cls) => `<div class="lg-plate ${cls}"><b>${txt}</b><i>${name}</i></div>`;
+    this.el.league.innerHTML = sh(lg.short, lg.name, 'cur')
+      + `<div class="route" style="--n:${n};--p:${n > 1 ? (spec.no - 1) / (n - 1) : 0}"><i class="rt-line"></i><i class="rt-done"></i><div class="stns">${chips}</div></div>`
+      + (next ? sh(next.short, next.name, 'next') : sh('' + (S.season + 2), 'Сезон ' + (S.season + 2), 'next'));
   }
 
   refresh(force) {
@@ -320,9 +368,14 @@ export class UI {
     const kc = [rating, S.stats.wins, S.stats.goals, S.stats.bestCombo, form.join(''), S.trophies].join('|');
     if (force || this._clubKey !== kc) {
       this._clubKey = kc;
-      this.el.club.innerHTML = `<div class="mc-h">${lokoCrest()}<div><b>ЛОКОМОТИВ</b><em>Київ · з 1919</em></div></div>
-        <div class="mc-stats"><div><b>${rating}</b><span>рейтинг</span></div><div><b>${S.stats.wins}</b><span>перемог</span></div><div><b>${S.trophies}</b><span>кубків</span></div></div>
-        <div class="mc-form"><span>Форма</span><div>${dots}</div></div>`;
+      this.el.club.innerHTML = `<i class="mc-band" aria-hidden="true"></i>
+        <div class="mc-h">${lokoCrest()}<div><b>Локомотив</b><em>Київ · з 1919</em></div></div>
+        <div class="mc-num"><b id="m-rating" data-v="0">0</b><span>сила<br>складу</span></div>
+        <div class="mc-stats"><div><b>${S.stats.wins}</b><span>перемог</span></div><div><b>${S.stats.goals}</b><span>голів</span></div><div><b>${S.trophies}</b><span>кубків</span></div></div>
+        <div class="mc-form"><span>Форма</span>${form.length ? `<div>${dots}</div>` : '<em>ще без матчів</em>'}</div>
+        <div class="mc-more">Склад команди<svg viewBox="0 0 40 24" aria-hidden="true"><path d="M2 3l11 9-11 9V3zM15 3l11 9-11 9V3z"/></svg></div>`;
+      const rt = this.el.club.querySelector('#m-rating');
+      if (force) countTo(rt, rating, 900, (v) => String(Math.round(v))); else { rt.dataset.v = rating; rt.textContent = rating; }
     }
     const nk = [S.fixture, S.season, rating, S.up.stadium, S.stats.matches].join('|');
     if (force || this._nextKey !== nk) {
@@ -331,21 +384,28 @@ export class UI {
       const oq = oppSquad(spec), star = oq.find((e) => e.star), oAvg = Math.round(oq.reduce((a, e) => a + ovr(e), 0) / oq.length), diff = oAvg - rating;
       const lvl = diff <= -8 ? 1 : diff <= 3 ? 2 : diff <= 14 ? 3 : 4, label = ['', 'Легко', 'Рівний бій', 'Складно', 'Дуже складно'][lvl];
       const rew = Math.round(120 * spec.scale * incomeMult());
-      const pips = [1, 2, 3, 4].map((n) => `<i class="${n <= lvl ? 'on l' + lvl : ''}"></i>`).join('');
       const flap = (t) => [...String(t).toUpperCase()].map((ch, i) => `<s style="--i:${i}">${ch === ' ' ? '&nbsp;' : ch}</s>`).join('');
       const sig = [1, 2, 3, 4].map((n) => `<i class="${n <= lvl ? 'on l' + lvl : ''}"></i>`).join('');
-      this.el.next.innerHTML = `<div class="bd-h"><span>ВІДПРАВЛЕННЯ</span><b>${spec.no}/${spec.of}</b></div>
-        <div class="bd-r"><em>НА</em><div class="flap">${flap(spec.club.name)}</div></div>
-        <div class="bd-r"><em>З</em><div class="flap sm">${flap(spec.club.city)}</div></div>
-        <div class="bd-r"><em>ШЛЯХ</em><div class="flap sm">${flap(spec.leagueName)}</div></div>
-        <div class="bd-r"><em>СТИЛЬ</em><div class="flap sm">${flap(rv.style.name)}</div></div>
+      this.el.next.innerHTML = `<div class="bd-h"><span>Відправлення</span><b>${spec.no}/${spec.of}</b><time class="bd-clk">${this.clock()}</time></div>
+        <div class="bd-r"><em>До</em><div class="flap">${flap(spec.club.name)}</div></div>
+        <div class="bd-r"><em>Місто</em><div class="flap sm">${flap(spec.club.city)}</div></div>
+        <div class="bd-r"><em>Ліга</em><div class="flap sm">${flap(spec.leagueName)}</div></div>
+        <div class="bd-r"><em>Стиль</em><div class="flap sm">${flap(rv.style.name)}</div></div>
         <div class="bd-n">${star ? `<b>★ ${star.name}</b> · ` : ''}${note || rv.style.tip}${rv.rec.met ? ` · зустрічі ${rv.rec.w}-${rv.rec.d}-${rv.rec.l}` : ''}${rv.revenge ? ' · <i>РЕВАНШ</i>' : ''}</div>
-        <div class="bd-s"><div class="sig">${sig}</div><span>${label}</span></div>
-        <div class="bd-f"><span>ПРИЗ</span><b>+${fmt(rew)}</b>${I.coin}</div>`;
+        <div class="bd-s"><div class="sem">${sig}</div><span>${label}</span></div>
+        <div class="bd-f"><span>Приз</span><b>+${fmt(rew)}</b>${I.coin}</div>`;
     }
   }
 
+  /** Вокзальний годинник на табло: справжній час пристрою, двокрапка блимає. */
+  clock() {
+    const d = new Date(), p = (v) => String(v).padStart(2, '0');
+    return `${p(d.getHours())}<i>:</i>${p(d.getMinutes())}`;
+  }
+
   tickCash() {
+    const clk = !this.el.menu.hidden && this.el.next.querySelector('.bd-clk');
+    if (clk) { const t = this.clock(); if (clk.dataset.t !== t) { clk.dataset.t = t; clk.innerHTML = t; } }
     const c = pendingCash();
     const b = this.el.cash;
     if (c >= 10) { b.hidden = false; const t = 'Каса +' + fmt(c); if (b.dataset.t !== t) { b.dataset.t = t; b.innerHTML = I.coin + '<b>' + t + '</b>'; } }
@@ -599,21 +659,27 @@ export class UI {
     const tdb = (k, t) => `<button class="${s.timeOfDay === k ? 'on' : ''}" data-act="tod-${k}">${t}</button>`;
     const wtb = (k, t) => `<button class="${s.weather === k ? 'on' : ''}" data-act="wth-${k}">${t}</button>`;
     const qb = (k, t) => `<button class="${s.quality === k ? 'on' : ''}" data-act="q-${k}">${t}</button>`;
-    this.el.settings.innerHTML = `<div class="card-box wide">
-      <header class="sheet-h"><h2>Налаштування</h2><button class="sq btn-red" data-act="close-settings" aria-label="Закрити">${I.close}</button></header>
-      <div class="set-grid">
-        ${row('set-sfx', 'Звуки', s.sfx)}${row('set-music', 'Музика', s.music)}${row('set-haptics', 'Вібрація', s.haptics)}
-        <div class="tg q"><span>Графіка</span><div class="seg">${qb('auto', 'АВТО')}${qb('high', 'ВИСОКА')}${qb('low', 'ЕКОНОМНА')}</div></div>
-        <div class="tg q"><span>Керування ударом</span><div class="seg">${cb('auto', 'АВТО')}${cb('joy', 'ДЖОЙСТИК')}${cb('drag', 'ВІДТЯГУВАННЯ')}</div></div>
-        <div class="tg q"><span>Час доби</span><div class="seg">${tdb('day', 'ДЕНЬ')}${tdb('dusk', 'ВЕЧІР')}${tdb('night', 'НІЧ')}${tdb('random', 'ВИПАДКОВО')}</div></div>
-        <div class="tg q"><span>Погода</span><div class="seg">${wtb('clear', 'ЯСНО')}${wtb('cloudy', 'ХМАРНО')}${wtb('rain', 'ДОЩ')}${wtb('snow', 'СНІГ')}${wtb('fog', 'ТУМАН')}${wtb('random', 'ВИПАДКОВО')}</div></div>
-        <div class="tg q"><span>Камера в матчі</span><div class="seg cam-views">${Object.entries(CAM_VIEWS).map(([k, v]) => `<button class="${s.camView === k ? 'on' : ''}" data-act="cam-${k}">${v.name}</button>`).join('')}</div></div>
-        <div class="tg q joy-set"><div class="rng"><label>Відстань<output>${s.camZoom}%</output></label><input type="range" min="60" max="140" step="2" value="${s.camZoom}" data-range="camZoom" aria-label="Відстань камери"/></div><div class="rng"><label>Нахил<output>${s.camTilt}°</output></label><input type="range" min="32" max="80" step="1" value="${s.camTilt}" data-range="camTilt" data-unit="°" aria-label="Нахил камери"/></div><div class="rng"><label>Слідкування за м'ячем<output>${s.camFollow}%</output></label><input type="range" min="50" max="220" step="10" value="${s.camFollow}" data-range="camFollow" aria-label="Швидкість слідкування камери"/></div></div>
-        ${row('set-shake', 'Тряска камери', s.camShake !== false)}
-        <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
-        <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><button class="btn alt joy-mv" data-act="joy-move"><b>ПЕРЕМІСТИТИ</b></button><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>
+    const tab = this.setTab || 'gen';
+    const tabs = [['gen', 'Загальне', I.gear], ['match', 'Матч', I.ball], ['cam', 'Камера', I.full], ['ctl', 'Керування', I.up]];
+    const pages = {
+      gen: `${row('set-sfx', 'Звуки', s.sfx)}${row('set-music', 'Музика', s.music)}${row('set-haptics', 'Вібрація', s.haptics)}
         <button class="tg" data-act="fs"><span>На весь екран</span>${I.full}</button>
-        <button class="tg danger" data-act="reset"><span></span><b>СКИНУТИ ПРОГРЕС</b></button>
+        <div class="tg q"><span>Графіка</span><div class="seg">${qb('auto', 'АВТО')}${qb('high', 'ВИСОКА')}${qb('low', 'ЕКОНОМНА')}</div></div>
+        <button class="tg danger" data-act="reset"><span></span><b>СКИНУТИ ПРОГРЕС</b></button>`,
+      match: `<div class="tg q"><span>Час доби</span><div class="seg">${tdb('day', 'ДЕНЬ')}${tdb('dusk', 'ВЕЧІР')}${tdb('night', 'НІЧ')}${tdb('random', 'ВИПАДКОВО')}</div></div>
+        <div class="tg q"><span>Погода</span><div class="seg">${wtb('clear', 'ЯСНО')}${wtb('cloudy', 'ХМАРНО')}${wtb('rain', 'ДОЩ')}${wtb('snow', 'СНІГ')}${wtb('fog', 'ТУМАН')}${wtb('random', 'ВИПАДКОВО')}</div></div>`,
+      cam: `<div class="tg q"><span>Камера в матчі</span><div class="seg cam-views">${Object.entries(CAM_VIEWS).map(([k, v]) => `<button class="${s.camView === k ? 'on' : ''}" data-act="cam-${k}">${v.name}</button>`).join('')}</div></div>
+        <div class="tg q joy-set"><div class="rng"><label>Відстань<output>${s.camZoom}%</output></label><input type="range" min="60" max="140" step="2" value="${s.camZoom}" data-range="camZoom" aria-label="Відстань камери"/></div><div class="rng"><label>Нахил<output>${s.camTilt}°</output></label><input type="range" min="32" max="80" step="1" value="${s.camTilt}" data-range="camTilt" data-unit="°" aria-label="Нахил камери"/></div><div class="rng"><label>Слідкування за м'ячем<output>${s.camFollow}%</output></label><input type="range" min="50" max="220" step="10" value="${s.camFollow}" data-range="camFollow" aria-label="Швидкість слідкування камери"/></div></div>
+        ${row('set-shake', 'Тряска камери', s.camShake !== false)}`,
+      ctl: `<div class="tg q"><span>Керування ударом</span><div class="seg">${cb('auto', 'АВТО')}${cb('joy', 'ДЖОЙСТИК')}${cb('drag', 'ВІДТЯГУВАННЯ')}</div></div>
+        <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
+        <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><button class="btn alt joy-mv" data-act="joy-move"><b>ПЕРЕМІСТИТИ</b></button><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>`,
+    };
+    this.el.settings.innerHTML = `<div class="card-box wide st-box">
+      <header class="sheet-h"><h2>Налаштування</h2><button class="sq btn-red" data-act="close-settings" aria-label="Закрити">${I.close}</button></header>
+      <div class="st-wrap">
+        <nav class="st-tabs">${tabs.map(([k, t, ic]) => `<button class="${tab === k ? 'on' : ''}" data-act="set-tab:${k}"><i>${ic}</i><span>${t}</span></button>`).join('')}</nav>
+        <div class="set-grid st-${tab}">${pages[tab]}</div>
       </div></div>`;
   }
 
@@ -622,7 +688,9 @@ export class UI {
     const g = this.game;
     if (g.sm.name !== 'MATCH' || !g.match.isPlaying()) return;
     g.match.pause(); this.el.pause.hidden = false;
-    const pf = this.root.querySelector('#p-fact'); if (pf) pf.textContent = 'Знали? ' + randomFact();
+    const pf = this.root.querySelector('#p-fact'); if (pf) pf.textContent = randomFact();
+    const tx = (id) => { const e = this.root.querySelector('#' + id); return e ? e.textContent : ''; };
+    this.root.querySelector('#p-score').innerHTML = `<span>ЛОК</span><b>${tx('h-sc-me')}</b><i>:</i><b>${tx('h-sc-opp')}</b><span>${tx('h-opp-name')}</span><em>${tx('h-time')} · ${tx('h-half')}</em>`;
   }
 
   showResult(r) {

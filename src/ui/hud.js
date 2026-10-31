@@ -106,6 +106,7 @@ export class Hud {
     const c = this.cineEl ??= this.el.querySelector('#h-cine'), tg = this.cineTag ??= this.el.querySelector('#h-cine-tag');
     c.classList.toggle('on', !!on); this.el.classList.toggle('cine-on', !!on);
     tg.textContent = on && tag ? tag : ''; tg.classList.toggle('live', tag === 'ПОВТОР');
+    if (this.onCine) this.onCine(!!on);
   }
 
   /** Картка гравця з м'ячем: ім'я, рейтинг і три головні навички. null — сховати. */
