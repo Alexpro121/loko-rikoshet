@@ -357,13 +357,19 @@ export class Team {
       // напрямок і темп — куди він ЗБИРАЄТЬСЯ бігти (ціль), а не куди ще несе інерція: розвертається вже на гальмуванні,
       // тож після розвороту біжить обличчям уперед, а не задом
       const gx = (a.tx ?? p.x) - p.x, gz = (a.tz ?? p.z) - p.z, gl = Math.hypot(gx, gz), want = gl > 1 ? Math.min(a.spT ?? s, gl * 1.6) : 0;
-      const se = Math.max(s, want), mvA = gl > 1 && want > s ? Math.atan2(gx, gz) : Math.atan2(p.vx, p.vz);
+      // на розвороті з розгону (ціль позаду руху) спершу гальмує обличчям уперед і лише повільно (< ~2 м/с) повертається
+      // до нової цілі — інакше корпус одразу дивився на ціль, а гравець ще летів у старий бік задом
+      const vA = Math.atan2(p.vx, p.vz), gA = Math.atan2(gx, gz), rev = s > 2 && Math.abs(angDiff(vA, gA)) > 1.6;
+      const se = Math.max(s, want), mvA = gl > 1 && want > s && !rev ? gA : vA;
       let d = 0, tw = 0;
       if (se >= 0.3) {
         d = angDiff(by, mvA);
         if (Math.abs(d) > 2.4) { if (!a.gSide) a.gSide = Math.sign(d) || 1; if (Math.sign(d) !== a.gSide) d += a.gSide * Math.PI * 2; } else a.gSide = 0;
-        const v0 = 0.8 + 1.4 * smooth(clamp((Math.abs(d) - 1.6) / 1.0, 0, 1));
-        tw = smooth(clamp((se - v0) / 1.3, 0, 1));
+        // задом чи боком до гри — лише короткий підшаг (до ~2.5 м і ~1.6 м/с). Раніше погляд тримався на м'ячі аж до
+        // 2.2–3.5 м/с, а спокійна перестановка обмежена ~2.3 м/с (і move() не пускає швидше задом), тож гравець
+        // ішов на нову позицію задом або боком через пів поля
+        const v0 = 0.8 + 0.8 * smooth(clamp((Math.abs(d) - 1.6) / 1.0, 0, 1)), far = smooth(clamp((gl - 2.5) / 3, 0, 1));
+        tw = Math.max(smooth(clamp((se - v0) / 1.0, 0, 1)), far * smooth(clamp((se - 0.5) / 0.6, 0, 1)));
       } else a.gSide = 0;
       a.gW = (a.gW ?? tw) + (tw - (a.gW ?? tw)) * Math.min(1, dt * 5);
       p.yaw = by + d * a.gW;
