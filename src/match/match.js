@@ -2152,6 +2152,7 @@ export class Match {
       // уже вирішив ловити: лишає як є, поки м'яч справді йде в руки; пішов убік (підкрутка, рикошет) — лише стрибок
       const redo = g.decided === this.shotId;
       if (redo && (need < 0.15 || eta < 0.12)) continue;
+      let lowDive = false;
       const lat = Math.abs(lateral), hands = (fn) => { g.decided = this.shotId; g.decType = 'hands'; g.frozen = Math.max(g.frozen, eta + 0.35); g.p.vx = g.p.vz = 0; fn(); };
       if (!redo) {
         // упритул сильно на рівні тіла, часу ні на що нема — «зірочка»
@@ -2178,11 +2179,14 @@ export class Match {
           const shift = (keep) => { const s = Math.sign(lateral) * clamp(lat - keep, 0, 0.55); g.saveShift = s ? { z0: g.p.z, dz: s, t: 0, T: Math.max(0.12, eta * 0.8) } : null; };
           if (lowBall && lat < 1.0) { shift(0.3); hands(() => g.p.gkKnee(at, eta)); }      // «барʼєр» на коліні — ловить руками
           else if (lowBall && lat < 1.3 && bsp > 12) { shift(0.7); strike(() => g.p.gkFoot(at, eta)); }
+          // низом далі — короткий стрибок уздовж газону, нижня рука по траві до м'яча. Падіння на бік з місця лише нахиляло
+          // корпус (плечі ~0.9 м над газоном): нижня рука до трави не діставала, м'яч проходив під верхньою
+          else if (lowBall) lowDive = true;
           else { shift(0.75); g.decided = this.shotId; g.decType = 'hands'; g.frozen = Math.max(g.frozen, eta + 1.2); g.p.vx = g.p.vz = 0; g.p.gkFall(at, eta); }
-          continue;
+          if (!lowDive) continue;
         }
         // під поперечину трохи збоку — відштовхується й дотягується однією рукою, переводить через перекладину
-        if (predY > 1.8 && need < 0.4) { if (eta > 0.45) continue; strike(() => g.p.gkTip(at, eta)); continue; }
+        if (!lowDive && predY > 1.8 && need < 0.4) { if (eta > 0.45) continue; strike(() => g.p.gkTip(at, eta)); continue; }
       }
       // бігти чи стрибати — як справжній воротар: поки встигає ногами (приставним/бігом, team.js), біжить на лінію удару;
       // стрибає, лише коли ногами вже не встигне, — і саме тоді, коли стрибку лишається рівно стільки часу, скільки він триває
@@ -2197,7 +2201,7 @@ export class Match {
       // тіло в стрибку реально летить убік ~6 м/с (з розгоном — швидше), а не на повну силу ніг: далекий м'яч — стрибає
       // одразу, як прочитав удар (до ~0.75 с), а не чекає й не запізнюється
       const tOpt = clamp(0.24 + need / (5.8 + 0.5 * carry), 0.3, 0.75);
-      if (eta > tOpt + 0.03) continue;
+      if (!lowDive && eta > tOpt + 0.03) continue;
       g.decided = this.shotId; g.decType = 'dive';
       {
         const dir = Math.sign(lateral), reach = Math.min(Math.abs(lateral) + (Math.abs(lateral) < 0.8 ? 0.6 : 1.0), (2.2 + g.sk.reach * 3.4 + vRun * 0.12) * (G / 7.2));   // дотяжка в масштабі воріт

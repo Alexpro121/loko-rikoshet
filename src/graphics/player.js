@@ -2181,7 +2181,9 @@ export class Player {
             // однією рукою: м'яч далі, ніж дістають дві; тягнеться та рука, чиє плече ближче до м'яча
             const t = Math.min(tPlane, 0.5), dd = Math.hypot(V.x - chest.x - st.cv.x * t, V.y - chest.y - st.cv.y * t, V.z - chest.z - st.cv.z * t);
             oneT = smooth(clamp((dd - (armReach - 0.12)) / 0.18, 0, 1));
-            this.armL.getWorldPosition(_hs); const dl = _hs.distanceToSquared(V); this.armR.getWorldPosition(_hs); oneS = _hs.distanceToSquared(V) < dl ? 1 : -1;
+            // низовий м'яч — завжди нижня рука (плече ближче до газону): верхня, навіть ближча, проходить над м'ячем
+            this.armL.getWorldPosition(_hs); const dl = _hs.distanceToSquared(V), yl = _hs.y; this.armR.getWorldPosition(_hs);
+            oneS = V.y < 0.5 && Math.abs(_hs.y - yl) > 0.12 ? (_hs.y < yl ? 1 : -1) : _hs.distanceToSquared(V) < dl ? 1 : -1;
             spr = rb * lerp(0.75, 1.7, smooth(clamp((tPlane - 0.1) / 0.2, 0, 1)));   // поки м'яч далеко — руки ширше, ближче — збираються
           } else if (this.diveAim) { V = _hv.copy(this.diveAim); src = 'aim'; both(go * 0.55); spr = rb * 1.8; }   // м'яко: руки тягнуться, а не викручують тіло
           else { V = null; spr = rb * 0.75; }
