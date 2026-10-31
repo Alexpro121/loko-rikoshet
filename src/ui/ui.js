@@ -12,6 +12,7 @@ import { ensureSquad, oppSquad, allPlayers, swapTargets, swapPlayers, ovr, tierO
 /** Тестові інструменти (+10 000 монет) лише з ?test в адресі або в dev-збірці. */
 const TEST_MODE = !!(import.meta.env && import.meta.env.DEV) || /[?&]test/.test(location.search);
 import { striker } from '../state/economy.js';
+import { rivalOf, scoutNote } from '../state/rivals.js';
 
 const rarCol = (id) => ACADEMY.rarities.find((r) => r.id === id) || ACADEMY.rarities[0];
 
@@ -323,10 +324,11 @@ export class UI {
         <div class="mc-stats"><div><b>${rating}</b><span>рейтинг</span></div><div><b>${S.stats.wins}</b><span>перемог</span></div><div><b>${S.trophies}</b><span>кубків</span></div></div>
         <div class="mc-form"><span>Форма</span><div>${dots}</div></div>`;
     }
-    const nk = [S.fixture, S.season, rating, S.up.stadium].join('|');
+    const nk = [S.fixture, S.season, rating, S.up.stadium, S.stats.matches].join('|');
     if (force || this._nextKey !== nk) {
       this._nextKey = nk;
-      const oq = oppSquad(spec), oAvg = Math.round(oq.reduce((a, e) => a + ovr(e), 0) / oq.length), diff = oAvg - rating;
+      const rv = rivalOf(spec), note = scoutNote(spec);
+      const oq = oppSquad(spec), star = oq.find((e) => e.star), oAvg = Math.round(oq.reduce((a, e) => a + ovr(e), 0) / oq.length), diff = oAvg - rating;
       const lvl = diff <= -8 ? 1 : diff <= 3 ? 2 : diff <= 14 ? 3 : 4, label = ['', 'Легко', 'Рівний бій', 'Складно', 'Дуже складно'][lvl];
       const rew = Math.round(120 * spec.scale * incomeMult());
       const pips = [1, 2, 3, 4].map((n) => `<i class="${n <= lvl ? 'on l' + lvl : ''}"></i>`).join('');
@@ -336,6 +338,8 @@ export class UI {
         <div class="bd-r"><em>НА</em><div class="flap">${flap(spec.club.name)}</div></div>
         <div class="bd-r"><em>З</em><div class="flap sm">${flap(spec.club.city)}</div></div>
         <div class="bd-r"><em>ШЛЯХ</em><div class="flap sm">${flap(spec.leagueName)}</div></div>
+        <div class="bd-r"><em>СТИЛЬ</em><div class="flap sm">${flap(rv.style.name)}</div></div>
+        <div class="bd-n">${star ? `<b>★ ${star.name}</b> · ` : ''}${note || rv.style.tip}${rv.rec.met ? ` · зустрічі ${rv.rec.w}-${rv.rec.d}-${rv.rec.l}` : ''}${rv.revenge ? ' · <i>РЕВАНШ</i>' : ''}</div>
         <div class="bd-s"><div class="sig">${sig}</div><span>${label}</span></div>
         <div class="bd-f"><span>ПРИЗ</span><b>+${fmt(rew)}</b>${I.coin}</div>`;
     }

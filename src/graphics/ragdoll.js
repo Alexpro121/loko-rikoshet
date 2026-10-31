@@ -165,7 +165,9 @@ export class Ragdoll {
             if (vy < -1.2 && this.t > 0.08) { if (TORSO.includes(i) || i === 10) this.impact = Math.max(this.impact, -vy); if (this.landT < 0 && (TORSO.includes(i) || i === 10 || i >= 13)) this.landT = 0; }
             // тертя Кулона тіла об траву (μ ≈ 0.7): гальмує вага й сам удар — бічний імпульс до μ × нормального (жорстке
             // падіння гасить ковзання; з людської швидкості ~5 м/с тіло проїжджає травою до ~1 м)
-            const hx = p.x - q.x, hz = p.z - q.z, hv = Math.hypot(hx, hz), dec = 0.7 * (this.g * h + Math.max(0, -vy)) * h;
+            // стрибок воротаря: поки тулуб ще не торкнувся газону, стопи й гомілки (відштовхнулись) не гальмують політ — інакше
+            // ноги, що ще черкають траву, гасили бічну швидкість, і тіло летіло вдвічі повільніше, ніж відштовхнулось
+            const hx = p.x - q.x, hz = p.z - q.z, hv = Math.hypot(hx, hz), dec = this.dive && this.landT < 0 && i >= 2 && i <= 7 ? 0 : 0.7 * (this.g * h + Math.max(0, -vy)) * h;
             const k = hv > dec ? (hv - dec) / hv : 0; q.x = p.x - hx * k; q.z = p.z - hz * k;
           } else { q.x += (p.x - q.x) * 0.45; q.z += (p.z - q.z) * 0.45; }
           if (q.y < p.y - 0.001) q.y = p.y;

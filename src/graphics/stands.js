@@ -54,17 +54,27 @@ export class Stands {
     const pickCloth = (home) => (home && rnd() > 0.35 ? (rnd() > 0.5 ? '#a8182b' : '#e8e4d8') : CLOTHES[(rnd() * CLOTHES.length) | 0]);
 
     // вісь «вздовж» (ax,az), вісь «углиб» (dx,dz) — від поля назовні
-    const stand = (cx, cz, ax, az, dx, dz, cols, rows, homeFrom, homeTo) => {
+    // cut — проріз над тунелем гравців (лише трибуна вздовж X): по центру на ±cut.w нижні ряди прибрано, вищі стоять на
+    // його даху (від cut.y), тож тунель іде під трибуну, а не впирається в неї
+    const stand = (cx, cz, ax, az, dx, dz, cols, rows, homeFrom, homeTo, cut = null) => {
       const width = cols * SP + 1.2;
       const px0 = () => cx - dx * 0.4, pz0 = () => cz - dz * 0.4;
+      // смуга на всю ширину трибуни (y0..y1), крім прорізу; над прорізом — лише те, що вище за його дах
+      const span = (px, pz, y0, y1, dep, col) => {
+        if (!cut || ax === 0) { b.box(px, (y0 + y1) / 2, pz, ax !== 0 ? width : dep, y1 - y0, ax !== 0 ? dep : width, col); return; }
+        const sw = width / 2 - cut.w;
+        for (const sg of [-1, 1]) b.box(px + sg * (cut.w + sw / 2), (y0 + y1) / 2, pz, sw, y1 - y0, dep, col);
+        if (y1 > cut.y + 0.05) b.box(px, (Math.max(y0, cut.y) + y1) / 2, pz, 2 * cut.w, y1 - Math.max(y0, cut.y), dep, col);
+      };
       for (let r = 0; r < rows; r++) {
         const top = 1.0 + r * ROW_H, off = r * ROW_D;
         const px = cx + dx * off, pz = cz + dz * off;
-        b.box(px, (top - 0.6) / 2, pz, ax !== 0 ? width : ROW_D, top + 0.6, ax !== 0 ? ROW_D : width, r % 2 ? '#8c969b' : '#7f898e');
-        b.box(px, top + 0.04, pz, ax !== 0 ? width : ROW_D - 0.15, 0.08, ax !== 0 ? ROW_D - 0.15 : width, '#a4adb1');
+        span(px, pz, -0.3, top + 0.3, ROW_D, r % 2 ? '#8c969b' : '#7f898e');
+        span(px, pz, top, top + 0.08, ROW_D - 0.15, '#a4adb1');
         for (let k = 0; k < cols; k++) {
           if (rnd() > 0.94 || k % 26 === 0) continue;                     // проходи між секторами
           const lat = (k - (cols - 1) / 2) * SP;
+          if (cut && Math.abs(lat) < cut.w + 0.3 && top < cut.y + 0.3) continue;   // над тунелем у нижніх рядах — нікого
           const home = k >= homeFrom && k < homeTo;
           fans.push(px + ax * lat, top + 0.46, pz + az * lat, rnd() * 6.28, pickCloth(home), SKINS[(rnd() * SKINS.length) | 0]);
           sides.push(home ? 1 : (k > cols * 0.58 ? -1 : 0));
@@ -76,7 +86,7 @@ export class Stands {
         spots.push({ x: cx + dx * r * ROW_D + ax * (k - (cols - 1) / 2) * SP, z: cz + dz * r * ROW_D + az * (k - (cols - 1) / 2) * SP, y: 1.0 + r * ROW_H + 0.9, ry: Math.atan2(-dx, -dz) });
       }
       // поручні перед першим рядом і сходи в проходах
-      b.box(px0(), 1.55, pz0(), ax !== 0 ? width : 0.1, 0.1, ax !== 0 ? 0.1 : width, '#dfe3e6');
+      if (cut && ax !== 0) span(px0(), pz0(), 1.5, 1.6, 0.1, '#dfe3e6'); else b.box(px0(), 1.55, pz0(), ax !== 0 ? width : 0.1, 0.1, ax !== 0 ? 0.1 : width, '#dfe3e6');
       const place = (k, r) => ({ x: cx + dx * r * ROW_D + ax * (k - (cols - 1) / 2) * SP, z: cz + dz * r * ROW_D + az * (k - (cols - 1) / 2) * SP, y: 1.0 + r * ROW_H + 0.9, ry: Math.atan2(-dx, -dz) });
       if (dx !== 0) for (const [f, r] of [[0.26, 1], [0.38, 2], [0.5, 1]]) spots.push(place(Math.round(cols * f), r));   // плакати за воротами: добре видно при пенальті
       for (const [f, r] of [[0.6, 1], [0.7, 2], [0.8, 1]]) awaySpots.push(place(Math.round(cols * f), r));            // сектор гостей
@@ -87,7 +97,7 @@ export class Stands {
     };
 
     const zf = W + WALL + 3.2;
-    stand(0, -zf, 1, 0, 0, -1, Math.round((2 * L + 20) / SP), 10, 22, 52);
+    stand(0, -zf, 1, 0, 0, -1, Math.round((2 * L + 20) / SP), 10, 22, 52, { w: 4.4, y: 4.85 });   // над тунелем гравців
     for (const sd of [-1, 1]) stand(sd * (L + GOAL_D + 4.5), 0, 0, 1, sd, 0, Math.round((2 * W + 10) / SP), 8, 8, 28);
     for (const [sd, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {            // прожектори
       const px = sd * (L + 9), pz = sz * (W + 9);

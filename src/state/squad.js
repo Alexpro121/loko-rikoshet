@@ -2,6 +2,7 @@ import { S, commit } from './save.js';
 import { ACADEMY, FORMATIONS, KITS } from '../config.js';
 import { striker, keeper, keeperTier } from './economy.js';
 import { rng } from '../graphics/voxel.js';
+import { rivalOf, hashStr } from './rivals.js';
 
 /** Характеристики гравців: власні навички й інтелект, що справді впливають на гру й розвиваються. */
 export const STAT_KEYS = ['pace', 'shoot', 'pass', 'drib', 'tack', 'iq'];
@@ -133,12 +134,27 @@ export function swapPlayers(slot, benchIdx) {
 }
 
 /** Склад суперника: сила росте з прогресом, ролі мають свої сильні сторони. */
+/**
+ * Склад суперника — сталий: ті самі гравці (імена, обличчя, сильні й слабкі сторони) щосезону, лише ростуть — кожен у
+ * свому темпі (молоді й талановиті швидше). У кожного клубу своя зірка (+9), склад підлаштований під стиль клубу
+ * (техніка — пас і дриблінг, сила — відбір), а за кожну нашу перемогу над ними — реванш (rivals.js).
+ */
 export function oppSquad(spec) {
-  const d = spec.fixtureIdx + spec.season * 13, rnd = rng(spec.globalNo * 977 + 13);
-  const base = clamp(16 + d * 2.8 + (spec.no - 1) * 0.6, 16, 92), names = spec.league >= 3 ? 'int' : 'ua';
+  const d = spec.fixtureIdx + spec.season * 13, h = hashStr(spec.club.name), rnd = rng(h % 1e6 + 13), dev = rng(h % 1e6 + 7919 * (spec.season + 1));
+  const rv = rivalOf(spec), bias = rv.style.bias || {};
+  const base = clamp(16 + d * 2.8 + (spec.no - 1) * 0.6 + rv.revenge, 16, 92), names = spec.league >= 3 ? 'int' : 'ua';
   const roles = FORMATIONS[spec.formation];
   const sq = [newEntry(GK_ROLE, 0, rnd, base + 2, names)];
   roles.forEach((r, i) => sq.push(newEntry(r, i + 1, rnd, base, names)));
+  // зірка клубу — нападник/фланговий (за клубом), у деяких клубів — воротар
+  const att = sq.map((e, i) => i).filter((i) => sq[i].line === 'F' || sq[i].line === 'W' || sq[i].role === 'AM');
+  const star = h % 5 === 0 ? 0 : att[h % att.length] ?? 10;
+  const grow = Math.min(spec.season, 3);
+  sq.forEach((e, i) => {
+    const talent = dev() * 6 - 2;                                    // за сезон: хтось додає, хтось стоїть на місці
+    for (const k of keysFor(e.line)) e.stats[k] = clamp(Math.round(e.stats[k] + talent * grow * 0.5 + (bias[k] || 0) * rv.k + (i === star ? 9 : 0)), 8, 99);
+    if (i === star) e.star = true;
+  });
   return sq;
 }
 

@@ -230,6 +230,7 @@ export class Team {
       if (!owns && bs > 6) { const lead = 0.2 + 0.5 * a.sk.iq; pb.x = clamp(b.x + b.vx * lead, -L, L); pb.z = clamp(b.z + b.vz * lead, -W, W); sb = pb; }   // розумніші передбачають рух м'яча
       this.spot(a, sb, owns, tmp);
       let tx = tmp.x, tz = tmp.z, sp = this.speed, chase = false;
+      if (!owns && this.zBias) tz += this.zBias * (a.role && a.role.line === 'D' ? 0.6 : 1);   // вивчили наш фланг — блок зсувається туди
       // на м'яч біжить один від команди (або той, кому пасують); другий — страхує (за ним або ближче до своїх воріт)
       if (a.receiver) { chase = true; }
       else if (!owns && (!hasRecv || (this.recvWeak && i === n1))) {
@@ -336,12 +337,18 @@ export class Team {
       // погляд: плавно між «на м'яч» (повільно, у стійці, приставним чи заднім ходом) і «куди біжить» (швидко). Раніше
       // на 1.8 м/с погляд перескакував різко, і на межі гравця смикало туди-сюди. Біг майже спиною до м'яча — довше
       // дивиться на м'яч (задній хід), а швидше розвертається таз (player.js), груди й голова лишаються на грі
+      // Біг майже спиною до м'яча: бік розвороту (через яке плече) запам'ятовується — інакше дрібне смикання курсу
+      // перекидало погляд із +180° на −180°, і тіло різко розверталось в інший бік. Вага погляду «куди біжить» теж плавна
       const by = Math.atan2(b.x - p.x, b.z - p.z);
-      if (s < 0.3) p.yaw = by;
-      else {
-        const vy = Math.atan2(p.vx, p.vz), d = angDiff(by, vy), v0 = 0.8 + 1.0 * smooth(clamp((Math.abs(d) - 1.6) / 1.0, 0, 1));
-        p.yaw = by + d * smooth(clamp((s - v0) / 1.3, 0, 1));
-      }
+      let d = 0, tw = 0;
+      if (s >= 0.3) {
+        d = angDiff(by, Math.atan2(p.vx, p.vz));
+        if (Math.abs(d) > 2.4) { if (!a.gSide) a.gSide = Math.sign(d) || 1; if (Math.sign(d) !== a.gSide) d += a.gSide * Math.PI * 2; } else a.gSide = 0;
+        const v0 = 0.8 + 1.4 * smooth(clamp((Math.abs(d) - 1.6) / 1.0, 0, 1));
+        tw = smooth(clamp((s - v0) / 1.3, 0, 1));
+      } else a.gSide = 0;
+      a.gW = (a.gW ?? tw) + (tw - (a.gW ?? tw)) * Math.min(1, dt * 3);
+      p.yaw = by + d * a.gW;
     }
     this.updateGK(dt, c, bs);
   }
@@ -361,23 +368,31 @@ export class Team {
     const ux = (b.x - goalX) / (dist || 1), uz = b.z / (dist || 1);
     let tx = goalX + side * Math.max(1.0, Math.abs(ux) * out), tz = clamp(uz * out, -(G + 1.5), G + 1.5);
     const toward = -b.vx * side;
-    let speed = this.gkSpeed, shot = false;
+    let speed = this.gkSpeed, shot = false, lob = false;
     // удар у бік воріт: де м'яч перетне площину, у якій воротар СТОЇТЬ (а не лінію воріт позаду нього), — з прогнозу польоту
     // (гальмування, рикошети). Тоді воротар, як справжній: не біжить назад на лінію, а ставить ноги й приставним кроком
     // зміщується на лінію удару; задалеко вийшов (>5 м) — трохи відступає. Читає удар неідеально (Інтелект, ліга) і
     // уточнює, що ближче м'яч
     if (c.bs === 'roll' && toward > 2 && bs > 3 && c.plan && c.plan.len > 1) {   // і повільний м'яч здалеку теж: він докочується
       const cr = c.plan.cross(p.x, -side, this._gcr || (this._gcr = { t: 0, z: 0, y: 0 }));
-      if (cr.t > 0 && Math.abs(cr.z) < G + 2.5 && cr.y < PITCH.GOAL_H + 0.5) {
+      // м'яч пройде над ним (вийшов далеко, удар-парашут), але опуститься у ворота — відступає до лінії, а не стоїть
+      const cg = c.plan.cross(goalX + side * 0.4, -side, this._gcg || (this._gcg = { t: 0, z: 0, y: 0 }));
+      if (cr.t > 0 && cr.y > 2.3 && cg.t > 0 && Math.abs(cg.z) < G + 0.5 && cg.y < PITCH.GOAL_H + 0.3 && (p.x - goalX) * side > 1.2) {
+        shot = true; lob = true; tx = goalX + side * 1.0; tz = clamp(cg.z, -(G - 0.3), G - 0.3); speed = this.gkSpeed;
+      } else if (cr.t > 0 && Math.abs(cr.z) < G + 2.5 && cr.y < PITCH.GOAL_H + 0.5) {
         shot = true;
         if (g.shotSeen !== c.shotId) { g.shotSeen = c.shotId; g.shotErr = (Math.random() * 2 - 1) * (0.15 + 0.3 * this.gkErr) * (1.2 - 0.6 * g.sk.iq); }
         const err = g.shotErr * clamp(cr.t / 0.8, 0, 1);
         // м'яч долетить не скоро — зміщується на лінію удару (з похибкою прочитання) приставним кроком або бігом;
         // лишилось менше ~0.55 с — бігти пізно: ставить ноги (стійка) і далі руки або стрибок (match.js)
-        if (cr.t > 0.55) {
+        if (cr.t > 0.62) {                                               // стрибок — не пізніше ~0.55 с до м'яча: до того вже стоїть
           tz = clamp(cr.z + err, -(G + 0.3), G + 0.3);
           tx = goalX + side * clamp((p.x - goalX) * side, 1.2, 5);
           speed = Math.abs(tz - p.z) < 1.6 ? Math.min(this.gkSpeed, 3.2) : this.gkSpeed;   // близько — приставним, далеко — бігом
+        } else if (cr.t > 0.28 && Math.abs(cr.z + err - p.z) > 0.3) {
+          // уже в стійці, але м'яч іде поруч — не стоїть, а підлаштовується дрібними приставними кроками до останньої мити
+          // (тоді ловить чи бере на коліно, а не падає в останню мить на м'яч, що вже повз)
+          tz = clamp(cr.z + err, -(G + 0.3), G + 0.3); tx = p.x; speed = Math.min(this.gkSpeed, 3.4);
         } else { tx = p.x; tz = p.z; speed = this.gkSpeed; }
       }
     }
@@ -388,8 +403,12 @@ export class Team {
     if (!shot && oppHas && dist < 24) {
       const px = goalX - b.x, l1 = Math.hypot(px, G - b.z) || 1, l2 = Math.hypot(px, -G - b.z) || 1;
       let bx = px / l1 + px / l2, bz = (G - b.z) / l1 + (-G - b.z) / l2; const bl = Math.hypot(bx, bz) || 1; bx /= bl; bz /= bl;
-      const keep = clamp(0.35 * dist, 2.2, 6);
-      tx = goalX + side * clamp((b.x + bx * keep - goalX) * side, 0.8, 12); tz = clamp(b.z + bz * keep, -(G + 2), G + 2);
+      // скільки вийти від лінії воріт (а не від м'яча): з дистанції удару — 1.5–4.5 м, щоб і кут скоротити, і встигнути
+      // зреагувати; ближче ~10 м нападник уже йде сам на сам — тоді воротар іде назустріч, лишаючи ~4.5 м до м'яча
+      // (раніше ставав за ~5 м від м'яча: на удар із 14 м вибігав на 9 м, і будь-який удар повз нього був голом)
+      const base = clamp(1.2 + 0.15 * dist, 1.5, 4.5), outX = base + Math.max(0, dist - 4.5 - base) * smooth(clamp((11 - dist) / 3, 0, 1)), tl = Math.abs((goalX - b.x) / (bx || 1e-3));
+      const t = Math.max(0, tl - outX / Math.max(0.2, Math.abs(bx)));
+      tx = goalX + side * clamp((b.x + bx * t - goalX) * side, 0.8, 12); tz = clamp(b.z + bz * t, -(G + 2), G + 2);
       speed = this.gkSpeed;
     }
     if (!shot && c.bs === 'roll' && bs < 16 && toGoal < 20 && Math.abs(b.z) < 18) {   // вільний м'яч у штрафному — його
@@ -407,11 +426,19 @@ export class Team {
     p.gkAlert = danger; p.gkShot = shot;
     // переставляється, лише коли позиція відійшла помітно (≥ ~0.3–0.9 м, далі від гри — грубіше); тоді йде, поки не стане
     // точно, — а не «повзе» безперервно за кожним рухом м'яча, як робот
+    if (!shot && this.cheatZ) tz = clamp(tz + this.cheatZ * danger, -(G + 1.5), G + 1.5);   // «грає» в наш улюблений кут
     const off = Math.hypot(tx - p.x, tz - p.z), dz = 0.3 + 0.6 * (1 - danger);
     if (!shot && !g.gkMoving && off < dz) { tx = p.x; tz = p.z; }
     g.gkMoving = shot || (g.gkMoving ? off > 0.12 : off >= dz);
     speed = Math.min(speed, lerp(2.4, this.gkSpeed, Math.max(danger, smooth(clamp((off - 2) / 4, 0, 1)))));   // далеко й без поспіху — кроком
     if (!shot) speed = Math.min(speed, 1.3 + 1.4 * off);                 // переставитись на пів метра — пара приставних кроків, а не ривок
+    // обличчям до м'яча воротар убік рухається приставним/перехресним кроком (до ~5 м/с), назад — заднім ходом (до ~3.8 м/с):
+    // спиною до гри він не біжить (лише на парашут за спину — розвертається й біжить до воріт)
+    p.gkLob = lob;
+    if (danger > 0.3 && !lob) {
+      const mx = tx - p.x, mz = tz - p.z, ml = Math.hypot(mx, mz), bx = b.x - p.x, bz = b.z - p.z, bl = Math.hypot(bx, bz);
+      if (ml > 0.05 && bl > 0.05) { const cf = (mx * bx + mz * bz) / (ml * bl); speed = Math.min(speed, cf > 0.3 ? speed : cf > -0.3 ? 5.2 : lerp(5.2, 3.8, clamp((-0.3 - cf) / 0.5, 0, 1))); }
+    }
     this.avoid(g, c.all);
     g.move(tx, tz, speed, dt);
     p.yaw = Math.atan2(b.x - p.x, b.z - p.z);

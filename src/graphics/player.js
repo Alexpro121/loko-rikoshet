@@ -42,7 +42,7 @@ const _hw = new THREE.Vector3(), _hu = new THREE.Vector3(), _hf = new THREE.Vect
 const _hm = new THREE.Matrix4(), _hqa = new THREE.Quaternion(), _hqe = new THREE.Quaternion(), _hqh = new THREE.Quaternion(), _hqi = new THREE.Quaternion();
 const _XA = new THREE.Vector3(1, 0, 0), _Q1 = new THREE.Quaternion();
 /** Дії воротаря, у яких руки працюють свідомо (м'язи, без розхитування). */
-const GK_MODES = new Set(['pdive', 'gkdive', 'catch', 'scoop', 'parry', 'gkjump', 'throw', 'gkwait', 'gkpunch', 'gktip', 'gkfoot', 'gkstar']);
+const GK_MODES = new Set(['pdive', 'gkdive', 'catch', 'scoop', 'parry', 'gkjump', 'throw', 'gkwait', 'gkpunch', 'gktip', 'gkfoot', 'gkstar', 'gkknee', 'gkfall']);
 /** Сейви, у яких воротар м'яч не ловить, а відбиває (кулаками, долонею через поперечину, ногою, тілом «зірочкою»). */
 export const GK_STRIKE = new Set(['gkpunch', 'gktip', 'gkfoot', 'gkstar']);
 
@@ -56,7 +56,7 @@ export const GK_STRIKE = new Set(['gkpunch', 'gktip', 'gkfoot', 'gkstar']);
  * лягає вздовж газону вже на середині стрибка, руки йдуть по траві. true/false — старі «верх/середина».
  */
 const DK = { travel: 0, roll: 0, lift: 0, maxRoll: 0, landAt: 0 };   // результат — у спільному об'єкті (читається одразу), без виділень щокадру
-const DK_MAXR = [1.42, 1.34, 1.46], DK_R0 = [0.16, 0.13, 0.1], DK_RL = [0.58, 0.5, 0.42], DK_PEAK = [1.05, 0.42, 0.12];
+const DK_MAXR = [1.42, 1.34, 1.46], DK_R0 = [0.16, 0.13, 0.06], DK_RL = [0.58, 0.5, 0.3], DK_PEAK = [1.05, 0.42, 0.12];   // низом тіло лягає набік одразу після відштовхування
 const dkSm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 /**
  * Фази стрибка з місця, як у людини: присід (контррух, load), відрив і балістична дуга (air, висота h = 4u(1−u)), у польоті —
@@ -456,9 +456,9 @@ export class Player {
 
   // ---------------------------------------------------------------- події (кожна запускається один раз)
   setMode(m, t = 0) { this.bakeSlide(); const k = 0.92 + 0.16 * Math.random(); t *= k; this.mode = m; this.modeT = t; this.modeD = t; this.vary = 0.9 + 0.2 * Math.random(); }
-  kick(power = 1) {
+  kick(power = 1, side) {
     this.kicking = 0.0001; this.kickPow = power; this.kickAmp = (0.6 + 0.6 * power) * (0.93 + 0.14 * Math.random()); this.setExpr('angry', 0.6);
-    this.kickSide = this.backLeg(); this.kickHit = false;
+    this.kickSide = side ?? this.backLeg(); this.kickHit = false;
     this.kickAmp *= 0.92 + 0.4 * (this.persona.power - 0.8);          // хтось б'є з величезним замахом, хтось — коротко
     // на бігу проводка й крок через м'яч коротші — тіло не «пливе» з застиглими ногами, хода підхоплює раніше
     this.kickF = lerp(1, 0.6, smooth(clamp((Math.hypot(this.vx, this.vz) - 2) / 4, 0, 1)));
@@ -727,7 +727,9 @@ export class Player {
   planDive(aim, tArr, vmax) {
     const s = this.root.scale.x || 0.82, g = 9.81;
     // воротар уже в напівприсіді (стійка): короткий контррух і вибухове відштовхування — разом 0.15–0.24 с, решта часу — політ
-    const t0 = clamp(tArr * 0.35, 0.15, 0.24), Tc = 0.35 * t0, Tp = t0 - Tc, tf = Math.max(0.12, tArr - t0);
+    // воротар уже в стійці на носках: контррух короткий, відштовхування — 0.12–0.2 с (раніше 0.15–0.24 — не встигав)
+    // низом — трохи довший присід (є час): коліна згинаються й таз опускається до відштовхування
+    const t0 = this.diveKind === 2 ? clamp(tArr * 0.35, 0.12, 0.26) : clamp(tArr * 0.3, 0.12, 0.2), Tc = 0.3 * t0, Tp = t0 - Tc, tf = Math.max(0.12, tArr - t0);
     const PA = [0.5, 0.52, 0.55][this.diveKind], roll = diveKin(PA, this.diveKind).roll;
     const fx = Math.sin(this.bodyYaw), fz = Math.cos(this.bodyYaw);
     let ux = aim.x - this.x, uz = aim.z - this.z; const fw = ux * fx + uz * fz; ux -= fw * fx; uz -= fw * fz;
@@ -735,17 +737,22 @@ export class Player {
     const Lb = 1.45 * s / 0.82, reachH = Lb * Math.sin(roll);
     // куди має прилетіти таз: убік — до мети мінус дотяг рук, трохи вперед назустріч м'ячу; угору — під мету на висоту рук
     const dLat = Math.max(0.25, lat - reachH), tx = ux * dLat + fx * 0.3, tz = uz * dLat + fz * 0.3;
-    const yTO = HIP * s, yT = Math.max(HIP_LIE * s + 0.1, aim.y - Lb * Math.cos(roll));
-    let vx = tx / (Tp / 2 + tf), vz = tz / (Tp / 2 + tf); const vh = Math.hypot(vx, vz);
+    const yTO = (this.diveKind === 2 ? HIP - 0.42 : HIP) * s, yT = Math.max(HIP_LIE * s + 0.1, aim.y - Lb * Math.cos(roll));   // низом відштовхується з глибокого присіду
+    // низом тіло не «зависає» в повітрі до м'яча: падає вбік одразу (за час падіння з висоти стійки до трави, ~0.35 с) і вже
+    // лежить на лінії, коли м'яч підкотиться, — руки й бік перекривають газон. Раніше план тримав таз у повітрі рівно до
+    // прильоту м'яча, і на далекий удар низом воротар підстрибував і летів дугою над ним
+    const k = this.diveKind, tfl = k === 2 ? Math.min(tf, Math.max(0.22, 0.95 * Math.sqrt(2 * Math.max(0.05, yTO - yT) / g))) : tf;
+    let vx = tx / (Tp / 2 + tfl), vz = tz / (Tp / 2 + tfl); const vh = Math.hypot(vx, vz);
     // відштовхування вибухове, але не далі за м'яч: мінімальна швидкість убік — лише така, щоб таз долетів не більш як на
     // ~0.25 м за точку, звідки руки дістають мету (раніше ~3 м/с і до близького м'яча — тіло пролітало повз нього)
-    const k = this.diveKind, vmin = Math.min([3.2, 3.0, 2.6][k], (dLat + 0.25) / (Tp / 2 + tf));
+    const vmin = Math.min([3.2, 3.0, 2.6][k], (dLat + 0.25) / (Tp / 2 + tfl));
     if (vh > vmax) { vx *= vmax / vh; vz *= vmax / vh; } else if (vh < vmin && vh > 1e-3) { vx *= vmin / vh; vz *= vmin / vh; }
     // низом — не вистрибує вгору: тіло «падає» вбік і до м'яча, що котиться, має вже лежати майже на траві (руки й бік
     // перекривають газон). Тож вертикальна швидкість лише та, щоб у мить м'яча таз був на висоті лежачого (до ~1 м/с,
     // а якщо часу мало — і без підскоку взагалі)
     // нижні межі м'які: середній м'яч (~0.5–1.3 м) не вистрибує над ним, високий — рівно під мету, а не вище
-    const vy = clamp((yT - yTO + 0.5 * g * tf * tf) / tf, [1.4, 0.4, -0.3][k], [4.4, 3.8, 1.0][k]);
+    const vy = k === 2 ? clamp((yT - yTO + 0.5 * g * tfl * tfl) / tfl, -0.6, 1.0)                  // низом — з присіду пласко над газоном, без дуги
+      : clamp((yT - yTO + 0.5 * g * tf * tf) / tf, [1.4, 0.4][k], [4.4, 3.8][k]);
     return { t: 0, Tc, Tp, t0, tf, PA, vx, vy, vz, x0: this.x, z0: this.z };
   }
   /** Керований удар (пенальті): прогрес kickP задає зовнішній код (0..1): замах → контакт ≈0.35 → проводка. */
@@ -772,7 +779,7 @@ export class Player {
    * руки самі б'ють по м'ячу й проводять його назовні. Стоячи — долоні (або одна) виштовхують м'яч.
    */
   parry(at) {
-    const air = this.mode === 'gkdive' || this.mode === 'pdive' || this.mode === 'gkjump' || GK_STRIKE.has(this.mode), pt = at || this.ball;
+    const air = this.mode === 'gkdive' || this.mode === 'pdive' || this.mode === 'gkjump' || this.mode === 'gkfall' || this.mode === 'gkknee' || GK_STRIKE.has(this.mode), pt = at || this.ball;
     if (pt) {
       (this.parryAt ??= new THREE.Vector3()).copy(pt);
       this.root.updateMatrixWorld(true); { const lx = this.thorax.worldToLocal(_w.copy(pt)).x; this.parrySide = Math.abs(lx) < 0.25 ? 0 : Math.sign(lx); }   // −1 — м'яч з боку лівої руки (−x), +1 — правої, 0 — по центру
@@ -808,10 +815,27 @@ export class Player {
     return true;
   }
   /** Ловить м'яч: високий — у «віконце» на рівні грудей, низький (low) — підбирає з трави. Повторний виклик — одразу притискає. */
-  catchBall(low = !this.ball || this.ball.y < 0.6) {
-    if ((this.mode === 'catch' || this.mode === 'scoop') && this.modeT > 0) { this.modeT = Math.min(this.modeT, this.modeD * 0.45); return; }
-    this.setMode(low ? 'scoop' : 'catch', 0.9); this.setExpr('shock', 0.4);
+  /**
+   * T — за скільки секунд м'яч долетить до рук. Руки тягнуться назустріч рівно до прильоту (і трохи після), а не
+   * фіксовані 0.29 с: раніше, вирішивши ловити за 0.45 с до м'яча, воротар притискав руки до грудей ще до нього — м'яч бив у
+   * тіло й відскакував. Повторний виклик (м'яч уже в рукавицях) — прилетів зараз: одразу до грудей.
+   */
+  catchBall(low = !this.ball || this.ball.y < 0.6, T = 0.25, mode = null) {
+    const busy = (this.mode === 'catch' || this.mode === 'scoop' || this.mode === 'gkknee') && this.modeT > 0;
+    if (busy) { const el = this.modeD - this.modeT; this.catchT = Math.max(0, el - 0.04); this.modeD = this.catchT + 0.04 + 0.6; this.modeT = Math.max(0.05, this.modeD - el); return; }
+    this.catchT = clamp(T, 0.08, 0.7); const d = this.catchT + 0.04 + 0.6;
+    this.setMode(mode || (low ? 'scoop' : 'catch'), d); this.modeT = this.modeD = d; this.setExpr('shock', 0.4);
   }
+  /** Прогрес ловлі 0..1 за часом прильоту: 0.3 — мить, коли м'яч у руках (поза й руки ловлять саме тоді). */
+  catchMk(md) {
+    const T = this.catchT; if (T == null) return null;
+    const el = md - this.modeT, Ta = T + 0.04, rest = Math.max(0.2, md - Ta);
+    return el < Ta ? 0.3 * el / Ta : 0.3 + 0.7 * clamp((el - Ta) / rest, 0, 1);
+  }
+  /** Низом поруч: «барʼєр» — на одне коліно (дальнє), ближня нога широко вбік, тіло за м'ячем, долоні знизу підбирають. */
+  gkKnee(at, T) { this.saveSide(at, T); this.catchBall(true, T, 'gkknee'); }
+  /** Збоку близько, а часу на політ нема: падає на бік без стрибка (ближня нога підломлюється), рука тягнеться до м'яча. */
+  gkFall(at, T) { this.saveSide(at, T); if (!this.saveS) this.saveS = Math.random() < 0.5 ? -1 : 1; this.setMode('gkfall', this.saveT + 1.5); this.setExpr('shock', 0.9); }
   throwBall() { this.setMode('throw', 0.7); }
   setThreat(v, yaw) { this.threat = v; this.threatYaw = yaw; }
   /** Поруч інший гравець (dx, dz — до нього у світі, w 0..1 — наскільки близько): тримати його на відстані рукою. */
@@ -837,7 +861,13 @@ export class Player {
     // польовий гравець боком не ходить і не бігає: таз за рухом уже з ~0.7 м/с (назад — короткий задній хід до ~1.5 м/с);
     // приставним кроком довше пересувається лише воротар у стійці (м'яч близько до його воріт)
     const gkw = this.look.gk && !this.gaze && (this.mode === 'gkwait' || (this.gkAlertS ?? 1) > 0.3);
-    const v0 = gkw ? lerp(2.0, 3.4, bk) + 0.25 * (1 - bk) : lerp(0.55, 1.3, bk), w = smooth(clamp((vh - v0) / 0.4, 0, 1));
+    // назад — задній хід до легкого бігу (~2.4 м/с), далі розвертається; гістерезис: відкритий таз закривається лише на
+    // ~0.4 м/с повільніше, ніж відкрився, — швидкість коливається біля межі, а тіло не хитає з боку на бік
+    const v0 = (gkw ? lerp(2.0, 3.4, bk) + 0.25 * (1 - bk) : lerp(0.55, 2.4, bk)) - (this.hipOpen ? 0.4 : 0), w = smooth(clamp((vh - v0) / 0.4, 0, 1));
+    this.hipOpen = w > 0.5;
+    // воротар у грі ніколи не повертається до м'яча спиною: убік — щонайбільше «відкриті стегна» (~45°, перехресний крок),
+    // назад — лише задній хід обличчям до гри. Розвертається й біжить тільки на удар-парашут за спину (gkLob)
+    if (gkw && !this.gkLob) { const lim = 0.8 * (1 - bk); return w * clamp(rel, -lim, lim); }
     return w * (rel - Math.sign(rel) * Math.min(0.08, 0.05 * Math.abs(rel)));
   }
 
@@ -894,7 +924,7 @@ export class Player {
         const own = Math.abs(this.vx) + Math.abs(this.vz) > 0.01, vx = own ? this.vx : this.mvx || 0, vz = own ? this.vz : this.mvz || 0;
         const vh = Math.hypot(vx, vz), free0 = (this.mode === 'idle' || this.mode === 'aim' || this.mode === 'gkwait' || this.mode === 'gesture' || this.mode === 'sad') && !this.kicking && !this.holdFacing;
         if (free0 && vh > 0.6) hipT = this.hipTurn(Math.atan2(vx, vz), vh);
-        else this.hipSide = 0;
+        else { this.hipSide = 0; this.hipOpen = false; }
       }
       // укривання м'яча: під тиском таз розвертається так, щоб суперник опинився збоку-позаду (між ним і м'ячем — тіло),
       // але м'яч лишається в межах досяжності ноги (не більше ~75° від погляду)
@@ -904,8 +934,8 @@ export class Player {
       }
       this.hipY = (this.hipY || 0) + (hipT - (this.hipY || 0)) * Math.min(1, dt * 5);
       this.bodyYawT = this.yawF + this.hipY;
-      const dy = angDiff(this.bodyYaw, this.bodyYawT), wmax = (act ? 16 : 9 - 4 * sp) * dt;
-      this.bodyYaw += clamp(dy * Math.min(1, dt * (act ? 20 : 8)), -wmax, wmax);
+      const dy = angDiff(this.bodyYaw, this.bodyYawT), wmax = (act ? 11 : 9 - 4 * sp) * dt;
+      this.bodyYaw += clamp(dy * Math.min(1, dt * (act ? 14 : 8)), -wmax, wmax);
       // таз не обганяє стопи: відносно них він повертається лише на ~30° (у бігу ~45°), далі — тільки переступивши.
       // Тож ноги й тулуб рухаються разом, а поворот іде кроками, як у людини
       const gs = this.gaitSys;
@@ -1059,8 +1089,10 @@ export class Player {
     const sn = Math.sin(mk * Math.PI), r = this.r;
     switch (this.mode) {
       case 'aim': {
-        const p = this.power;
-        legB = -p * 1.15; kneeB = 0.3 + p * 1.1; leanX = -0.08 - p * 0.3; armA = -0.45 - p * 0.5; armB = 0.5 + p * 0.4; spread = 0.3 + p * 0.4; elbA = elbB = 0.6;
+        // стоячи — замах ногою за силою удару; поки обходить м'яч чи стає на розбіг — ноги йдуть ходою, лишається лише постава
+        const p = this.power, w = 1 - smooth(clamp((speed - 0.3) / 1.2, 0, 1));
+        legB = lerp(legB, -p * 1.15, w); kneeB = lerp(kneeB, 0.3 + p * 1.1, w); leanX = lerp(leanX, -0.08 - p * 0.3, w);
+        armA = lerp(armA, -0.45 - p * 0.5, w); armB = lerp(armB, 0.5 + p * 0.4, w); spread = lerp(spread, 0.3 + p * 0.4, w); elbA = lerp(elbA, 0.6, w); elbB = lerp(elbB, 0.6, w);
         break;
       }
       case 'cheer': {
@@ -1253,13 +1285,14 @@ export class Player {
         break;
       }
       case 'catch': {                                            // «віконце»: руки назустріч, після контакту м'яч притягується до грудей
-        const meet = smooth(clamp(mk / 0.3, 0, 1)), hug = smooth(clamp((mk - 0.35) / 0.3, 0, 1)), rel = smooth(clamp((mk - 0.85) / 0.15, 0, 1));
+        const ck = this.catchMk(md) ?? mk;
+        const meet = smooth(clamp(ck / 0.3, 0, 1)), hug = smooth(clamp((ck - 0.35) / 0.3, 0, 1)), rel = smooth(clamp((ck - 0.85) / 0.15, 0, 1));
         armA = armB = (1.45 * meet - 0.35 * hug) * (1 - rel) - 0.12 * rel; elbA = elbB = (0.5 + 1.2 * hug) * (1 - rel) + 0.5 * rel; spread = 0.12;
         leanX = 0.12 * meet + 0.18 * hug * (1 - rel); legA = 0.25 * hug; legB = -0.1 * hug; kneeA = kneeB = 0.15 + 0.25 * meet * (1 - rel);
         drop = 0.04 * meet * (1 - rel); break;
       }
       case 'scoop': {                                            // низький м'яч: присід із нахилом, долоні під м'ячем, потім до грудей і випрямитись
-        const down = smooth(clamp(mk / 0.3, 0, 1)), up = smooth(clamp((mk - 0.5) / 0.4, 0, 1)), k = down * (1 - up);
+        const ck = this.catchMk(md) ?? mk, down = smooth(clamp(ck / 0.3, 0, 1)), up = smooth(clamp((ck - 0.5) / 0.4, 0, 1)), k = down * (1 - up);
         // техніка: ноги разом і напівзігнуті, глибокий нахил у кульшових, прямі руки до трави, долоні позаду м'яча
         legA = legB = 1.1 * k + 0.1 * up; kneeA = kneeB = 1.7 * k + 0.12; ankOwn = true; ankA = legA - kneeA; ankB = legB - kneeB;
         drop = HIP - (YA + THIGH * Math.cos(legA) + SHIN * Math.cos(legA - kneeA));
@@ -1415,15 +1448,18 @@ export class Player {
           const fly = sm((P - 0.3) / 0.12), land = sm((P - K.landAt) / 0.18), tk = fly * (1 - land);
           // низом: ближня нога підломлюється (коліно до трави), тіло падає вбік, а не злітає
           const buckle = low ? sm((P - 0.1) / 0.16) * (1 - land) : 0;
+          // низом не стрибає з повного росту: ще на присіді згинає обидва коліна й опускає таз (~0.35 м) — відштовхується вже
+          // низько над газоном і летить уздовж нього
+          const sink = low ? sm(P / 0.2) * (1 - land) : 0;
           // ближня до м'яча нога — та, що на боці стрибка (sg > 0 — убік −x, ліва)
           const nearA = sg > 0;
           // ближня нога: глибокий присід із кроком убік (на ній уся вага), потім вибухове розгинання до кінчиків пальців;
           // у польоті тягнеться за тілом
-          const ln = 0.8 * load * (1 - push) - 0.22 * push * (1 - fly) + 0.25 * tk + 0.2 * land + 0.35 * buckle;
-          const kn = 1.35 * load * (1 - push) + 0.06 + 0.35 * tk + 0.45 * land + 0.9 * buckle;
+          const ln = 0.8 * load * (1 - push) - 0.22 * push * (1 - fly) * (1 - 0.8 * sink) + 0.25 * tk + 0.2 * land + 0.35 * buckle + 0.6 * sink;
+          const kn = 1.35 * load * (1 - push) + 0.06 + 0.35 * tk + 0.45 * land + 0.9 * buckle + 0.75 * sink;
           // дальня нога: ширше й пряміше (ваги на ній менше), на відштовхуванні коліно махом іде вгору — дає висоту й оберт
-          const lf = 0.35 * load + 0.9 * drive * (1 - 0.5 * fly) * (1 - land) + 0.25 * land;
-          const kf = 0.5 * load + 1.1 * drive * (1 - 0.4 * fly) * (1 - land) + 0.5 * land;
+          const lf = 0.35 * load + 0.9 * drive * (1 - 0.5 * fly) * (1 - land) + 0.25 * land + 0.4 * sink;
+          const kf = 0.5 * load + 1.1 * drive * (1 - 0.4 * fly) * (1 - land) + 0.5 * land + 0.8 * sink;
           // розведення: ближня робить крок до м'яча, дальня стоїть широко — тому обидві стопи на траві при різному згині колін
           const abN = 0.22 * load + 0.12 * tk, abF = 0.55 * load * (1 - drive) + 0.1 * tk;
           if (nearA) { legA = ln; kneeA = kn; legB = lf; kneeB = kf; abdSA = -abN; abdSB = abF; }
@@ -1431,12 +1467,12 @@ export class Player {
           // стопи: на присіді пласко, на відштовхуванні ближня розгинається до носка, у польоті обидві витягнуті
           const ankNear = 0.6 * sm((P - 0.2) / 0.1) * (1 - land), ankFar = 0.3 * drive * (1 - land);
           ankA = legA - kneeA + (nearA ? ankNear : ankFar); ankB = legB - kneeB + (nearA ? ankFar : ankNear); ankOwn = true;
-          drop = THIGH * (1 - Math.cos(1.1 * load));                         // глибший присід — сильніше відштовхування
+          drop = THIGH * (1 - Math.cos(1.1 * load)) + 0.42 * sink * (1 - fly);   // глибший присід — сильніше відштовхування
           // тіло: оберт убік за кінематикою, бічний вигин тулуба до м'яча в польоті, на приземленні — згрупувався
-          tiltZ = sg * Math.max(K.roll, 0.5 * push * (1 - land));                   // на відштовхуванні тіло вже нахилене в бік стрибка (~30°)
+          tiltZ = sg * Math.max(K.roll, (low ? 0.85 : 0.5) * push * (1 - land));    // на відштовхуванні тіло вже нахилене в бік стрибка (~30°; низом ~50°)
           leanX = 0.3 * load - 0.12 * fly * (1 - land) + 0.28 * land;
           leanZ = sg * (0.12 * load + (low ? 0.08 : 0.16) * fly * (1 - land));
-          lift = K.lift + 0.1 * land;                                         // лежачи на боці таз і плече над газоном
+          lift = K.lift * (low ? 0.3 : 1) + 0.1 * land;                      // лежачи на боці таз і плече над газоном
           // руки: на присіді вниз-назад (замах), на відштовхуванні махом угору до м'яча — верхня (дальня) рука вища,
           // у польоті витягнуті, на приземленні притискають м'яч до грудей
           const up = sm((P - 0.13) / 0.2);
@@ -1494,6 +1530,26 @@ export class Player {
           spread = 0.12; leanX = 0.25 * J.load + 0.12 * J.air + 0.12 * strike + 0.15 * J.absorb; hdX = -0.15 * J.air;
         }
         if (this.strikeHit !== this.modeD && el >= T) { this.strikeHit = this.modeD; this.impulse(tip ? -0.6 : 1.0, -1.8, 0, tip ? 2 : 5, tip ? 2 : 5, 0); }   // віддача удару по м'ячу
+        break;
+      }
+      case 'gkknee': {
+        // «барʼєр»: дальнє коліно до трави, ближня нога широко вбік і вперед — ноги й тіло перекривають газон, корпус над
+        // м'ячем, долоні знизу (їх веде IK) підбирають його; потім до грудей і встає
+        const ck = this.catchMk(md) ?? mk, k = smooth(clamp(ck / 0.26, 0, 1)) * (1 - smooth(clamp((ck - 0.55) / 0.4, 0, 1)));
+        const nearA = this.saveS < 0, kL = 0.1 * k, kK = 0.06 + 1.5 * k, pL = 1.2 * k, pK = 0.06 + 1.3 * k;
+        if (nearA) { legA = pL; kneeA = pK; abdSA = -0.32 * k; legB = kL; kneeB = kK; } else { legB = pL; kneeB = pK; abdSB = 0.32 * k; legA = kL; kneeA = kK; }
+        drop = THIGH * 0.85 * k; leanX = 0.5 * k; leanZ = (nearA ? 1 : -1) * 0.12 * k; armA = armB = 0.55 * k; elbA = elbB = 0.25; spread = 0.1;
+        break;
+      }
+      case 'gkfall': {
+        // падіння на бік без стрибка: ближня нога підломлюється, дальня відштовхує й випрямляється, тіло перекочується на бік
+        // до м'яча (≈75°), ближня рука — уздовж газону до м'яча (IK), дальня — через груди; полежав — встає
+        const T = this.saveT ?? 0.3, el = md - this.modeT, go = smooth(clamp(el / Math.max(0.14, T), 0, 1)), up = smooth(clamp((el - T - 0.75) / 0.6, 0, 1)), k = go * (1 - up);
+        const nearA = this.saveS < 0, sg = nearA ? 1 : -1;
+        tiltZ = sg * 1.3 * k; leanX = 0.15 * k; drop = 0.15 * k;
+        if (nearA) { legA = 0.55 * k; kneeA = 0.06 + 1.15 * k; legB = 0.15 * k; kneeB = 0.1; abdSB = 0.25 * k; sdA += 1.9 * k; armB = 0.8 * k; elbB = 1.2 * k; }
+        else { legB = 0.55 * k; kneeB = 0.06 + 1.15 * k; legA = 0.15 * k; kneeA = 0.1; abdSA = -0.25 * k; sdB += 1.9 * k; armA = 0.8 * k; elbA = 1.2 * k; }
+        if (this.strikeHit !== this.modeD && el >= T + 0.12) { this.strikeHit = this.modeD; this.impulse(0, 1.8, sg * 1.6, -2, -2, 1.2); }   // бік ударився об газон
         break;
       }
       case 'gkfoot': {
@@ -1696,7 +1752,7 @@ export class Player {
     // ---- згладжування: кожен суглоб — пружина з критичним загасанням (неперервні і кут, і швидкість: без ривків і без перельоту).
     // Ноги на бігу йдуть точно за IK (інакше стопа ковзає), а вхід і вихід із бігу плавно змішуються з пружинами.
     const S = this.sm, V = (this.sv ??= {});
-    const quick = this.kicking > 0 || this.mode === 'pkick' || this.mode === 'pdive' || this.mode === 'gkdive' || this.mode === 'header' || this.mode === 'tackle' || this.mode === 'block' || this.mode === 'parry' || this.mode === 'gkjump' || this.mode === 'scoop' || this.mode === 'catch' || this.mode === 'stagger' || GK_STRIKE.has(this.mode) ? 1.4 : 0.9;
+    const quick = this.kicking > 0 || this.mode === 'pkick' || this.mode === 'pdive' || this.mode === 'gkdive' || this.mode === 'header' || this.mode === 'tackle' || this.mode === 'block' || this.mode === 'parry' || this.mode === 'gkjump' || this.mode === 'scoop' || this.mode === 'catch' || this.mode === 'stagger' || GK_STRIKE.has(this.mode) || this.mode === 'gkfall' || this.mode === 'gkknee' ? 1.4 : 0.9;
     // у скриптових діях суглоби — пружини з легким недогасанням (ζ < 1): замах проходить трохи далі й повертається,
     // як у живого тіла з інерцією кінцівок; у вільному русі (фізика ходи) — критичне загасання, бо динаміка вже своя
     const spring = (key, target, w, z = 1) => {
@@ -2067,19 +2123,29 @@ export class Player {
     const both = (w) => { wL = wR = w; };
     if (this.touchT > 0) this.touchT -= dt;
     switch (this.mode) {
-      case 'catch':                                                           // «віконце» назустріч м'ячу → притиснути до грудей
-        if (mk < 0.32) {
+      case 'catch': {                                                         // «віконце» назустріч м'ячу → притиснути до грудей
+        const ck = this.catchMk(md) ?? mk;
+        if (ck < 0.36) {
           const ip = ball && (dist < 2.4 || coming) ? intercept(0.6) : null, ok = ip && reachable(ip, 0) > 0.3;
           V = ok ? ip : local(0, 0.05, 0.6); src = ok ? 'ball' : 'front';
         } else { V = local(0, -0.12, 0.2 + rb); grip = 1; src = 'hold'; }   // м'яч притиснутий до грудей: центр — на радіус м'яча перед ними
-        both(1 - sm((mk - 0.82) / 0.18)); break;
-      case 'scoop':                                                           // «кошик» під м'ячем → до грудей
-        if (mk < 0.5) {
+        both(1 - sm((ck - 0.82) / 0.18)); break;
+      }
+      case 'scoop': case 'gkknee': {                                          // «кошик» під м'ячем → до грудей
+        const ck = this.catchMk(md) ?? mk;
+        if (ck < 0.5) {
           const ip = ball && (dist < 2.2 || coming) ? intercept(0.7) : null, ok = ip && reachable(ip, 0) > 0.3;
           V = ok ? ip : _hv.set(this.root.position.x + Math.sin(this.bodyYaw) * 0.67 * s, PITCH.BALL_VIS, this.root.position.z + Math.cos(this.bodyYaw) * 0.67 * s); src = ok ? 'ball' : 'ground';
         }
         else { V = local(0, -0.16, 0.2 + rb); grip = 1; src = 'hold'; }
-        both(sm(mk / 0.15) * (1 - sm((mk - 0.85) / 0.15))); break;
+        both(sm(ck / 0.15) * (1 - sm((ck - 0.85) / 0.15))); break;
+      }
+      case 'gkfall': {                                                        // ближня рука — до м'яча вздовж газону, дальня підстраховує
+        if (!ball || !(dist < 3 || coming)) break;
+        V = _hv.copy(intercept(0.9)); if (reachable(V, 0, 0.2) < 0.01) { V = null; break; }
+        const w = 1 - sm((mk * md - (this.saveT ?? 0.3) - 0.35) / 0.3);
+        src = 'ball'; if (this.saveS < 0) { wL = w; wR = 0.45 * w; } else { wR = w; wL = 0.45 * w; } spr = rb * 0.7; break;
+      }
       case 'parry': {                                                         // долоні б'ють по м'ячу й проводять його назовні
         if (!this.parryAt) break;
         const out = _hd.subVectors(this.parryAt, chest); out.y = Math.max(0, out.y); out.normalize();
@@ -2160,7 +2226,9 @@ export class Player {
       // руки не телепортуються: відносно грудей рукавиці рухаються не швидше ~handV м/с (кращі руки — швидші)
       if (!st.rel || wSum < 0.02) (st.rel ??= new THREE.Vector3()).subVectors(st.V, chest);
       else {
-        _hq.subVectors(st.V, chest).sub(st.rel); const l = _hq.length(), m = (this.handV ?? 7) * dt;
+        // у стрибку й сейвах руки вистрілюють до м'яча значно швидше, ніж стежать за ним у стійці
+        const fast = this.mode === 'pdive' || this.mode === 'gkdive' || this.mode === 'gkjump' || this.mode === 'gkfall' || this.mode === 'gkknee' || this.mode === 'catch' || this.mode === 'scoop' || GK_STRIKE.has(this.mode);
+        _hq.subVectors(st.V, chest).sub(st.rel); const l = _hq.length(), m = (this.handV ?? 7) * (fast ? 1.8 : 1) * dt;
         if (l > m) _hq.multiplyScalar(m / l);
         st.rel.add(_hq); st.V.copy(chest).add(st.rel);
       }

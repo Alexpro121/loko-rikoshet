@@ -21,6 +21,8 @@ const defaults = () => ({
   bench: null,
   kitId: 'home',
   form: [],
+  rivals: {},                                     // історія зустрічей із кожним клубом (rivals.js)
+  scout: { n: 0, corner: 0, flank: 0, dist: 20, aim: 1, shots: 0 },   // що суперники вивчили в нашій грі
 });
 
 function merge(base, src) {
@@ -28,7 +30,7 @@ function merge(base, src) {
   for (const k of Object.keys(base)) {
     if (!(k in src)) continue;
     const b = base[k], s = src[k];
-    if (b && typeof b === 'object' && !Array.isArray(b)) base[k] = merge(b, s);
+    if (b && typeof b === 'object' && !Array.isArray(b)) base[k] = Object.keys(b).length ? merge(b, s) : (s && typeof s === 'object' && !Array.isArray(s) ? s : b);   // порожній словник (rivals) — береться як є
     else if (typeof b === typeof s) base[k] = s;
   }
   return base;
