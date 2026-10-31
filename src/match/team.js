@@ -81,7 +81,7 @@ export class Actor {
     }
     // обмежені сили: розгін слабшає зі швидкістю, гальмування сильніше, бічне зчеплення обмежує поворот (радіус ≈ v²/a)
     let ex = dvx - p.vx, ez = dvz - p.vz;
-    const v = Math.hypot(p.vx, p.vz), sc = Math.max(1, speed / 7.4);
+    const v = Math.hypot(p.vx, p.vz), sc = Math.max(1, Math.min(this.isGK ? 1.15 : 9, speed / 7.4));   // воротар (до ~11 м/с) розганявся й гальмував ривком до ~20 м/с²
     const aF = 8.5 * sc * (1 - 0.4 * Math.min(1, v / (speed * 1.05 + 0.1))), aB = 15 * sc, aL = 13 * sc;
     if (v > 0.6) {
       const hx = p.vx / v, hz = p.vz / v;
@@ -457,8 +457,12 @@ export class Team {
       const mx = tx - p.x, mz = tz - p.z, ml = Math.hypot(mx, mz), bx = b.x - p.x, bz = b.z - p.z, bl = Math.hypot(bx, bz);
       if (ml > 0.05 && bl > 0.05) { const cf = (mx * bx + mz * bz) / (ml * bl); speed = Math.min(speed, cf > 0.3 ? speed : cf > -0.3 ? 5.2 : lerp(5.2, 3.8, clamp((-0.3 - cf) / 0.5, 0, 1))); }
     }
-    this.avoid(g, c.all);
-    g.move(tx, tz, speed, dt);
-    p.yaw = Math.atan2(b.x - p.x, b.z - p.z);
+    // межа швидкості змінюється плавно, а не стрибком між «кроком», «приставним» і «бігом» (тоді move різко гальмував —
+    // ривки до ~20 м/с²); на удар — швидко, на заспокоєння — гальмує поступово (~6 м/с за секунду)
+    g.gkSp = g.gkSp === undefined ? speed : speed > g.gkSp ? g.gkSp + (speed - g.gkSp) * Math.min(1, dt * (shot ? 14 : 5)) : Math.max(speed, g.gkSp - 6 * dt);
+    // обхід гравців у штрафному — м'якший, ніж у польових (там поштовх під темп команди ~7–9 м/с штовхав воротаря вбік)
+    this.avoid(g, c.all); g.avx *= 0.35; g.avz *= 0.35;
+    g.move(tx, tz, g.gkSp, dt);
+    if (Math.hypot(b.x - p.x, b.z - p.z) > 1.2) p.yaw = Math.atan2(b.x - p.x, b.z - p.z);   // м'яч біля ніг — погляд не крутиться за кожним його зсувом
   }
 }

@@ -859,10 +859,11 @@ export class Player {
     const bk = smooth(clamp((ar - 2.55) / 0.4, 0, 1));                 // наскільки рух «назад» (там працює задній хід до ~4–4.4 м/с)
     // польовий гравець боком не ходить і не бігає: таз за рухом уже з ~0.7 м/с (назад — короткий задній хід до ~1.5 м/с);
     // приставним кроком довше пересувається лише воротар у стійці (м'яч близько до його воріт)
-    const gkw = this.look.gk && !this.gaze && (this.mode === 'gkwait' || (this.gkAlertS ?? 1) > 0.3);
+    const gkw = !!this.gkStance;
     // назад — задній хід до легкого бігу (~2.4 м/с), далі розвертається; гістерезис: відкритий таз закривається лише на
     // ~0.4 м/с повільніше, ніж відкрився, — швидкість коливається біля межі, а тіло не хитає з боку на бік
-    const v0 = (gkw ? lerp(2.0, 3.4, bk) + 0.25 * (1 - bk) : lerp(0.55, 2.4, bk)) - (this.hipOpen ? 0.4 : 0), w = smooth(clamp((vh - v0) / 0.4, 0, 1));
+    // воротар у стійці відкриває таз лише на справжньому бігу вбік (~3.4 м/с) — до того приставний крок обличчям до гри
+    const v0 = (gkw ? 3.4 : lerp(0.55, 2.4, bk)) - (this.hipOpen ? 0.4 : 0), w = smooth(clamp((vh - v0) / 0.4, 0, 1));
     this.hipOpen = w > 0.5;
     // воротар у грі ніколи не повертається до м'яча спиною: убік — щонайбільше «відкриті стегна» (~45°, перехресний крок),
     // назад — лише задній хід обличчям до гри. Розвертається й біжить тільки на удар-парашут за спину (gkLob)
@@ -909,6 +910,10 @@ export class Player {
     const speed = Math.hypot(this.vx, this.vz);
     const sp = clamp(speed / 8.5, 0, 1);
     const prevYaw = this.bodyYaw;
+    // воротар у грі завжди рухається як воротар — обличчям до гри, приставним і заднім ходом (пильність міняє лише стійку).
+    // Раніше, коли м'яч був далеко, він ходив «як польовий», але дивився на м'яч: рух ішов боком чи назад відносно корпусу,
+    // і хода щокілька кадрів перескакувала між кроком, приставним і заднім ходом. У кат-сценах (gaze) — звичайна хода
+    if (this.look.gk) this.gkStance = !this.gaze;
     {   // поворот корпусу: швидкість обмежена (повільніше на великій швидкості) — тіло має інерцію
       // ціль курсу згладжена: гра (ІІ) смикає напрям від кадру до кадру — тіло цього не повторює
       // в ударі, випаді й підкаті тіло розвертається різко — на опорній нозі, а не плавним поворотом бігу
@@ -1003,7 +1008,7 @@ export class Player {
         gkC = lerp(0.12, 0.58, al) * ws + 0.4 * Math.max(0, setK) + (speed < 0.3 ? 0.03 * al * Math.sin(this.t * 5.3 + (this.ph0 ?? 0)) : 0);
         gkW = lerp(0.03, 0.1, al) * ws * sc;
       }
-      st.yawT = this.bodyYawT ?? this.yaw; st.crouch = gkC + 0.5 * th + (this.gCrouch || 0); this.gCrouch = 0; st.arms = this.armStyle; st.wide = gkW; st.dribble = this.dribble; st.cadK = this.persona.cad;
+      st.yawT = this.bodyYawT ?? this.yaw; st.crouch = gkC + 0.5 * th + (this.gCrouch || 0); this.gCrouch = 0; st.arms = this.armStyle; st.wide = gkW; st.dribble = this.dribble; st.cadK = this.persona.cad; st.gk = !!this.gkStance;
       if (!this.gaitFree && this.gaitSys.ready) {             // ноги повертаються зі скриптової дії: стопи там, де вони зараз
         this.root.updateMatrixWorld(true);
         const fw = (this._fw ??= [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]);

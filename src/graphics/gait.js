@@ -111,10 +111,14 @@ export class Gait {
     // режим вирішуємо за тим, куди таз РОЗВЕРТАЄТЬСЯ (yawT), а не де він зараз: коли гравець на розгоні відкриває стегна в бік
     // руху, хода одразу переходить у біг, а не тягне приставний чи задній хід, поки корпус доверне (тоді таз «провалювався»)
     const cT = Math.cos(yawT), sT = Math.sin(yawT), vfT = st.vx * sT + st.vz * cT, vlT = st.vx * cT - st.vz * sT;
-    this.shuffle = v > 0.3 && v < (this.shuffle ? 3.0 : 2.6) && Math.abs(vl) > (this.shuffle ? 0.9 : 1.2) * Math.abs(vf) && Math.abs(vlT) > 0.9 * Math.abs(vfT);   // швидше ~3 м/с приставним не біжать — таз відкривається (player.js)
+    // воротар обличчям до м'яча ходить переважно приставним кроком: вмикається вже з ~37° між рухом і поглядом, а вимикається
+    // лише нижче ~24° (широкий гістерезис) і до ~3.6–4.2 м/с — інакше на русі навскіс хода щосекунди перескакувала
+    // між звичайним і приставним кроком, і воротар смикався
+    const gk = !!st.gk, shIn = gk ? 0.75 : 1.2, shStay = gk ? 0.45 : 0.9;
+    this.shuffle = v > (this.shuffle ? 0.15 : 0.3) && v < (this.shuffle ? (gk ? 4.2 : 3.0) : (gk ? 3.6 : 2.6)) && Math.abs(vl) > (this.shuffle ? shStay : shIn) * Math.abs(vf) && Math.abs(vlT) > (gk ? shStay : 0.9) * Math.abs(vfT);   // швидше приставним не біжать — таз відкривається (player.js)
     const sDir = Math.sign(vl) || 1;                                          // куди крок: +1 — праворуч
     // задній хід: рух переважно назад відносно погляду, не швидко
-    this.back = !this.shuffle && v > 0.3 && v < (this.back ? 4.4 : 4.0) && vf < -(this.back ? 0.7 : 0.9) * Math.abs(vl) && vfT < -0.7 * Math.abs(vlT);
+    this.back = !this.shuffle && v > (this.back ? 0.15 : 0.3) && v < (this.back ? 4.4 : 4.0) && vf < -(this.back ? 0.7 : 0.9) * Math.abs(vl) && vfT < -0.7 * Math.abs(vlT);
     this.running = !this.shuffle && !this.back && v > (this.running ? 1.9 : 2.4);
     const sp = clamp((v - 2.5) / 7, 0, 1), kL = Math.sqrt(HUMAN.legRef / Lw);
     // кроків/с; на розгоні ритм частішає (стартові кроки короткі й часті, як у спринтера з колодок)
