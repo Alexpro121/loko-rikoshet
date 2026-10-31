@@ -258,6 +258,8 @@ export class Team {
             let ux = (a.p.x - b.x) / al + 0.8 * (gx - b.x) / gl, uz = (a.p.z - b.z) / al - 0.8 * b.z / gl; const ul = Math.hypot(ux, uz) || 1;
             tx = b.x + (ux / ul) * 1.6; tz = b.z + (uz / ul) * 1.6;
             sp = this.speed * (db > 5 ? 1.1 + this.press * 0.2 : 0.42 + 0.12 * this.press);
+            // виконавець ще біжить із м'ячем — захисник наздоганяє його швидше за нього, а не тримається позаду на 2.5 м
+            if (db > 1.8) sp = Math.max(sp, Math.min(this.speed * 1.15, (c.holdV || 0) + 1.6));
           } else { tx = b.x + (-side * L - b.x) * 0.22; tz = b.z * 0.8; sp = this.speed * 1.05; }
         } else if (contest && !a.receiver) {
           // стримування: найближчий тримає ~1.9 м перед м'ячем (між ним і своїми воротами) і біжить разом із ним, чекаючи

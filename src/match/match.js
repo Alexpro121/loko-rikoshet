@@ -461,7 +461,9 @@ export class Match {
    */
   startTackle(a) {
     const b = this.ball, T = 0.2 + 0.12 * (1 - a.sk.tack), lead = T * (0.4 + 0.6 * a.sk.iq);
-    a.tkl = T; a.tklX = b.x + b.vx * lead; a.tklZ = b.z + b.vz * lead; a.nearT = 0;
+    // наш виконавець веде м'яч, переставляючи його (швидкість м'яча 0) — рух м'яча беремо з його бігу
+    const hp = (this.bs === 'ready' || this.bs === 'aim') && this.holder ? this.holder.p : null, bvx = hp ? hp.vx : b.vx, bvz = hp ? hp.vz : b.vz;
+    a.tkl = T; a.tklX = b.x + bvx * lead; a.tklZ = b.z + bvz * lead; a.nearT = 0;
     a.frozen = Math.max(a.frozen, T + 0.3);                          // ІІ команди не кермує, поки триває випад
     a.p.yaw = Math.atan2(a.tklX - a.p.x, a.tklZ - a.p.z);
     a.p.tackle(T);
@@ -477,10 +479,14 @@ export class Match {
       const a = this.actors[i];
       if (!(a.tkl > 0)) continue;
       if (a.p.downed) { a.tkl = 0; continue; }
+      // нога йде туди, де м'яч буде в мить контакту: у випаді захисник бачить м'яч і доводить ціль (розумніший — точніше),
+      // а не б'є в точку, де м'яч був на старті (м'яч, що котиться з дриблером, раніше майже завжди «тікав»)
+      { const b = this.ball, hp = (this.bs === 'ready' || this.bs === 'aim') && this.holder ? this.holder.p : null, bvx = hp ? hp.vx : b.vx, bvz = hp ? hp.vz : b.vz;
+        const q = 0.4 + 0.6 * a.sk.iq, k = Math.min(1, dt * 10 * q); a.tklX += (b.x + bvx * a.tkl * q - a.tklX) * k; a.tklZ += (b.z + bvz * a.tkl * q - a.tklZ) * k; }
       const dx = a.tklX - a.p.x, dz = a.tklZ - a.p.z, d = Math.hypot(dx, dz) || 1;
       // стопа має дістати м'яч, тіло зупиняється ~0.85 м від нього. Швидкість — не більше ~6 м/с (м'яч утік — під кінець
       // випаду тіло не «вистрілює» вперед) і набирається з поточної за ~0.08 с, без стрибка
-      const lunge = Math.min(6, Math.min(1.3, Math.max(0, d - 0.85)) / Math.max(0.05, a.tkl)), kv = Math.min(1, dt * 12);
+      const lunge = Math.min(7.5, Math.min(1.6, Math.max(0, d - 0.85)) / Math.max(0.05, a.tkl)), kv = Math.min(1, dt * 12);
       a.p.vx += ((dx / d) * lunge - a.p.vx) * kv; a.p.vz += ((dz / d) * lunge - a.p.vz) * kv; a.p.x += a.p.vx * dt; a.p.z += a.p.vz * dt;
       a.tkl -= dt;
       if (a.tkl <= 0) { a.tkl = 0; a.p.vx *= 0.3; a.p.vz *= 0.3; this.resolveTackle(a); }
@@ -559,7 +565,7 @@ export class Match {
   }
 
   makeReady(a, kickoff) {
-    this.pendKick = null;
+    this.pendKick = null; this.holdStop = false;
     this.bs = 'ready'; this.owner = 1; this.readyT = 0; this.shotBy = 0;
     if (this.holder && this.holder !== a) this.holder.manual = false;
     if (this.holder && this.holder !== a) this.holder.p.setThreat(0, 0);
@@ -669,7 +675,7 @@ export class Match {
   }
 
   /** Чи веде наш виконавець м'яч на бігу (польовий, не розведення з центру; воротар — розігрує з місця). */
-  carries(a) { return !!a && !a.isGK && !this.kickoff && this.phase === 'play'; }
+  carries(a) { return !!a && !a.isGK && !this.kickoff && this.phase === 'play' && !this.holdStop; }
 
   /**
    * Ведення м'яча нашим виконавцем: біжить курсом бігу (want — куди доводить курс, із кутовою швидкістю turn), швидкість
@@ -1753,6 +1759,7 @@ export class Match {
       if (wait !== !!this.gkWaitShown) { this.gkWaitShown = wait; this.ui.hud.warn(wait ? 'СУПЕРНИКИ ВІДХОДЯТЬ…' : null); }
     }
     ctx.bs = this.bs; ctx.owner = this.owner; ctx.kickoff = this.kickoff; ctx.t = this.time; ctx.shotBy = this.shotBy; ctx.shotId = this.shotId;
+    ctx.holdV = (this.bs === 'ready' || this.bs === 'aim') && this.holder ? Math.hypot(this.holder.p.vx, this.holder.p.vz) : 0;   // темп нашого виконавця — захисник не відстає
     if (this.bs !== 'roll' && this.bs !== 'net') ground(b);                 // м'яч у ногах чи руках
     if (this.bs === 'roll') {                                             // прогноз польоту: раз на 0.1 с або одразу після удару
       this.planT -= dt;
@@ -2399,10 +2406,12 @@ export class Match {
     const a = this.holder, b = this.ball;
     if (!a) return;
     if (this.carries(a)) {
-      // прийняв м'яч — не зупиняється: веде його далі легким бігом (з розгону гальмує поступово); поки цілишся — плавно
-      // доводить біг у бік удару (м'яч у ногах), тож удар чи пас іде з ходу
+      // прийняв м'яч на бігу — гальмує з м'ячем у ногах і зупиняється: далі гра чекає на твій удар чи пас (раніше він
+      // вів м'яч далі бігом, і захисник, що біг не швидше, ніколи не діставав до відбору). Поки цілишся й гальмує —
+      // корпус доводиться в бік удару
       const aim = this.bs === 'aim' && this.shot.valid;
-      this.carry(a, dt, aim ? Math.atan2(this.shot.dirx, this.shot.dirz) : null, 2.2, aim ? 2.6 : 3.4);
+      this.carry(a, dt, aim ? Math.atan2(this.shot.dirx, this.shot.dirz) : null, 2.2, 0);
+      if (Math.hypot(a.p.vx, a.p.vz) < 0.4) this.holdStop = true;   // зупинився — далі стоїть біля м'яча
       return;
     }
     if (this.bs === 'ready') {
