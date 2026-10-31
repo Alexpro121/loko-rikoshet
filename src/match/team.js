@@ -69,6 +69,16 @@ export class Actor {
     dvx += this.avx; dvz += this.avz;
     const m = Math.hypot(dvx, dvz), cap = speed * 1.05;
     if (m > cap) { dvx *= cap / m; dvz *= cap / m; }
+    // людина не біжить швидко задом чи боком: назад — задній хід до ~2.4 м/с, убік — приставний/перехресний до ~3.5 м/с;
+    // швидше — лише коли тіло вже розвернулось у бік бігу (раніше ІІ розганяв гравця в протилежний бік за ~0.3 с, а тіло
+    // ще 0.3–0.5 с дивилось назад — біг задом і боком)
+    if (!this.isGK && p.bodyYaw !== undefined) {
+      const mm = Math.hypot(dvx, dvz);
+      if (mm > 2.4) {
+        const c = (dvx * Math.sin(p.bodyYaw) + dvz * Math.cos(p.bodyYaw)) / mm, lim = c > 0.5 ? 99 : c > 0 ? 3.5 + (c / 0.5) * 6 : c > -0.5 ? 2.4 + 1.1 * (1 + c / 0.5) : 2.4;
+        if (mm > lim) { dvx *= lim / mm; dvz *= lim / mm; }
+      }
+    }
     // обмежені сили: розгін слабшає зі швидкістю, гальмування сильніше, бічне зчеплення обмежує поворот (радіус ≈ v²/a)
     let ex = dvx - p.vx, ez = dvz - p.vz;
     const v = Math.hypot(p.vx, p.vz), sc = Math.max(1, speed / 7.4);
@@ -263,7 +273,9 @@ export class Team {
           intercept(a, b, spd, 0.3 + 0.7 * iq, 0.35 - 0.25 * iq, ic);
           tx = ic.x; tz = ic.z; sp = this.speed * 1.2;
           // вже на місці раніше за м'яч — не стоїть столбом, а йде назустріч, щоб прийняти першим
-          if (ic.t > 0.4 && Math.hypot(tx - a.p.x, tz - a.p.z) < 1.2) { tx += (b.x - tx) * 0.15; tz += (b.z - tz) * 0.15; }
+          // приймає пас — не стоїть на точці: іде м'ячу назустріч (крок у м'яч), тож приймає на ходу
+          if (a.receiver && ic.t > 0.2 && Math.hypot(tx - a.p.x, tz - a.p.z) < 1.5) { tx = b.x; tz = b.z; sp = Math.min(sp, this.speed * 0.45); }
+          else if (ic.t > 0.4 && Math.hypot(tx - a.p.x, tz - a.p.z) < 1.2) { tx += (b.x - tx) * 0.15; tz += (b.z - tz) * 0.15; }
         }
         tx = clamp(tx, -L + 1.5, L - 1.5); tz = clamp(tz, -W + 1.5, W - 1.5);
       } else {
@@ -326,7 +338,7 @@ export class Team {
         sp = Math.min(sp, lerp(2.3, sp, Math.max(inv, smooth(clamp((off - 3) / 7, 0, 1)))));
       } else a.calmMove = true;
       sp *= 0.84 + 0.34 * a.sk.pace;
-      a.tx = tx; a.tz = tz; a.sprint = chase;
+      a.tx = tx; a.tz = tz; a.sprint = chase; a.spT = sp;
       if (chase && Math.hypot(a.p.x - b.x, a.p.z - b.z) < 6) { a.avx = 0; a.avz = 0; } else this.avoid(a, c.all);   // біля м'яча не відштовхуємось
       a.move(tx, tz, sp, dt);
     }
@@ -340,14 +352,18 @@ export class Team {
       // Біг майже спиною до м'яча: бік розвороту (через яке плече) запам'ятовується — інакше дрібне смикання курсу
       // перекидало погляд із +180° на −180°, і тіло різко розверталось в інший бік. Вага погляду «куди біжить» теж плавна
       const by = Math.atan2(b.x - p.x, b.z - p.z);
+      // напрямок і темп — куди він ЗБИРАЄТЬСЯ бігти (ціль), а не куди ще несе інерція: розвертається вже на гальмуванні,
+      // тож після розвороту біжить обличчям уперед, а не задом
+      const gx = (a.tx ?? p.x) - p.x, gz = (a.tz ?? p.z) - p.z, gl = Math.hypot(gx, gz), want = gl > 1 ? Math.min(a.spT ?? s, gl * 1.6) : 0;
+      const se = Math.max(s, want), mvA = gl > 1 && want > s ? Math.atan2(gx, gz) : Math.atan2(p.vx, p.vz);
       let d = 0, tw = 0;
-      if (s >= 0.3) {
-        d = angDiff(by, Math.atan2(p.vx, p.vz));
+      if (se >= 0.3) {
+        d = angDiff(by, mvA);
         if (Math.abs(d) > 2.4) { if (!a.gSide) a.gSide = Math.sign(d) || 1; if (Math.sign(d) !== a.gSide) d += a.gSide * Math.PI * 2; } else a.gSide = 0;
         const v0 = 0.8 + 1.4 * smooth(clamp((Math.abs(d) - 1.6) / 1.0, 0, 1));
-        tw = smooth(clamp((s - v0) / 1.3, 0, 1));
+        tw = smooth(clamp((se - v0) / 1.3, 0, 1));
       } else a.gSide = 0;
-      a.gW = (a.gW ?? tw) + (tw - (a.gW ?? tw)) * Math.min(1, dt * 3);
+      a.gW = (a.gW ?? tw) + (tw - (a.gW ?? tw)) * Math.min(1, dt * 5);
       p.yaw = by + d * a.gW;
     }
     this.updateGK(dt, c, bs);

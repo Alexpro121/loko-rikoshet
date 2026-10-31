@@ -226,7 +226,7 @@ export class Match {
     const hp = this.holder.p, hands = this.holder.isGK && !this.holder.footBall;
     // рукою воротар кидає одразу; ногою — гравець спершу підходить до м'яча (обходить його, розбігається), удар — у мить,
     // коли опорна нога стає біля м'яча (kickApproach / kickReady), м'яч летить через ~0.13 с, у контакті
-    this.wnd = { t: 0, run: false, kicked: hands, hands };
+    this.wnd = { t: 0, run: false, kicked: hands, hands, carry: this.carries(this.holder) };
     if (hands) { this.windT = 0.14; hp.yaw = Math.atan2(this.shot.dirx, this.shot.dirz); hp.throwBall(); } else { this.windT = 0.13; hp.setMode('idle'); }
     if (!S.tutorial) { S.tutorial = true; commit(); }
   }
@@ -664,6 +664,40 @@ export class Match {
     if (hands) { a.p.yaw = Math.atan2(tx, tz); swing(); }
   }
 
+  /** Куди повернути корпус в ударі на бігу: у бік удару, але не далі ~40° від курсу бігу — решту робить стопа (пас щічкою). */
+  kickYaw(p, dx, dz) {
+    const v = Math.hypot(p.vx, p.vz), k = Math.atan2(dx, dz); if (v < 1.5) return k;
+    const run = Math.atan2(p.vx, p.vz); return run + clamp(angDiff(run, k), -0.7, 0.7);
+  }
+
+  /** Чи веде наш виконавець м'яч на бігу (польовий, не розведення з центру; воротар — розігрує з місця). */
+  carries(a) { return !!a && !a.isGK && !this.kickoff && this.phase === 'play'; }
+
+  /**
+   * Ведення м'яча нашим виконавцем: біжить курсом бігу (want — куди доводить курс, із кутовою швидкістю turn), швидкість
+   * плавно йде до vT (обмежені прискорення в move), м'яч — у ногах попереду, з легким «дихання» дотиків. Біля бортів і
+   * воріт курс заходить усередину поля. Повертає курс (кут).
+   */
+  carry(a, dt, want, turn, vT) {
+    const p = a.p, b = this.ball, v = Math.hypot(p.vx, p.vz);
+    let cur = v > 0.6 ? Math.atan2(p.vx, p.vz) : (a.carryH ?? p.bodyYaw);
+    if (want != null) cur += clamp(angDiff(cur, want), -turn * dt, turn * dt);
+    let hx = Math.sin(cur), hz = Math.cos(cur);
+    // борт попереду — курс уздовж нього, а не в нього
+    const ex = Math.abs(p.x) > L - 5 && Math.sign(hx) === Math.sign(p.x), ez = Math.abs(p.z) > W - 4 && Math.sign(hz) === Math.sign(p.z);
+    if (ex || ez) { if (ex) hx *= 0.3; if (ez) hz *= 0.3; const l = Math.hypot(hx, hz) || 1; hx /= l; hz /= l; cur = Math.atan2(hx, hz); }
+    a.carryH = cur;
+    this.myTeam.avoid(a, this.actors); a.avx *= 0.4; a.avz *= 0.4;
+    a.move(p.x + hx * 4, p.z + hz * 4, vT, dt);
+    p.yaw = cur;
+    // м'яч попереду біля ноги: відстань «дихає» з кроками (дотики), а не приклеєна точка
+    const sp = Math.hypot(p.vx, p.vz), lead = 0.62 + 0.12 * Math.min(1, sp / 4) * (1 + Math.sin(this.time * (5 + sp * 1.6)));
+    const tx = p.x + hx * lead, tz = p.z + hz * lead, k = Math.min(1, dt * 14);
+    b.x += (tx - b.x) * k; b.z += (tz - b.z) * k; b.vx = b.vz = 0; this.glideT = 0;
+    if (this.bs === 'aim') this.aimDirty = true;
+    return cur;
+  }
+
   /**
    * Підхід до м'яча перед ударом у напрямку (dx, dz): гравець обходить м'яч по дузі (не крізь нього) за точку back позаду
    * на лінії удару, дивлячись на м'яч; вирівнявшись — дивиться в бік удару. run — розбіг: біжить на м'яч, щоб опорна нога
@@ -721,7 +755,7 @@ export class Match {
     const vs = (a.kickV ??= v0), v = clamp(tl / R, Math.max(1.5, vs * 0.85), Math.min(9, vs + 1.2));   // від швидкості на початку замаху
     const wx = tl > 0.15 ? (tx / tl) * v : b.vx, wz = tl > 0.15 ? (tz / tl) * v : b.vz, kk = Math.min(1, dt * 16);
     p.vx += (wx - p.vx) * kk; p.vz += (wz - p.vz) * kk; p.x += p.vx * dt; p.z += p.vz * dt;
-    p.yaw = Math.atan2(dx, dz);
+    p.yaw = this.kickYaw(p, dx, dz);
   }
 
   doPass(a, best, long) {
@@ -1754,7 +1788,15 @@ export class Match {
       // контакту ноги (~0.13 с після початку замаху). Раніше гравця за 0.14 с переносило за м'яч — телепорт
       const a = this.holder, h = a.p, sh = this.shot, w = this.wnd;
       w.t += dt;
-      if (!w.kicked) {
+      if (!w.kicked && w.carry) {
+        // веде м'яч — б'є з ходу: удар у бік бігу одразу; під кутом — рішучий розворот із м'ячем на бігу (без зупинки) і удар,
+        // щойно кут прийнятний (пас — внутрішньою стороною стопи до ~90°, удар — до ~35°). Перед ударом трохи прискорюється
+        const want = Math.atan2(sh.dirx, sh.dirz), okA = sh.power < 0.45 ? 1.55 : 0.6;
+        const hd = this.carry(a, dt, want, 5.5, 3.6 + 1.6 * sh.power);
+        if (Math.abs(angDiff(hd, want)) < okA || w.t > 1.0) {
+          w.kicked = true; this.windT = 0.13; h.yaw = this.kickYaw(h, sh.dirx, sh.dirz); h.kick(sh.power);
+        }
+      } else if (!w.kicked) {
         // пас — внутрішньою стороною стопи й під кутом до ~70° (без обходу м'яча), удар — з розбігу під кутом до ~37°
         const okA = sh.power < 0.45 ? 1.25 : 0.65;
         const st = this.kickApproach(a, sh.dirx, sh.dirz, 0.95, 4.5 + 2.5 * sh.power, dt, w.run, okA);
@@ -1764,9 +1806,10 @@ export class Match {
           h.kick(sh.power, Math.hypot(h.vx, h.vz) < 1.2 ? 1 : undefined);   // з місця — правою, як у стійці прицілу
         }
       } else {
-        if (!w.hands) { a.avx = a.avz = 0; a.move(b.x - sh.dirx * 0.55, b.z - sh.dirz * 0.55, 2.5, dt); }   // опорна нога стала — тіло гальмує над м'ячем
+        if (w.carry) this.carry(a, dt, null, 0, Math.max(2.5, Math.hypot(h.vx, h.vz)));          // замах на бігу: м'яч біля ноги до контакту
+        else if (!w.hands) { a.avx = a.avz = 0; a.move(b.x - sh.dirx * 0.55, b.z - sh.dirz * 0.55, 2.5, dt); }   // опорна нога стала — тіло гальмує над м'ячем
         else { h.vx *= 0.6; h.vz *= 0.6; }
-        h.yaw = Math.atan2(sh.dirx, sh.dirz);
+        h.yaw = w.carry ? this.kickYaw(h, sh.dirx, sh.dirz) : Math.atan2(sh.dirx, sh.dirz);
         if ((this.windT -= dt) <= 0) this.launchShot();
       }
     }
@@ -2357,6 +2400,13 @@ export class Match {
     if (this.bs !== 'ready' && this.bs !== 'aim') return;
     const a = this.holder, b = this.ball;
     if (!a) return;
+    if (this.carries(a)) {
+      // прийняв м'яч — не зупиняється: веде його далі легким бігом (з розгону гальмує поступово); поки цілишся — плавно
+      // доводить біг у бік удару (м'яч у ногах), тож удар чи пас іде з ходу
+      const aim = this.bs === 'aim' && this.shot.valid;
+      this.carry(a, dt, aim ? Math.atan2(this.shot.dirx, this.shot.dirz) : null, 2.2, aim ? 2.6 : 3.4);
+      return;
+    }
     if (this.bs === 'ready') {
       const d = Math.hypot(a.p.x - b.x, a.p.z - b.z);
       if (d > 2.4) {
