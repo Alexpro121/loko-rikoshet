@@ -1004,6 +1004,7 @@ button.purse:active { transform: translate(calc(var(--U) * 0.4), calc(var(--U) *
 .settings .tg i u { top: 14%; left: 6%; width: 40%; height: 72%; border-radius: 0; background: #4d6159; transition: transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1), background 0.2s; }
 .settings .tg.on i { background: var(--gn); } .settings .tg.on i u { background: var(--cr); transform: translateX(calc(var(--u) * 3.4)); }
 .settings .tg.q { flex-wrap: wrap; row-gap: calc(var(--u) * 1); }
+.settings .tg.q .cam-note { flex: 1 0 100%; font-weight: 600; font-size: max(9px, calc(var(--u) * 1.8)); color: #9fb4ab; line-height: 1.3; }
 .settings .seg { gap: calc(var(--u) * 0.7); }
 .settings .seg button { position: relative; isolation: isolate; padding: calc(var(--u) * 0.8) calc(var(--u) * 1.7); border-radius: 0; background: none; color: #b8c8c1; font-size: max(9px, calc(var(--u) * 1.9)); transition: color 0.15s; }
 .settings .seg button::before { content: ''; position: absolute; inset: 0; z-index: -1; background: #06120d; transform: skewX(var(--sk)); transition: background 0.15s; }

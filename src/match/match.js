@@ -18,6 +18,7 @@ import { Walkout } from './walkout.js';
 import { diveKin, GK_STRIKE, angDiff } from '../graphics/player.js';
 import { evolveSpec, recordMatch } from '../state/rivals.js';
 import { ONLINE_AIM, ONLINE_GK } from '../online/profile.js';
+import { pathPoint } from '../core/camera.js';
 const { L, W, G, R } = PITCH;
 // інтро (кат-сцена виходу), с: A — проліт над стадіоном; B — вихід із тунелю; C — камера задкує перед колонами;
 // D — бічний телеоб'єктив; E — шикування; далі гімн і «п'ятірки» (HS_T): кожен гість проходить усю шеренгу господарів;
@@ -30,7 +31,7 @@ const BREAK_T = 4.0;                // перерва між таймами (к�
 const END_T = 9.4;                  // після фінального свистка: радість, рукостискання, загальний план — далі результат
 const LZ = -14;                     // лінія шикування: ближче до тунелю (команди доходять до неї без монтажних «стрибків»)
 const LANE_Z = LZ + 1.45;           // доріжка гостей — перед шеренгою господарів (між ними й трибуною), на відстані витягнутої руки
-const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3();
+const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3(), _cp = { x: 0, z: 0 };
 const H = 1 / PHYS.hz;
 const GK_THROW = 1.25;              // сила кидка воротаря рукою (×1.25 до колишньої)
 const GK_CLEAR = 7;                 // на скільки суперники відходять від воротаря з м'ячем у руках
@@ -1589,6 +1590,18 @@ export class Match {
     if (this.phase === 'pens' || this.phase === 'end' || this.phase === 'idle') return;
     this.cancelAim(); this.penRes = null; this.timeUp = false;
     this.pens = new Penalties(this); this.pens.start();
+  }
+  /** Що важливо для ігрової камери (core/camera.js): м'яч, хто з ним, адресат паса, куди цілимось. Наші атакують +X. */
+  camInfo(o) {
+    const b = this.ball, pl = o.pl;
+    o.bx = b.x; o.bz = b.z; o.bvx = b.vx; o.bvz = b.vz;
+    this.actors.forEach((a, i) => { const q = pl[i] || (pl[i] = {}); q.x = a.p.x; q.z = a.p.z; q.side = a.side; q.gk = a.isGK; });
+    o.n = this.actors.length;
+    const bs = this.bs, h = bs === 'ready' || bs === 'aim' || bs === 'wind' ? this.holder : bs === 'held' ? this.taker : null;
+    o.carrier = h ? this.actors.indexOf(h) : -1;
+    o.receiver = this.passTarget && this.passTarget.receiver ? this.actors.indexOf(this.passTarget) : -1;
+    o.aiming = this.aiming; o.aimOn = this.aiming && this.shot.valid && this.path.n > 1;
+    if (o.aimOn) { pathPoint(this.path, this.path.goal ? 1e9 : 28, _cp); o.ax = _cp.x; o.az = _cp.z; }
   }
   camOverride() {
     const ph = this.phase === 'paused' ? this.prevPhase : this.phase;

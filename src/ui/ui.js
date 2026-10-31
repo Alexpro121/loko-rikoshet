@@ -1,5 +1,5 @@
 import { S, commit, resetAll, subscribe } from '../state/save.js';
-import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, KITS, matchSpec, CAM_VIEWS } from '../config.js';
+import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, KITS, matchSpec, CAM_PRESETS } from '../config.js';
 import { stadiumCost, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
 import { audio, vibrate } from '../core/audio.js';
 import { I, crest, lokoCrest } from './icons.js';
@@ -119,8 +119,8 @@ export class UI {
       const t = e.target.closest('[data-range]'); if (!t) return;
       const k = t.dataset.range, v = +t.value;
       S.settings[k] = v; this.applyControls(); commit();
-      if (k.startsWith('cam')) { S.settings.camView = 'custom'; this.game.computeMatchBase(); this.markCamView(); }
-      const o = t.parentElement.querySelector('output'); if (o) o.textContent = v + (t.dataset.unit || '%');
+      if (k.startsWith('cam')) this.game.computeMatchBase();
+      const o = t.parentElement.querySelector('output'); if (o) o.textContent = (t.dataset.sign && v > 0 ? '+' : '') + v + (t.dataset.unit || '%');
     });
     root.addEventListener('click', (e) => {
       if (e.target === this.el.settings) return this.closeSettings();                 // тап по затемненню закриває вікно
@@ -191,7 +191,7 @@ export class UI {
       if (jel.hidden) { jel.classList.add('off'); jel.hidden = false; void jel.offsetWidth; }
       jel.classList.remove('off');
     } else if (!jel.hidden) {
-      jel.classList.add('off'); jel.querySelector('.joy-knob').style.transform = '';
+      jel.classList.add('off'); jel.querySelector('.joy-knob').style.transform = ''; if (this.joyRelease) this.joyRelease(false);
       this._joyT = setTimeout(() => { if (jel.classList.contains('off')) jel.hidden = true; }, 400);
     }
     const js = this.el.joy.style, st0 = S.settings, custom = st0.joyX >= 0 && st0.joyY >= 0;
@@ -213,12 +213,24 @@ export class UI {
       if (this.game && this.game.match) this.game.match.joyMove(dx, dy, m);
     };
     let drag = -1;
+    // палець «загубився» (джойстик сховався в катсцені, вікно втратило фокус, система забрала дотик) — без цього скидання
+    // pid лишався зайнятим і джойстик більше не реагував до перезапуску
+    const release = (fire) => {
+      if (pid === -1) return;
+      const p = pid; pid = -1; this.joyActive = false; knob.style.transform = '';
+      try { if (el.hasPointerCapture(p)) el.releasePointerCapture(p); } catch (_) { /* ignore */ }
+      const m = this.game && this.game.match; if (m) { if (fire) m.pointerUp(); else m.cancelAim(); }
+    };
+    // прицілювання ще не почалось (палець притиснули трохи раніше, ніж м'яч прийшов, або приціл скасував інший дотик) —
+    // починаємо, щойно можна, не змушуючи відпускати й тиснути знову
+    const ensure = () => { const m = this.game && this.game.match; if (m && pid !== -1 && m.bs === 'ready') m.joyStart(); };
     el.addEventListener('pointerdown', (e) => {
       if (this.joyEdit) { drag = e.pointerId; try { el.setPointerCapture(drag); } catch (_) { /* ignore */ } e.preventDefault(); return; }
-      if (pid !== -1 || !this.game || !this.game.match) return;
+      if (!this.game || !this.game.match) return;
+      if (pid !== -1) { if (e.pointerId === pid) return; release(false); }      // новий дотик — старий уже не повернеться
       const r = ring.getBoundingClientRect();
-      cx = r.left + r.width / 2; cy = r.top + r.height / 2; R = r.width / 2;
-      pid = e.pointerId; try { el.setPointerCapture(pid); } catch (_) { /* ignore */ }
+      cx = r.left + r.width / 2; cy = r.top + r.height / 2; R = r.width / 2 || 1;
+      pid = e.pointerId; this.joyActive = true; try { el.setPointerCapture(pid); } catch (_) { /* ignore */ }
       this.game.match.joyStart(); set(e); e.preventDefault();
     });
     el.addEventListener('pointermove', (e) => {
@@ -226,11 +238,15 @@ export class UI {
         const cl = (v, a, b) => Math.max(a, Math.min(b, v));
         S.settings.joyX = cl(e.clientX / innerWidth, 0.1, 0.9); S.settings.joyY = cl(e.clientY / innerHeight, 0.2, 0.88); this.applyControls(); return;
       }
-      if (e.pointerId === pid) set(e);
+      if (e.pointerId === pid) { ensure(); set(e); }
     });
     el.addEventListener('pointerup', (e) => { if (e.pointerId === drag) { drag = -1; commit(); } });
-    el.addEventListener('pointerup', (e) => { if (e.pointerId !== pid) return; pid = -1; knob.style.transform = ''; if (this.game.match) this.game.match.pointerUp(); });
-    el.addEventListener('pointercancel', (e) => { if (e.pointerId !== pid) return; pid = -1; knob.style.transform = ''; if (this.game.match) this.game.match.cancelAim(); });
+    el.addEventListener('pointerup', (e) => { if (e.pointerId === pid) release(true); });
+    el.addEventListener('pointercancel', (e) => { if (e.pointerId === pid) release(false); });
+    el.addEventListener('lostpointercapture', (e) => { if (e.pointerId === pid) release(false); });
+    addEventListener('blur', () => release(false));
+    document.addEventListener('visibilitychange', () => { if (document.hidden) release(false); });
+    this.joyRelease = release;
   }
 
   // ---------------------------------------------------------------- дії
@@ -275,7 +291,7 @@ export class UI {
       default:
         if (a.startsWith('on-')) return this.online && this.online.act(a, el);
         if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); return this.renderPanel(); }
-        if (a.startsWith('cam-')) { const v = CAM_VIEWS[a.slice(4)]; if (v) { Object.assign(S.settings, { camView: a.slice(4), camTilt: v.tilt, camZoom: v.zoom }); commit(); g.computeMatchBase(); audio.click(); return this.renderSettings(); } }
+        if (a.startsWith('cam-')) { if (CAM_PRESETS[a.slice(4)]) { S.settings.camMode = a.slice(4); commit(); g.computeMatchBase(); audio.click(); return this.renderSettings(); } }
         if (a.startsWith('set-tab:')) { this.setTab = a.slice(8); audio.click(); return this.renderSettings(); }
         if (a.startsWith('tod-')) { S.settings.timeOfDay = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
         if (a.startsWith('wth-')) { S.settings.weather = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
@@ -674,8 +690,6 @@ export class UI {
     this.el.settings.hidden = false; this.renderSettings();
   }
   closeSettings() { this.el.settings.hidden = true; }
-  /** Повзунок камери змінено вручну: жоден готовий вид більше не підсвічений. */
-  markCamView() { for (const b of this.el.settings.querySelectorAll('.cam-views button')) b.classList.remove('on'); }
   renderSettings() {
     const s = S.settings, row = (a, label, on) => `<button class="tg ${on ? 'on' : ''}" data-act="${a}"><span>${label}</span><i><u></u></i></button>`;
     const cb = (k, t) => `<button class="${s.control === k ? 'on' : ''}" data-act="ctl-${k}">${t}</button>`;
@@ -692,8 +706,8 @@ export class UI {
         <button class="tg danger" data-act="reset"><span></span><b>СКИНУТИ ПРОГРЕС</b></button>`,
       match: `<div class="tg q"><span>Час доби</span><div class="seg">${tdb('day', 'ДЕНЬ')}${tdb('dusk', 'ВЕЧІР')}${tdb('night', 'НІЧ')}${tdb('random', 'ВИПАДКОВО')}</div></div>
         <div class="tg q"><span>Погода</span><div class="seg">${wtb('clear', 'ЯСНО')}${wtb('cloudy', 'ХМАРНО')}${wtb('rain', 'ДОЩ')}${wtb('snow', 'СНІГ')}${wtb('fog', 'ТУМАН')}${wtb('random', 'ВИПАДКОВО')}</div></div>`,
-      cam: `<div class="tg q"><span>Камера в матчі</span><div class="seg cam-views">${Object.entries(CAM_VIEWS).map(([k, v]) => `<button class="${s.camView === k ? 'on' : ''}" data-act="cam-${k}">${v.name}</button>`).join('')}</div></div>
-        <div class="tg q joy-set"><div class="rng"><label>Відстань<output>${s.camZoom}%</output></label><input type="range" min="60" max="140" step="2" value="${s.camZoom}" data-range="camZoom" aria-label="Відстань камери"/></div><div class="rng"><label>Нахил<output>${s.camTilt}°</output></label><input type="range" min="32" max="80" step="1" value="${s.camTilt}" data-range="camTilt" data-unit="°" aria-label="Нахил камери"/></div><div class="rng"><label>Слідкування за м'ячем<output>${s.camFollow}%</output></label><input type="range" min="50" max="220" step="10" value="${s.camFollow}" data-range="camFollow" aria-label="Швидкість слідкування камери"/></div></div>
+      cam: `<div class="tg q"><span>Камера в матчі</span><div class="seg cam-views">${Object.entries(CAM_PRESETS).map(([k, v]) => `<button class="${(s.camMode || 'classic') === k ? 'on' : ''}" data-act="cam-${k}">${v.name}</button>`).join('')}</div><small class="cam-note">${(CAM_PRESETS[s.camMode] || CAM_PRESETS.classic).note}</small></div>
+        <div class="tg q joy-set"><div class="rng"><label>Відстань<output>${s.camDist}%</output></label><input type="range" min="70" max="140" step="5" value="${s.camDist}" data-range="camDist" aria-label="Відстань камери"/></div><div class="rng"><label>Нахил<output>${s.camTiltOff > 0 ? '+' : ''}${s.camTiltOff}°</output></label><input type="range" min="-15" max="20" step="1" value="${s.camTiltOff}" data-range="camTiltOff" data-unit="°" data-sign="1" aria-label="Нахил камери відносно пресету"/></div><div class="rng"><label>Слідкування за м'ячем<output>${s.camFollow}%</output></label><input type="range" min="50" max="220" step="10" value="${s.camFollow}" data-range="camFollow" aria-label="Швидкість слідкування камери"/></div></div>
         ${row('set-shake', 'Тряска камери', s.camShake !== false)}`,
       ctl: `<div class="tg q"><span>Керування ударом</span><div class="seg">${cb('auto', 'АВТО')}${cb('joy', 'ДЖОЙСТИК')}${cb('drag', 'ВІДТЯГУВАННЯ')}</div></div>
         <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>

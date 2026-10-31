@@ -2,14 +2,14 @@ import * as THREE from 'three';
 import { StateMachine } from './stateMachine.js';
 import { audio } from './audio.js';
 import { S, commit } from '../state/save.js';
-import { PITCH, COL, matchSpec } from '../config.js';
+import { COL, matchSpec } from '../config.js';
 import { stadiumTier } from '../state/economy.js';
 import { Island } from '../graphics/island.js';
 import { Particles } from '../graphics/particles.js';
 import { Match } from '../match/match.js';
 import { CineFX } from '../graphics/cinefx.js';
+import { CamDirector, camInfoBlank } from './camera.js';
 
-const { L, W, GOAL_D } = PITCH;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const _v = new THREE.Vector3();
 const _d = new THREE.Vector3();
@@ -23,7 +23,7 @@ export class Game {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.1;
     this.coarse = coarse;
     this.res = coarse ? 0.85 : 1; this.ema = 16; this.evalT = 0; this.goodRuns = 0; this.pr = 0;
-    this.trauma = 0; this.fov = 0; this.time = 0; this.celebK = 0; this.celebAng = 0;
+    this.trauma = 0; this.fov = 0; this.time = 0;
     this.w = 1; this.h = 1;
 
     // меню: острів, що висить у небі
@@ -36,6 +36,7 @@ export class Game {
     ms.add(this.island.group, this.menuParticles.mesh);
     this.menuCam = new THREE.PerspectiveCamera(30, 1, 1, 500);
     this.matchCam = new THREE.PerspectiveCamera(34, 1, 1, 400);
+    this.camDir = new CamDirector(); this.camI = camInfoBlank();
     this.orbit = { az: 0.55, drag: 0, vel: 0, dragging: false };
 
     this.sm = new StateMachine();
@@ -182,57 +183,36 @@ export class Game {
     cam.lookAt(0, ty - 0.6, 1.2);
   }
 
-  /** Параметри слідкуючої камери: видима зона ~27 одиниць по Z і ≥44 по X. */
-  computeMatchBase() {
-    const cam = this.matchCam, asp = this.w / this.h;
-    const st = S.settings, el = clamp(st.camTilt ?? 57, 30, 80) * Math.PI / 180, half = Math.tan(cam.fov * Math.PI / 360);
-    const dV = (37 * Math.sin(el)) / (2 * half), dH = 58 / (2 * half * asp);
-    this.mBase = { dist: Math.max(dV, dH) * clamp((st.camZoom ?? 100) / 100, 0.55, 1.6), dirY: Math.sin(el), dirZ: Math.cos(el), fov: cam.fov, half, asp, tx: this.mBase ? this.mBase.tx : 0, tz: this.mBase ? this.mBase.tz : 0, zoom: this.mBase ? this.mBase.zoom : 1 };
-    this.updateMatchCam(0, true);
-  }
-  snapCamera() { if (this.mBase) { this.mBase.tx = 0; this.mBase.tz = 0; this.mBase.zoom = 1.8; } this.updateMatchCam(0, true); }
+  /** Змінились налаштування камери чи розмір екрана: режисер підлаштовується плавно (пресет, відстань, нахил). */
+  computeMatchBase() { this.updateMatchCam(0, false); }
+  snapCamera() { this.camDir.snap(); this.updateMatchCam(0, true); }
 
   addTrauma(v) { this.trauma = Math.min(1, this.trauma + v); }
-  fovKick(v) { this.fov = Math.min(8, this.fov + v); }
+  /** Поштовх кута огляду (удар, гол): набігає за ~0.1 с і спадає — не стрибком, що смикав кадр. */
+  fovKick(v) { this.fovImp = Math.max(-4, Math.min(8, (this.fovImp || 0) + v)); }
 
   updateMatchCam(dt, snap) {
-    const b = this.mBase, cam = this.matchCam; if (!b) return;
+    const cam = this.matchCam, m = this.match, cd = this.camDir; if (!m) return;
     this.trauma = Math.max(0, this.trauma - dt * 1.7);
-    this.fov += (0 - this.fov) * Math.min(1, dt * 6);
-    const m = this.match, ball = m ? m.ball : { x: 0, z: 0, vx: 0, vz: 0 };
-    const aiming = m && m.aiming;
-    // ціль: м'яч з упередженням у напрямку руху; під час прицілу кадр не рухається
-    if (!aiming) {
-      const lead = Math.min(1, Math.hypot(ball.vx, ball.vz) / 50);
-      b.gx = ball.x * 0.94 + Math.max(-7, Math.min(7, ball.vx * 0.22)) * lead; b.gz = ball.z * 0.55 + Math.max(-4, Math.min(4, ball.vz * 0.15)) * lead - 2.4;
-    }
-    if (b.gx === undefined) { b.gx = 0; b.gz = 0; }
-    const cv = m && m.celebView ? m.celebView() : null;
-    this.celebK += ((cv ? 1 : 0) - this.celebK) * Math.min(1, dt * 5);
-    if (cv) { b.gx = cv.tx; b.gz = cv.tz; this.celebAng = cv.ang; }
-    const zoomT0 = aiming ? 1.16 : (m && m.slow ? 0.94 : 1);
-    const hx = b.dist * b.zoom * 2 * b.half * b.asp / 2, hz = 18 * b.zoom;
-    const maxX = Math.max(0, L + 7 - hx), maxZ = Math.max(0, W + 3 - hz);
-    const zoomT = cv ? cv.zoom : zoomT0;
-    const tx = cv ? cv.tx : Math.max(-maxX, Math.min(maxX, b.gx)), tz = cv ? cv.tz : Math.max(-maxZ, Math.min(maxZ, b.gz));
-    const fol = clamp((S.settings.camFollow ?? 100) / 100, 0.4, 2.5);   // швидкість слідкування з налаштувань
-    const kf = snap ? 1 : 1 - Math.exp(-dt * (cv ? 4.5 : 2.8 * fol)), kz = snap ? 1 : 1 - Math.exp(-dt * (cv ? 3.8 : 3.2));
-    b.tx += (tx - b.tx) * kf; b.tz += (tz - b.tz) * kf; b.zoom += (zoomT - b.zoom) * kz;
-    const dist = b.dist * b.zoom;
-    const s = S.settings.camShake === false ? 0 : this.trauma * this.trauma, t = this.time;
-    const sx = Math.sin(t * 47) * 0.6 * s, sy = Math.sin(t * 61 + 1) * 0.45 * s;
-    const ang = (this.celebAng || 0) * this.celebK;
-    cam.position.set(b.tx + sx + Math.sin(ang) * b.dirZ * dist, b.dirY * dist + sy, b.tz + Math.cos(ang) * b.dirZ * dist);
-    cam.lookAt(b.tx, 0, b.tz);
+    this.fovImp = (this.fovImp || 0) * Math.exp(-dt * 5);
+    this.fov += (this.fovImp - this.fov) * (1 - Math.exp(-dt * 14));
+    // що важливо в моменті (м'яч, власник, хто тисне, адресат, приціл) — у координатах гравця: його команда атакує +X
+    if (m.camInfo) m.camInfo(this.camI);
+    const cv = m.celebView ? m.celebView() : null, st = S.settings;
+    cd.update(dt, this.camI, cv, { asp: this.w / this.h, preset: st.camMode, dist: st.camDist, tilt: st.camTiltOff, follow: st.camFollow, snap });
+    const s = st.camShake === false ? 0 : this.trauma * this.trauma, t = this.time;
+    const sx = (Math.sin(t * 23) + 0.5 * Math.sin(t * 37 + 2)) * 0.4 * s, sy = (Math.sin(t * 29 + 1) + 0.5 * Math.sin(t * 41)) * 0.3 * s;   // м'який гул, а не дрібне тремтіння
+    cam.position.set(cd.px + sx, cd.py + sy, cd.pz);
+    cam.lookAt(cd.tx, 0, cd.tz);
     // онлайн-гість дивиться з протилежного боку (поворот на 180°): його команда атакує зліва направо, як і в господаря
-    if (this.flipCam) { cam.position.x = -cam.position.x; cam.position.z = -cam.position.z; cam.lookAt(-b.tx, 0, -b.tz); }
-    const f = b.fov - this.fov;
+    if (this.flipCam) { cam.position.x = -cam.position.x; cam.position.z = -cam.position.z; cam.lookAt(-cd.tx, 0, -cd.tz); }
+    const f = cd.fov - this.fov;
     if (Math.abs(cam.fov - f) > 0.01) { cam.fov = f; cam.updateProjectionMatrix(); }
     const ov = m && m.camOverride ? m.camOverride() : null;
     if (ov) {
       // кат-сцени монтуються кадрами: новий кадр (shot) — склейка без перельоту, усередині кадру — плавний супровід
       const cut = ov.shot !== undefined && (!this._ov || ov.shot !== this._ovShot);
-      if (!this._ov) this._ov = { p: cam.position.clone(), l: new THREE.Vector3(b.tx, 0, b.tz), f: cam.fov, pv: new THREE.Vector3(), lv: new THREE.Vector3(), fv: 0 };
+      if (!this._ov) this._ov = { p: cam.position.clone(), l: new THREE.Vector3(this.flipCam ? -cd.tx : cd.tx, 0, this.flipCam ? -cd.tz : cd.tz), f: cam.fov, pv: new THREE.Vector3(), lv: new THREE.Vector3(), fv: 0 };
       this._ovShot = ov.shot;
       const o = this._ov;
       if (cut || snap) { o.p.copy(ov.p); o.l.copy(ov.l); o.f = ov.fov; o.pv.set(0, 0, 0); o.lv.set(0, 0, 0); o.fv = 0; }
@@ -320,7 +300,7 @@ export class Game {
     const c = this.canvas;
     let pid = -1, sx = 0, sy = 0, lx = 0, moved = false, t0 = 0;
     c.addEventListener('pointerdown', (e) => {
-      if (pid !== -1 && this.match) this.match.cancelAim();   // попередній жест загубився: починаємо спочатку
+      if (pid !== -1 && this.match && !this.ui.joyActive) this.match.cancelAim();   // попередній жест загубився: починаємо спочатку (приціл джойстиком не чіпаємо)
       pid = e.pointerId; try { c.setPointerCapture(pid); } catch (_) { /* ignore */ }
       sx = lx = e.clientX; sy = e.clientY; moved = false; t0 = performance.now();
       if (this.sm.name === 'MATCH' && this.match) this.match.pointerDown(e.clientX, e.clientY);

@@ -12,10 +12,11 @@ import { audio, vibrate } from '../core/audio.js';
 import { skillOf } from '../state/squad.js';
 import { decode, NODES, EXPR, PER, BALL, PHASES, F } from './codec.js';
 import { ONLINE_AIM, plain } from './profile.js';
+import { pathPoint } from '../core/camera.js';
 
 const NN = NODES.length;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const _q = [0, 0, 0, 0], _fw = new THREE.Vector3(), _qq = new THREE.Quaternion();
+const _q = [0, 0, 0, 0], _fw = new THREE.Vector3(), _qq = new THREE.Quaternion(), _cp = { x: 0, z: 0 };
 const GK_THROW = 1.25;
 const SWAP_SND = { goal: 'concede', concede: 'goal', win: 'lose', lose: 'win' };
 const SND_OK = new Set(['kick', 'wall', 'pass', 'save', 'whistle', 'horn', 'goal', 'concede', 'bell', 'rumble', 'slide', 'clap', 'thud', 'crowd', 'win', 'lose']);
@@ -218,6 +219,16 @@ export class GuestMatch {
   }
 
   // ------------------------------------------------------------------ для камери гри
+  /** Опис моменту для камери — дзеркально (наша команда, суперники господаря, атакує +X), як і this.ball. */
+  camInfo(o) {
+    const b = this.ball, P = this.view.players, pl = o.pl;
+    o.bx = b.x; o.bz = b.z; o.bvx = b.vx; o.bvz = b.vz;
+    P.forEach((p, i) => { const q = pl[i] || (pl[i] = {}), r = p.root.position; q.x = -r.x; q.z = -r.z; q.side = i >= 11 ? 1 : -1; q.gk = i === 0 || i === 11; });
+    o.n = P.length;
+    o.carrier = this.bs !== 'idle' && this.takerI >= 0 ? 11 + this.takerI : -1; o.receiver = -1;
+    o.aiming = this.aiming; o.aimOn = this.aiming && this.shot.valid && this.path.n > 1;
+    if (o.aimOn) { pathPoint(this.path, this.path.goal ? 1e9 : 28, _cp); o.ax = -_cp.x; o.az = -_cp.z; }
+  }
   camOverride() { return this.ov; }
   celebView() { return this.cv; }
   isPlaying() { return true; }

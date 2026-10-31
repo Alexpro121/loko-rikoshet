@@ -39,7 +39,13 @@ function merge(base, src) {
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return merge(defaults(), JSON.parse(raw));
+    if (raw) {
+      const src = JSON.parse(raw), st = src && src.settings;
+      const s = merge(defaults(), src);
+      // старі види камери: «зверху» стала тактичною, «ближче» — динамічною, «трансляція» — трансляцією
+      if (st && st.camView && !('camMode' in st)) s.settings.camMode = { top: 'tactic', close: 'dynamic', broadcast: 'broadcast' }[st.camView] || 'classic';
+      return s;
+    }
   } catch (e) { /* приватний режим або пошкоджений запис */ }
   return defaults();
 }
