@@ -634,6 +634,12 @@ export class Player {
   }
   /** Дотик при веденні: стопа (side 0 — ліва, 1 — права) коротко підбиває м'яч — носок/щиколотка, без зміни кроку. */
   tapBall(side) { this.tapT = 0.2; this.tapSide = side; }
+  /** Монтажна склейка (гравця переставили): одразу стоїть обличчям у yaw — корпус, таз і стопи, без розвороту кроками. */
+  faceNow(yaw) {
+    this.yaw = this.bodyYaw = this.bodyYawT = this.yawF = yaw;
+    this.hipW = this.hipY = this.shY = 0; this.hipSide = 0; this.hipOpen = false;
+    this.gaitSys.ready = false;                                          // стопи стануть під тілом уже з новим курсом
+  }
   control() { this.style = Math.random() < 0.5 ? 0 : 1; this.recvSide = Math.random() < 0.5 ? 0 : 1; this.setMode('control', 0.45); }
   /**
    * Прийом м'яча — за висотою, як у людини: низом — стопою (повільний — підошвою зупиняє, швидкий — внутрішньою стороною,
@@ -867,8 +873,10 @@ export class Player {
     this.hipOpen = w > 0.5;
     // воротар у грі ніколи не повертається до м'яча спиною: убік — щонайбільше «відкриті стегна» (~45°, перехресний крок),
     // назад — лише задній хід обличчям до гри. Розвертається й біжить тільки на удар-парашут за спину (gkLob)
-    if (gkw && !this.gkLob) { const lim = 0.8 * (1 - bk); return w * clamp(rel, -lim, lim); }
-    return w * (rel - Math.sign(rel) * Math.min(0.08, 0.05 * Math.abs(rel)));
+    // повертає вагу відкриття (0..1), а кут таза відносно погляду — у this.hipRel
+    if (gkw && !this.gkLob) { const lim = 0.8 * (1 - bk); this.hipRel = clamp(rel, -lim, lim); return w; }
+    this.hipRel = rel - Math.sign(rel) * Math.min(0.08, 0.05 * Math.abs(rel));
+    return w;
   }
 
   /** Контакт тілом (плече в плече): (dx, dz) — до суперника, w 0..1 — наскільки щільно тиснуть. За кадр береться найсильніший. */
@@ -923,20 +931,27 @@ export class Player {
       //  убік повільно — приставний крок (таз за поглядом); убік швидше — «відкриває стегна» в бік руху на 45–60°;
       //  назад повільно — задній хід (таз за поглядом); назад швидше ~3.5 м/с — розвертається й біжить, озираючись через плече.
       // Груди й голова лишаються на грі (до ~110° разом), решту докручує погляд
-      let hipT = 0;
+      // Згладжується ВАГА відкриття, а не кут: кут таза щокадру береться від поточного погляду до справжнього руху. Раніше
+      // згладжений кут відставав від погляду — коли погляд переходив з м'яча на біг, корпус перелітав напрям руху (і навпаки
+      // відставав), і ноги бігли вздовж руху, а тіло дивилось убік — гравець «ковзав» боком з анімацією бігу вперед
+      let hipW = 0;
       {
         const own = Math.abs(this.vx) + Math.abs(this.vz) > 0.01, vx = own ? this.vx : this.mvx || 0, vz = own ? this.vz : this.mvz || 0;
         const vh = Math.hypot(vx, vz), free0 = (this.mode === 'idle' || this.mode === 'aim' || this.mode === 'gkwait' || this.mode === 'gesture' || this.mode === 'sad') && !this.kicking && !this.holdFacing;
-        if (free0 && vh > 0.6) hipT = this.hipTurn(Math.atan2(vx, vz), vh);
+        if (free0 && vh > 0.6) hipW = this.hipTurn(Math.atan2(vx, vz), vh);
         else { this.hipSide = 0; this.hipOpen = false; }
       }
+      this.hipW = (this.hipW || 0) + (hipW - (this.hipW || 0)) * Math.min(1, dt * 7);
       // укривання м'яча: під тиском таз розвертається так, щоб суперник опинився збоку-позаду (між ним і м'ячем — тіло),
-      // але м'яч лишається в межах досяжності ноги (не більше ~75° від погляду)
-      if (this.threat > 0.3 && this.mode === 'idle' && speed < 2.5 && !this.look.gk) {
+      // але м'яч лишається в межах досяжності ноги (не більше ~75° від погляду). Лише майже на місці: на ходу (від ~1 м/с,
+      // і коли таз уже відкрито в бік руху) корпус іде за рухом, інакше ноги бігли вперед, а тіло — боком
+      let shT = 0;
+      if (this.threat > 0.3 && this.mode === 'idle' && speed < 1.6 && !this.look.gk) {
         const th = smooth(clamp((this.threat - 0.3) / 0.5, 0, 1)), rel = angDiff(this.yawF, this.threatYaw), sg = Math.sign(rel) || 1;
-        hipT += clamp(angDiff(this.yawF, this.threatYaw - sg * (Math.PI / 2 + 0.4)), -1.3, 1.3) * th;
+        shT = clamp(angDiff(this.yawF, this.threatYaw - sg * (Math.PI / 2 + 0.4)), -1.3, 1.3) * th * (1 - smooth(clamp((speed - 0.9) / 0.6, 0, 1))) * (1 - this.hipW);
       }
-      this.hipY = (this.hipY || 0) + (hipT - (this.hipY || 0)) * Math.min(1, dt * 5);
+      this.shY = (this.shY || 0) + (shT - (this.shY || 0)) * Math.min(1, dt * 5);
+      this.hipY = this.hipW * (this.hipRel || 0) + this.shY;
       this.bodyYawT = this.yawF + this.hipY;
       const dy = angDiff(this.bodyYaw, this.bodyYawT), wmax = (act ? 11 : 9 - 4 * sp) * dt;
       this.bodyYaw += clamp(dy * Math.min(1, dt * (act ? 14 : 8)), -wmax, wmax);

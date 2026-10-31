@@ -129,7 +129,7 @@ export class Match {
     this.introTgt = [this.mine, this.opp].map((arr) => arr.map((a) => ({ x: a.p.x, z: a.p.z })));
     this.introFlags = { wave: false, clap: false, cheer: false, roar: false, anthem: false, hs: false, fans: false };
     this.rp = null; this.hl = null; this.clips = []; this.moments = []; this.walk.start(spec.club, spec.home);
-    for (const a of this.actors) { a.lane = null; a._st = 0; a.post = null; a._jr = Math.random(); a.p.gaze = true; }
+    for (const a of this.actors) { a.lane = null; a._st = 0; a.post = null; a._jr = Math.random(); a.p.gaze = true; a._ix = a._iz = undefined; }
     this.introEndAt = null; this.skipEnd = false; this._cx = undefined; this._camT = undefined; this.brk = null; this.endPairs = null; this.replay.clear();
     this.ui.hud.cine(true);
     this.driveIntro(0, 0);
@@ -1334,17 +1334,21 @@ export class Match {
           a._st = (a._st || 0) + (0.3 * inT - (a._st || 0)) * Math.min(1, dt * 6);
           x = lx; z = lz + a._st;
           // перші півтори секунди після шикування — м'яко «доходить» останні міліметри до свого місця, без ривка
-          if (t < E_END + 1.5 && a._ix !== undefined) { const kk = Math.min(1, dt * 5); x = a._ix + (x - a._ix) * kk; z = a._iz + (z - a._iz) * kk; }
+          if (t < E_END + 1.5 && a._ix !== undefined && Math.hypot(x - a._ix, z - a._iz) < 1.2) { const kk = Math.min(1, dt * 5); x = a._ix + (x - a._ix) * kk; z = a._iz + (z - a._iz) * kk; }   // далі — склейка (пропуск), без ковзання
           if (t >= E_END) yaw = 0.2 * (jr - 0.5);                         // у шерензі — обличчям до трибуни, не крутиться
         }
         const px = a._ix === undefined ? x : a._ix, pz = a._iz === undefined ? z : a._iz;
+        // склейка: початок інтро (корпус ще з минулої сцени — напр. після матчу заходив у тунель обличчям усередину) чи
+        // пропуск фрагмента (процесія «перескочила»). Тоді гравець одразу стоїть обличчям за маршрутом — інакше перші
+        // кроки з тунелю йшов спиною, поки ноги переступали на 180°
+        const cut = a._ix === undefined || Math.hypot(x - px, z - pz) > 1.2;
         a._ix = x; a._iz = z;
         // швидкість: на маршруті процесії — справжня (стрибки на монтажних склейках її не смикають), інакше — з переміщення
         if (vx === null) { vx = dt > 0 ? (x - px) / dt : 0; vz = dt > 0 ? (z - pz) / dt : 0; if (Math.hypot(vx, vz) > 12) vx = vz = 0; }
         a.place(x, z); a.p.vx = vx; a.p.vz = vz; a.sync();
         const sp = Math.hypot(vx, vz);
         if (yaw === null) yaw = sp > 0.6 ? Math.atan2(vx, vz) : 0.24 * (jr - 0.5);
-        a.p.yaw = yaw;
+        if (cut) a.p.faceNow(yaw); else a.p.yaw = yaw;
       });
     });
     if (t >= E_END && dt > 0) this.introSeparate();

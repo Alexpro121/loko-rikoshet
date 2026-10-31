@@ -105,7 +105,8 @@ export class Walkout {
       this.flags[0].cloth.mesh.material.map = flagTexture(hm[0], hm[1], hm[2], home ? '' : '1919'); this.flags[0].cloth.mesh.material.needsUpdate = true;
     }
     this.cx = 0; this.cz = 5; this.t = 0; this.carry = false; this.group.visible = true;
-    this.bearers.forEach((b, i) => { b.p.root.visible = true; b.p.setMode('idle'); b.p.gaitSys.ready = false; });
+    this.bearers.forEach((b, i) => { b.p.root.visible = true; b.p.setMode('idle'); b.p.gaitSys.ready = false; b.cut = true; });
+    for (const b of this.poles) b.cut = true;                         // корпус ще з минулого матчу (заходили в тунель) — розвернути одразу
     for (let k = 0; k < 2; k++) { this.poles[k].p.root.visible = this.flags[k].group.visible = this.poles[k].sh.visible = true; }
   }
   hide() { this.group.visible = false; }
@@ -135,6 +136,7 @@ export class Walkout {
       p.vx = (tx - p.x) / Math.max(dt, 1e-3); p.vz = (tz - p.z) / Math.max(dt, 1e-3);
       if (Math.hypot(p.vx, p.vz) > 6) { p.vx = p.vz = 0; }
       p.x = tx; p.z = tz; p.yaw = Math.atan2(-nx, -nz);
+      if (b.cut) { b.cut = false; p.faceNow(p.yaw); }
       // кожна рука — на свою точку краю (уздовж краю ±0.35 м)
       const ax = nz ? 1 : 0, az = nx ? 1 : 0;
       for (let h = 0; h < 2; h++) {
@@ -149,6 +151,8 @@ export class Walkout {
     for (let k = 0; k < 2; k++) {
       const b = this.poles[k], p = b.p, f = this.flags[k], at = poleAt(k, _w);
       const vis = !at.hidden; p.root.visible = f.group.visible = b.sh.visible = vis; if (!vis) continue;
+      // склейка (старт інтро чи пропуск фрагмента — прапороносець «перескочив») — одразу обличчям за маршрутом, а не спиною
+      if (b.cut || Math.hypot(at.x - p.x, at.z - p.z) > 1.2) { b.cut = false; p.faceNow(at.yaw); }
       p.x = at.x; p.z = at.z; p.vx = at.vx; p.vz = at.vz; p.yaw = at.yaw;
       // древко — перед грудьми, трохи ближче до правої руки (вона тримає низько, ліва — на рівні плеча): обидва лікті
       // зігнуті, руки дістають древко й тоді, коли тіло на ходу опускається. Позиція — з поточної (а не минулого кадру)
