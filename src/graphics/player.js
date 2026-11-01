@@ -944,7 +944,7 @@ export class Player {
     {   // поворот корпусу: швидкість обмежена (повільніше на великій швидкості) — тіло має інерцію
       // ціль курсу згладжена: гра (ІІ) смикає напрям від кадру до кадру — тіло цього не повторює
       // в ударі, випаді й підкаті тіло розвертається різко — на опорній нозі, а не плавним поворотом бігу
-      const act = this.kicking > 0 || this.mode === 'tackle' || this.mode === 'slide' || this.mode === 'header' || this.mode === 'pdive';
+      const act = this.kicking > 0 || this.mode === 'tackle' || this.mode === 'slide' || this.mode === 'header' || this.mode === 'pdive' || (this.gkQuick && this.look.gk);
       this.yawF = this.yawF === undefined ? this.yaw : this.yawF + angDiff(this.yawF, this.yaw) * Math.min(1, dt * (act ? 25 : 7));
       // куди розвернути таз, коли гравець дивиться в одну сторону (на гру), а рухається в іншу — як футболіст:
       //  убік повільно — приставний крок (таз за поглядом); убік швидше — «відкриває стегна» в бік руху на 45–60°;

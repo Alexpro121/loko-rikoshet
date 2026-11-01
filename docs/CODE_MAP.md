@@ -211,7 +211,7 @@ Penalties: серія пенальті: своя панель, приціл, с�
 - **Penalties** :21
   constructor:22, start:24, build:38, dots:76, keeperMove:86, camOverride:99, setMark:107, placeMark:116, begin:125, decide:150, fire:168, announce:185, verdict:197, update:212, liveStep:221, ballStep:312, judge:409, endKick:422, dispose:434, unbindKeys:435, post:438, finish:440
 
-## src/match/team.js (483 рядків)
+## src/match/team.js (487 рядків)
 
 Actor (гравець у логіці) і Team (ШІ лінії: розстановка, пресинг, забігання, воротар).
 
