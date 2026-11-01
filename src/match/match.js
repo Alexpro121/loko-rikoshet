@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PITCH, PHYS, FIXTURES, ACADEMY } from '../config.js';
+import { PITCH, PHYS, FIXTURES, ACADEMY, KEEPERS, shotSkill } from '../config.js';
 import { CLUB, CHRONICLE } from '../club.js';
 import { World } from '../physics/world.js';
 import { AimPath } from '../physics/aim.js';
@@ -105,7 +105,9 @@ export class Match {
     this.kk = on ? ONLINE_GK : keeper(); this.st = on ? ONLINE_AIM : striker();
     this.myTeam.setFormation(MY_FORMATION); this.oppTeam.setFormation(spec.formation);
     const mg = this.mine[0].sk, og = this.opp[0].sk;
-    Object.assign(this.myTeam, { speed: 9.2, gkSpeed: 6 + 7 * mg.react, gkTrack: 0.35 + 0.6 * mg.iq, gkErr: (1.15 - mg.react) * 3.0 });
+    for (const g of this.keepers) g.kReach = 0;
+    if (!on) this.mine[0].kReach = this.kk.reach - KEEPERS[0].reach;   // «Досяжність» куплена воротаря: довші руки й ширший стрибок
+    Object.assign(this.myTeam, { speed: 9.2, gkSpeed: 6 + 7 * mg.react + (on ? 0 : (this.kk.speed - KEEPERS[0].speed) * 0.4), gkTrack: 0.35 + 0.6 * mg.iq, gkErr: (1.15 - mg.react) * 3.0 });
     Object.assign(this.oppTeam, { speed: spec.runSpeed, press: spec.press, line: spec.line, gkSpeed: 5 + 6 * og.react, gkTrack: 0.25 + 0.65 * og.iq, gkErr: (1.2 - og.react) * 3.4 });
     // вивчили нашу гру: воротар стоїть ближче до нашого улюбленого кута, блок зсувається на наш улюблений фланг
     this.oppTeam.cheatZ = spec.scout.corner * 0.45; this.oppTeam.zBias = spec.scout.flank * 2.5;
@@ -289,7 +291,9 @@ export class Match {
   }
 
   /** Сильний удар залежить від навички «Удар» виконавця; пас — від «Пасу» (точність). */
-  shotMul(p) { return p >= 0.45 ? 0.9 + 0.2 * this.holder.sk.shoot : 1; }
+  /** Похибка удару чи паса, рад: приціл нападника плюс власна майстерність виконавця (на максимумі навички — нуль). */
+  kickErr(v) { return (this.st.jitter * (1.5 - 0.9 * v) + 1.2 * (1 - v)) * DEG; }
+  shotMul(p) { return p >= 0.45 ? shotSkill(this.holder.sk.shoot) : 1; }
 
   updateAim() {
     const sh = this.shot, b = this.ball, g = this.game;
@@ -877,7 +881,7 @@ export class Match {
     const dx = -L - 1 - b.x, dz = z - b.z, d = Math.hypot(dx, dz) || 1;
     // сила удару — під відстань: м'яч у грі сильно гальмує (з 40 м удар у 40 м/с долітав ледь живим, ~10 м/с), тож бот
     // б'є так, щоб біля воріт м'яч ще мав ~20–43 м/с (сильніша ліга й кращий «Удар» — швидше). Воротар (довгий вибив) — без змін
-    let sp = spec.counterSpeed * (a.isGK ? 1.05 : 1) * (0.9 + 0.2 * a.sk.shoot);
+    let sp = spec.counterSpeed * (a.isGK ? 1.05 : 1) * shotSkill(a.sk.shoot);
     if (!a.isGK) sp = Math.min(PHYS.maxSpeed, Math.max(sp, this.launchFor(d, spec.counterSpeed * 0.6 * (0.85 + 0.3 * a.sk.shoot))));
     this.counterV.vx = (dx / d) * sp; this.counterV.vz = (dz / d) * sp;
     this.path.setCircles(this.world.bodies, a.body);
@@ -1064,7 +1068,7 @@ export class Match {
   /** Команда гостя: удар чи пас у напрямку (dx, dz) із силою pw — та сама формула, що й для нашого удару. */
   remoteKick(a, c) {
     const hands = a.isGK && !a.footBall, l = Math.hypot(c.dx, c.dz) || 1, dx = c.dx / l, dz = c.dz / l, pw = clamp(c.pw, 0, 1);
-    const speed = hands ? (9 + 17 * pw) * GK_THROW : Math.min(PHYS.maxSpeed, PHYS.baseShot * (0.28 + 0.72 * pw) * (pw >= 0.45 ? 0.9 + 0.2 * a.sk.shoot : 1));
+    const speed = hands ? (9 + 17 * pw) * GK_THROW : Math.min(PHYS.maxSpeed, PHYS.baseShot * (0.28 + 0.72 * pw) * (pw >= 0.45 ? shotSkill(a.sk.shoot) : 1));
     this.kickoff = false; this.netAim = null; this.netWaitT = 0;
     a.p.dribble = false; if (a.p.mode === 'aim') a.p.setMode('idle');
     const swing = () => { if (hands) a.p.throwBall(); else a.p.kick(pw); };
@@ -1073,7 +1077,7 @@ export class Match {
   }
 
   remoteRelease(a, vx, vz, pw) {
-    const b = this.ball, j = rand(-1, 1) * this.st.jitter * (1.5 - 0.9 * (pw >= 0.45 ? a.sk.shoot : a.sk.pass)) * DEG, cs = Math.cos(j), sn = Math.sin(j);
+    const b = this.ball, j = rand(-1, 1) * this.kickErr(pw >= 0.45 ? a.sk.shoot : a.sk.pass), cs = Math.cos(j), sn = Math.sin(j);
     b.vx = vx * cs - vz * sn; b.vz = vx * sn + vz * cs; ground(b);
     a.p.dribble = false; a.cool = 0.35; a.noTrap = 1.4; a.manual = false; this.taker = null; this.lastOppTaker = a;
     audio.kick(pw);
@@ -1140,7 +1144,7 @@ export class Match {
 
   launchShot() {
     const b = this.ball, sh = this.shot, h = this.holder;
-    const j = rand(-1, 1) * this.st.jitter * (1.5 - 0.9 * (sh.power >= 0.45 ? h.sk.shoot : h.sk.pass)) * DEG, cs = Math.cos(j), sn = Math.sin(j);
+    const j = rand(-1, 1) * this.kickErr(sh.power >= 0.45 ? h.sk.shoot : h.sk.pass), cs = Math.cos(j), sn = Math.sin(j);
     b.vx = sh.vx * cs - sh.vz * sn; b.vz = sh.vx * sn + sh.vz * cs; ground(b);
     this.bs = 'roll'; this.owner = 0; this.shotBy = 1; this.shotBounces = 0; this.looseT = 0; this.ts = 1; this.shotId++; this.kickoff = false; this.ui.hud.setCard(null);
     this.glideT = 0;                                   // м'яч, що ще докочувався до ніг, більше не гальмується
@@ -2199,7 +2203,7 @@ export class Match {
     for (const g of this.keepers) {
       if (g.dive || g.frozen > 0 || g.cool > 0 || g.noTrap > 0 || g.stun > 0 || g.p.downed || (this.shotBy === g.side && this.shooter === g)) continue;
       const goalX = -g.side * L, inBox = (b.x - goalX) * g.side < 20 && Math.abs(b.z) < 18;
-      if (!inBox || b.y > 1.9 + 0.5 * (g.sk.reach ?? 0.5)) continue;          // вище витягнутих рук — не дістає
+      if (!inBox || b.y > 1.9 + 0.5 * (g.sk.reach ?? 0.5) + 0.5 * g.kReach) continue;          // вище витягнутих рук — не дістає
       // бере, лише коли м'яч справді в рукавицях (руки самі тягнуться до нього — handsIK); поруч чи збоку — ні, не «телепорт» у руки
       const lim = PHYS.trapSpeed * (1.4 + 0.8 * (g.sk.hands ?? 0.5));
       // м'яч поруч і йде до нього, а руки ще не внизу — присідає й опускає руки до м'яча (далі бере, лише коли той у рукавицях)
@@ -2416,7 +2420,7 @@ export class Match {
       if (!lowDive && eta > tOpt + 0.03) continue;
       g.decided = this.shotId; g.decType = 'dive';
       {
-        const dir = Math.sign(lateral), reach = Math.min(Math.abs(lateral) + (Math.abs(lateral) < 0.8 ? 0.6 : 1.0), (2.2 + g.sk.reach * 3.4 + vRun * 0.12) * (G / 7.2));   // дотяжка в масштабі воріт
+        const dir = Math.sign(lateral), reach = Math.min(Math.abs(lateral) + (Math.abs(lateral) < 0.8 ? 0.6 : 1.0), (2.2 + g.sk.reach * 3.4 + 2 * g.kReach + vRun * 0.12) * (G / 7.2));   // дотяжка в масштабі воріт
         // висота стрибка — за висотою м'яча: високий — угору-вбік, середній — у політ, низом (по траві чи нижче ~0.5 м) — низом,
         // навіть далеко (тоді витягнутим тілом уздовж газону), а не над м'ячем
         // м'яч, що скаче по газону, у мить перетину може бути на верхівці відскоку — але поруч він торкається трави: такий
@@ -2674,7 +2678,7 @@ export class Match {
       let n = 0;
       for (const c of hit) {
         const o = cs[n++];
-        o.ax = c.ax; o.ay = c.ay; o.az = c.az; o.bx = c.bx; o.by = c.by; o.bz = c.bz; o.r = c.r + (c.glove ? 0.14 : 0.03);   // тіло — точно; рукавиці трохи «прощаючі» (долоні, пальці)
+        o.ax = c.ax; o.ay = c.ay; o.az = c.az; o.bx = c.bx; o.by = c.by; o.bz = c.bz; o.r = c.r + (c.glove ? 0.08 + 0.12 * a.sk.reach + 0.25 * a.kReach : 0.03);   // тіло — точно; рукавиці трохи «прощаючі» (долоні, пальці), що більша дотяжка, то ширше
         o.vx = clamp((c.vax + c.vbx) / 2, -12, 12); o.vy = clamp((c.vay + c.vby) / 2, -12, 12); o.vz = clamp((c.vaz + c.vbz) / 2, -12, 12);
       }
       // для м'яча: у стрибку — тіло (коло 0.45) і капсули; стоячи — капсули й невелика зона ніг і тулуба (0.5 м, а не 0.9–1.3)

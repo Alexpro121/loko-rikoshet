@@ -7,7 +7,7 @@
 //    кінокадр, що й у господаря.
 //  · Коли м'яч у його гравця, гра сповільнюється в обох, гість цілиться так само, як у звичайному матчі, і шле удар.
 import * as THREE from 'three';
-import { PITCH, PHYS } from '../config.js';
+import { PITCH, PHYS, shotSkill } from '../config.js';
 import { audio, vibrate } from '../core/audio.js';
 import { skillOf } from '../state/squad.js';
 import { decode, NODES, EXPR, PER, BALL, PHASES, F } from './codec.js';
@@ -303,7 +303,7 @@ export class GuestMatch {
     if (!valid) { this.view.aim.hide(); this.view.band.visible = false; sh.power = 0; if (was) this.sendAim(false); return; }
     sh.dirx = dirx; sh.dirz = dirz; sh.power = power;
     const sk = this.sk[Math.max(0, this.takerI)], hands = this.takerI === 0;
-    const speed = hands ? (9 + 17 * power) * GK_THROW : Math.min(PHYS.maxSpeed, PHYS.baseShot * (0.28 + 0.72 * power) * (power >= 0.45 ? 0.9 + 0.2 * sk.shoot : 1));
+    const speed = hands ? (9 + 17 * power) * GK_THROW : Math.min(PHYS.maxSpeed, PHYS.baseShot * (0.28 + 0.72 * power) * (power >= 0.45 ? shotSkill(sk.shoot) : 1));
     sh.vx = dirx * speed; sh.vz = dirz * speed;
     const v = this.view;
     if (this.aimDirty) {

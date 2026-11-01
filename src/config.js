@@ -108,8 +108,11 @@ export const STRIKERS = [
   { id: 's2', name: 'Стрілочник', price: 1800, jitter: 2.4, bounces: 3, hair: 'long', hairCol: '#1f2933', skin: '#e8bf9b', tip: 'Приціл із 3 відскоками' },
   { id: 's3', name: 'Машиніст', price: 6500, jitter: 1.4, bounces: 4, hair: 'band', hairCol: '#6b4423', skin: '#b07a52', tip: 'Приціл із 4 відскоками' },
   { id: 's4', name: 'Експрес', price: 20000, jitter: 0.6, bounces: 5, hair: 'mohawk', hairCol: '#c9a227', skin: '#e8bf9b', tip: 'Майже без похибки' },
-  { id: 's5', name: 'Тепловоз', price: 55000, jitter: 0, bounces: 6, hair: 'bald', hairCol: '#111827', skin: '#8a5a3c', tip: 'Нуль похибки, 6 відскоків' },
+  { id: 's5', name: 'Тепловоз', price: 55000, jitter: 0, bounces: 6, hair: 'bald', hairCol: '#111827', skin: '#8a5a3c', tip: 'Найточніший приціл, 6 відскоків' },
 ];
+
+/** Навичка «Удар» 0..1 -> множник сили сильного удару (0.5 — звичайний, 1 — на 18 % сильніший). */
+export const shotSkill = (v) => 0.82 + 0.36 * v;
 
 export const KEEPERS = [
   { id: 'k0', name: 'Дід Мороз', price: 0, speed: 7.0, reach: 1.15, concede: 1.0, hair: 'bald', hairCol: '#c9cdd1', skin: '#e8bf9b', tip: 'Звичайний воротар' },

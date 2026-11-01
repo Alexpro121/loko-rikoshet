@@ -19,6 +19,27 @@ export function sweepCircle(x0, z0, x1, z1, cx, cz, rr) {
   return t >= 0 && t <= 1 ? t : -1;
 }
 
+const capDist2 = (x, y, z, c) => {
+  const ex = c.bx - c.ax, ey = c.by - c.ay, ez = c.bz - c.az, l2 = ex * ex + ey * ey + ez * ez || 1e-6;
+  let t = ((x - c.ax) * ex + (y - c.ay) * ey + (z - c.az) * ez) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return (x - c.ax - ex * t) ** 2 + (y - c.ay - ey * t) ** 2 + (z - c.az - ez * t) ** 2;
+};
+
+/** Те саме для капсули частини тіла (рука, рукавиця) у 3D: тонка капсула вужча за крок сильного удару. */
+export function sweepCapsule(x0, y0, z0, x1, y1, z1, c, rr) {
+  const ex = x1 - x0, ey = y1 - y0, ez = z1 - z0, rc = rr * rr * 0.998;
+  if (capDist2(x0, y0, z0, c) <= rc) return -1;
+  const n = Math.ceil(Math.sqrt(ex * ex + ey * ey + ez * ez) / (rr * 0.5));
+  for (let i = 1; i <= n; i++) {
+    let hi = i / n;
+    if (capDist2(x0 + ex * hi, y0 + ey * hi, z0 + ez * hi, c) > rc) continue;
+    let lo = (i - 1) / n;
+    for (let k = 0; k < 6; k++) { const t = (lo + hi) / 2; if (capDist2(x0 + ex * t, y0 + ey * t, z0 + ez * t, c) <= rc) hi = t; else lo = t; }
+    return hi;
+  }
+  return -1;
+}
+
 /**
  * Відскок від нерухомої перешкоди з нормаллю (nx, nz): нормальна швидкість × −e, дотична втрачає частину від тертя
  * (кулонове: імпульс тертя ≤ μ·нормальний імпульс) — ковзний удар об борт «з'їдає» трохи швидкості, прямий — майже ні.
@@ -177,7 +198,14 @@ export class World {
     let tm = 2;
     for (let i = 0; i < bd.length; i++) {
       const o = bd[i];
-      if (!o.on || !(o.r > 0) || (o.capsOnly && o.caps && o.caps.n)) continue;
+      if (!o.on) continue;
+      if (o.caps && o.caps.n && Math.hypot(s.x - o.x, s.z - o.z) < 4 + Math.hypot(s.x - x0, s.z - z0)) {   // руки воротаря — так само безперервно
+        for (let k = 0; k < o.caps.n; k++) {
+          const t = sweepCapsule(x0, y0 + r, z0, s.x, s.y + r, s.z, o.caps[k], r + o.caps[k].r);
+          if (t >= 0 && t < tm) tm = t;
+        }
+      }
+      if (!(o.r > 0) || (o.capsOnly && o.caps && o.caps.n)) continue;
       const t = sweepCircle(x0, z0, s.x, s.z, o.x, o.z, r + o.r);
       if (t >= 0 && t < tm && y0 + (s.y - y0) * t < o.h) tm = t;
     }
