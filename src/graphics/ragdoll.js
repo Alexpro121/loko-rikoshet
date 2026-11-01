@@ -1,3 +1,4 @@
+// Ragdoll: падіння гравця як система точок Верле; вмикається з Player.knock.
 import * as THREE from 'three';
 
 /**

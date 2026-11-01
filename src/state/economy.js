@@ -1,3 +1,4 @@
+// Економіка кар'єри: ціна стадіону, дохід, каса, поточні нападник і воротар, випускник академії.
 import { S, commit } from './save.js';
 import { STADIUM_TIERS, STRIKERS, KEEPERS, ACADEMY } from '../config.js';
 

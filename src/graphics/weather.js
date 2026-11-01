@@ -1,3 +1,4 @@
+// Weather: дощ і сніг на InstancedMesh.
 import * as THREE from 'three';
 
 const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);

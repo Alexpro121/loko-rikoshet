@@ -1,3 +1,4 @@
+// playIntro: заставка запуску: станція, потяг, світлофор (DOM/CSS).
 import { audio } from '../core/audio.js';
 import { lokoCrest } from './icons.js';
 import { S } from '../state/save.js';

@@ -1,3 +1,4 @@
+// buildTunnel: тунель виходу команд на стадіоні матчу.
 import * as THREE from 'three';
 import { PITCH } from '../config.js';
 import { VoxelBuilder } from './voxel.js';

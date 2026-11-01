@@ -1,3 +1,4 @@
+// Match: уся логіка матчу: фази, ввід удару, м'яч, відбори, воротарі, голи, кат-сцени, нагороди. Огляд: docs/ARCHITECTURE.md.
 import * as THREE from 'three';
 import { PITCH, PHYS, FIXTURES, ACADEMY, KEEPERS, shotSkill } from '../config.js';
 import { CLUB, CHRONICLE } from '../club.js';

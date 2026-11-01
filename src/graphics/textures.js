@@ -1,3 +1,4 @@
+// Текстури, намальовані на canvas: атлас гравця (обличчя, номери), газон, борти, сітка, тінь, вивіски.
 import * as THREE from 'three';
 import { rng } from './voxel.js';
 import { whenLogo, logoReady, logoImg } from './logo.js';

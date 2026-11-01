@@ -1,3 +1,4 @@
+// Склад: реальний ROSTER, навички, рівні, заміни, тренування, склади суперників (oppSquad).
 import { S, commit } from './save.js';
 import { ACADEMY, FORMATIONS, KITS } from '../config.js';
 import { striker, keeper, keeperTier } from './economy.js';

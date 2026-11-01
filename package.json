@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "docs:map": "node scripts/code-map.mjs",
+    "docs:check": "node scripts/code-map.mjs --check"
   },
   "dependencies": {
     "@fontsource/rubik": "^5.3.0",

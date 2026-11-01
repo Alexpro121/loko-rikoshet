@@ -1,3 +1,4 @@
+// Island: острів у меню: стадіон за ярусами прокачки, потяг, кубки, небо.
 import * as THREE from 'three';
 import { VoxelBuilder, vcMat, lambert, rng, shade } from './voxel.js';
 import { locoMesh, wagonMesh, LOCO_LEN, WAGON_LEN, GAP } from './train.js';

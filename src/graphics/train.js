@@ -1,3 +1,4 @@
+// Воксельні локомотив і вагони для острова в меню.
 import * as THREE from 'three';
 import { VoxelBuilder, vcMat } from './voxel.js';
 

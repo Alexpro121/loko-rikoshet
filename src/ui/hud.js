@@ -1,3 +1,4 @@
+// Hud: табло матчу, годинник, картка гравця, банери. Методи з HUD_FWD (online/host.js) віддзеркалюються гостю.
 import { I, crest, lokoCrest } from './icons.js';
 import { KIT_LOKO } from '../config.js';
 import { esc } from '../online/profile.js';

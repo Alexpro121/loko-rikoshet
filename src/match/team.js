@@ -1,3 +1,4 @@
+// Actor (гравець у логіці) і Team (ШІ лінії: розстановка, пресинг, забігання, воротар).
 import { PITCH, FORMATIONS, PHYS } from '../config.js';
 import { makeBody } from '../physics/world.js';
 

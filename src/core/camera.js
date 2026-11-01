@@ -1,3 +1,4 @@
+// CamDirector: ігрова камера матчу за пресетами CAM_PRESETS (config.js); кадрує м'яч і важливих гравців.
 import { PITCH, CAM_PRESETS } from '../config.js';
 
 const { L, W, G } = PITCH;

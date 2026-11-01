@@ -1,3 +1,4 @@
+// portrait: рендерить 3D-модель гравця один раз у PNG для карток.
 import * as THREE from 'three';
 import { Player } from '../graphics/player.js';
 

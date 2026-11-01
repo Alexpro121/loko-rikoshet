@@ -1,3 +1,4 @@
+// BallView: видимий м'яч (меш, обертання); стан м'яча живе у physics/world.js.
 import * as THREE from 'three';
 import { PITCH } from '../config.js';
 

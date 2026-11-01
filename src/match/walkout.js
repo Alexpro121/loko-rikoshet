@@ -1,3 +1,4 @@
+// Walkout: декорації виходу команд: прапори, килим, салют.
 import * as THREE from 'three';
 import { PITCH, ACADEMY } from '../config.js';
 import { Player } from '../graphics/player.js';

@@ -1,0 +1,107 @@
+# Дерево файлів
+
+Усі файли репозиторію. `npm run docs:check` падає, якщо файл є в git, але його немає тут, або навпаки. Рядки й методи кожного модуля дивись у [CODE_MAP.md](CODE_MAP.md).
+
+Не в git: `node_modules/`, `dist/` (результат збірки), `.claude/` (локальні налаштування агента, зокрема `launch.json`).
+
+```text
+GAME-LOKO/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml               CI: при пуші в main збирає гру й публікує dist/ на GitHub Pages
+├── docs/
+│   ├── ARCHITECTURE.md              як гра влаштована: цикл, стани, матч, фізика, онлайн, збереження
+│   ├── CODE_MAP.md                  класи, методи й експорти з рядками; генерується, руками не правити
+│   ├── FILE_TREE.md                 цей файл
+│   └── WHERE_TO_CHANGE.md           таблиця «що змінити → де лежить»
+├── public/                          копіюється в dist/ без обробки
+│   ├── .well-known/
+│   │   └── assetlinks.json          прив'язка домену до Android-застосунку; у ньому ще заглушка SHA-256
+│   ├── apple-touch-icon.png         іконка для iOS
+│   ├── icon-192.png                 іконка PWA 192×192
+│   ├── icon-512.png                 іконка PWA 512×512, також для Google Play
+│   ├── icon-maskable-512.png        маскована іконка PWA для Android
+│   ├── icon.svg                     фавікон
+│   ├── loko-logo.svg                емблема клубу; завантажує src/graphics/logo.js
+│   ├── manifest.webmanifest         маніфест PWA: fullscreen, landscape
+│   ├── privacy.html                 політика конфіденційності для магазину
+│   └── sw.js                        сервіс-воркер: офлайн-кеш; версія кешу в CACHE
+├── scripts/
+│   └── code-map.mjs                 генерує docs/CODE_MAP.md; --check звіряє документи з репозиторієм
+├── src/
+│   ├── core/                        каркас гри, не залежить від правил футболу
+│   │   ├── audio.js                 AudioEngine: увесь звук і музика синтезуються WebAudio; vibrate
+│   │   ├── camera.js                CamDirector: ігрова камера за пресетами CAM_PRESETS
+│   │   ├── game.js                  Game: рендерер, стани, головний цикл, ввід, камера матчу, якість, втрата WebGL
+│   │   └── stateMachine.js          мінімальна стейт-машина станів гри
+│   ├── graphics/                    3D-вигляд; логіки матчу тут немає
+│   │   ├── ball.js                  BallView: видимий м'яч
+│   │   ├── cinefx.js                CineFX: кінофокус у кат-сценах
+│   │   ├── gait.js                  Gait: процедурна хода (стопи, рівновага, ритм)
+│   │   ├── island.js                Island: острів у меню, стадіон за ярусами, потяг, кубки
+│   │   ├── logo.js                  одноразове завантаження емблеми для текстур
+│   │   ├── particles.js             Particles: пул частинок
+│   │   ├── pitch.js                 buildPitch: газон, борти, ворота, сітки
+│   │   ├── player.js                Player: модель гравця, усі анімації в animate(), IK, пози воротаря
+│   │   ├── ragdoll.js               Ragdoll: падіння на точках Верле
+│   │   ├── stands.js                Stands: трибуни, глядачі, реакції натовпу, банери
+│   │   ├── surround.js              buildSurround: оточення поза трибунами
+│   │   ├── textures.js              canvas-текстури: атлас гравця, газон, борти, сітка, тінь, вивіски
+│   │   ├── train.js                 воксельні локомотив і вагони
+│   │   ├── tunnel.js                buildTunnel: тунель виходу команд
+│   │   ├── voxel.js                 VoxelBuilder: куби → один меш; shade, сідований rng
+│   │   └── weather.js               Weather: дощ і сніг
+│   ├── lab/                         лабораторія гравця, окрема сторінка
+│   │   ├── lab.css                  стилі лабораторії
+│   │   └── lab.js                   перегляд моделі й анімацій, заміри ходи, window.lab
+│   ├── match/                       правила й ШІ
+│   │   ├── cinema.js                Replay (повтори), Slaps («дай п'ять»), рукостискання
+│   │   ├── dribble.js               dribbleStep: ведення м'яча дотиками
+│   │   ├── match.js                 Match: головний клас матчу (фази, удар, м'яч, відбори, воротарі, голи, нагороди)
+│   │   ├── penalty.js               Penalties: серія пенальті
+│   │   ├── team.js                  Actor (гравець у логіці), Team (ШІ лінії й воротаря)
+│   │   ├── view.js                  MatchView: 3D-сцена матчу, час доби, погода
+│   │   └── walkout.js               Walkout: прапори, килим і салют на виході команд
+│   ├── online/                      онлайн-режим, клуб і мережа
+│   │   ├── codec.js                 бінарний кадр поз: encode/decode, NODES, прапори F
+│   │   ├── guest.js                 GuestMatch: гість показує гру господаря й шле удари
+│   │   ├── host.js                  HostLink: господар шле кадри й події, виконує команди гостя
+│   │   ├── net.js                   Net: кімната за кодом, PeerJS/WebRTC, канали ctl і st, пінг, реконект
+│   │   ├── profile.js               онлайн-клуб: герої, прапор, рейтинг, збереження OP, esc і plain
+│   │   ├── screen.js                OnlineScreen: вкладка «Онлайн» (розмітка й кнопки)
+│   │   └── session.js               Online: кімната → лобі → матч → результат → реванш, обриви
+│   ├── physics/                     м'яч і зіткнення
+│   │   ├── aim.js                   AimPath: симуляція прицілу; AimDots: пунктир
+│   │   ├── ballmodel.js             stepFree: єдина модель польоту; BallPlan: прогноз для ШІ
+│   │   └── world.js                 World: фіксований крок, борти, штанги, сітка, тіла; makeBody
+│   ├── state/                       кар'єра: дані й правила прогресу
+│   │   ├── economy.js               ціна стадіону, дохід, каса, поточні нападник і воротар, випускник
+│   │   ├── rivals.js                стиль клубів, реванш, скаутинг гри гравця
+│   │   ├── save.js                  об'єкт S, localStorage, commit/flush, підписники
+│   │   └── squad.js                 ROSTER, навички, рівні, заміни, тренування, oppSquad, skillOf
+│   ├── ui/                          HTML-інтерфейс поверх canvas
+│   │   ├── hud.js                   Hud: табло, годинник, картка гравця, банери
+│   │   ├── icons.js                 SVG-іконки I, герби crest і lokoCrest
+│   │   ├── intro.js                 playIntro: заставка з потягом
+│   │   ├── portrait.js              portrait: PNG-портрет гравця з 3D-моделі
+│   │   ├── ui.js                    UI: меню, панелі, пауза, налаштування, результат, джойстик
+│   │   └── vox.js                   VOX: ізометричні воксельні іконки в SVG
+│   ├── club.js                      дані про клуб: хроніка, факти, легенди, стадіон
+│   ├── config.js                    константи: поле, фізика, ліги, схеми, трансфери, академія, камери, налаштування
+│   ├── main.js                      точка входу гри
+│   └── style.css                    усі стилі гри; використовує змінні --u і --fs-*
+├── store/
+│   ├── PLAY_STORE.md                інструкція випуску в Google Play і тексти лістингу
+│   └── feature-graphic-1024x500.png графіка для сторінки в Google Play
+├── .gitignore                       ігнорує node_modules, dist, .claude, логи
+├── AGENTS.md                        посилання на CLAUDE.md для інших агентів
+├── BUGS.md                          аудит багів зі статусами; знизу питання, що чекають рішення
+├── CLAUDE.md                        старт для агента: правила й небезпечні місця
+├── README.md                        опис гри, запуск, правила, онлайн
+├── index.html                       сторінка гри: canvas #gl, контейнер #ui, підказка повернути екран
+├── lab.html                         сторінка лабораторії гравця
+├── package-lock.json                зафіксовані версії залежностей
+├── package.json                     скрипти; залежності three, peerjs, шрифт Rubik; збирач vite
+├── twa-manifest.json                обгортка для Google Play; домен ще заглушка ВАШ_ДОМЕН
+└── vite.config.js                   збірка: сторінки main і lab, окремий чанк three, base ./
+```

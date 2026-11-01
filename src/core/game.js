@@ -1,3 +1,4 @@
+// Game: рендерер, сцена меню, стейт-машина MENU/MATCH/GOAL/RESULT, головний цикл, ввід, камера матчу, якість.
 import * as THREE from 'three';
 import { StateMachine } from './stateMachine.js';
 import { audio } from './audio.js';

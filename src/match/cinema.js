@@ -1,3 +1,4 @@
+// Кат-сценні інструменти: Replay (запис і повтор поз), Slaps («дай п'ять»), рукостискання.
 import * as THREE from 'three';
 import { PITCH } from '../config.js';
 

@@ -1,3 +1,4 @@
+// Єдина модель польоту м'яча (stepFree) і BallPlan (прогноз для ШІ); опис фізики нижче.
 import { PITCH, PHYS } from '../config.js';
 
 /**

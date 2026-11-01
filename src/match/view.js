@@ -1,3 +1,4 @@
+// MatchView: 3D-сцена матчу: 22 гравці, стадіон, м'яч, тіні, час доби й погода.
 import * as THREE from 'three';
 import { COL, KIT_LOKO, KIT_GK_LOKO, ACADEMY, FORMATIONS, PITCH } from '../config.js';
 import { S } from '../state/save.js';

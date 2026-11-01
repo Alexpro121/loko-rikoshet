@@ -1,3 +1,4 @@
+// Лабораторія гравця (lab.html): окрема сторінка для перевірки моделі, ходи й анімацій; window.lab у консолі.
 import '@fontsource/rubik/cyrillic-600.css';
 import '@fontsource/rubik/cyrillic-800.css';
 import '@fontsource/rubik/latin-600.css';

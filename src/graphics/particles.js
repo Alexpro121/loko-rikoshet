@@ -1,3 +1,4 @@
+// Particles: пул частинок без алокацій (голи, удари, конфеті).
 import * as THREE from 'three';
 
 const _c = new THREE.Color();

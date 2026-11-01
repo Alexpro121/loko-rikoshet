@@ -1,3 +1,4 @@
+// World: фізика м'яча з кроком 120 Гц: борти, штанги, сітка, безперервні зіткнення з тілами.
 import { PITCH, PHYS } from '../config.js';
 import { stepFree } from './ballmodel.js';
 

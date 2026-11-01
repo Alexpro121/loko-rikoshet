@@ -1,3 +1,4 @@
+// Збереження кар'єри: об'єкт S у localStorage, commit/flush, підписники. Нове поле додавай у defaults().
 import { SETTINGS_DEFAULT, FIXTURES, ACADEMY } from '../config.js';
 
 const KEY = 'loko-rikoshet-save-v1';

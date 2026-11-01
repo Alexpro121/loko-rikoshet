@@ -1,3 +1,4 @@
+// Gait: процедурна хода гравця (стопи в світі, ритм, рівновага); викликається з Player.animate.
 import * as THREE from 'three';
 
 /**

@@ -1,3 +1,4 @@
+// Player: воксельна модель гравця, усі анімації (Player.animate), IK рук і ніг, пози воротаря.
 import * as THREE from 'three';
 import { VoxelBuilder } from './voxel.js';
 import { playerAtlas, faceCell, numberCell, sponsorCell, crestCell } from './textures.js';

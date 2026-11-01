@@ -1,3 +1,4 @@
+// buildPitch: газон, розмітка, борти, ворота й сітки матчу; OUTLINE — контур арени.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PITCH } from '../config.js';

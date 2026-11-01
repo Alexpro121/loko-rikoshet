@@ -1,3 +1,4 @@
+// buildSurround: усе поза трибунами матчу: земля, оточення, поїзд у кольорах Локо.
 import * as THREE from 'three';
 import { ANISO } from './textures.js';
 import { PITCH } from '../config.js';

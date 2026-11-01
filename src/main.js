@@ -1,3 +1,4 @@
+// Точка входу основної гри: шрифти, склад, UI, Game, онлайн-екран, сервіс-воркер.
 import '@fontsource/rubik/cyrillic-600.css';
 import '@fontsource/rubik/cyrillic-800.css';
 import '@fontsource/rubik/latin-600.css';

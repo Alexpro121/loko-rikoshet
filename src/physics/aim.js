@@ -1,3 +1,4 @@
+// AimPath (симуляція пунктиру прицілу з відскоками) і AimDots (його малювання).
 import * as THREE from 'three';
 import { PITCH } from '../config.js';
 import { sweepCircle } from './world.js';

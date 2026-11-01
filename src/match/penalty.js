@@ -1,3 +1,4 @@
+// Penalties: серія пенальті: своя панель, приціл, стрибок воротаря, 3D-політ м'яча.
 import * as THREE from 'three';
 import { PITCH } from '../config.js';
 import { audio } from '../core/audio.js';

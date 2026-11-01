@@ -1,3 +1,4 @@
+/* Стилі сторінки лабораторії (lab.html). */
 :root { --bg: #0e1a15; --panel: #13241c; --line: #24402f; --ink: #e9f1ec; --dim: #8fa89a; --acc: #d4202c; --acc2: #1f8f3f; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 600 13px/1.35 Rubik, system-ui, sans-serif; }

@@ -1,3 +1,4 @@
+/* Стилі основної гри; розділи перелічені в docs/CODE_MAP.md. */
 :root {
   --vh: 1vh; --vw: 1vw;
   --u: min(var(--vh), calc(var(--vw) * 0.7));

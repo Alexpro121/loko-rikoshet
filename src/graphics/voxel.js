@@ -1,3 +1,4 @@
+// VoxelBuilder: зливає куби в один меш із вершинними кольорами; матеріали, shade, сідований rng.
 import * as THREE from 'three';
 
 const _v = new THREE.Vector3();
