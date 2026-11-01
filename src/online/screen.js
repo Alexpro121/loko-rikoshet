@@ -138,7 +138,12 @@ export class OnlineScreen {
 
   // ------------------------------------------------------------------ дії
   input(el) {
-    if (el.matches('[data-oname]')) { const v = plain(el.value).toUpperCase().slice(0, 14); if (v) { OP.club.name = v; saveOP(); this.s.sync(); } return true; }
+    if (el.matches('[data-oname]')) {
+      const v = plain(el.value).toUpperCase().slice(0, 14);
+      if (v.replace(/[^A-ZА-ЯІЇЄҐ]/g, '') === 'ЮКСА') { audio.deny(); this.ui.toast('Помилка, проблемна команда'); el.value = OP.club.name; return true; }   // заборонена назва: лишається попередня
+      if (v) { OP.club.name = v; saveOP(); this.s.sync(); }
+      return true;
+    }
     if (el.matches('[data-ocity]')) { OP.club.city = plain(el.value).slice(0, 18); saveOP(); this.s.sync(); return true; }
     if (el.matches('[data-ocode]')) { const v = cleanCode(el.value); this.codeIn = v; if (el.value !== v) el.value = v; return true; }
     return false;
