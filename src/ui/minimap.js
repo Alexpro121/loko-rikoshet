@@ -6,6 +6,7 @@ import { camPreset } from '../core/camera.js';
 import { vibrate } from '../core/audio.js';
 import { S, commit } from '../state/save.js';
 import { myKit } from '../state/squad.js';
+import { DemoMatch } from './minimap-demo.js';
 
 const { L, W, G, GOAL_D } = PITCH;
 const LONG_M = GOAL_D + 1, SIDE_M = 1;                  // запас навколо поля на мапі (од.): ворота й гравці за лінією
@@ -28,8 +29,12 @@ const FADE = 0.3;                                       // м'яч під мап
 
 const _v = new THREE.Vector3();
 const CORNERS = [-1, -1, 1, -1, 1, 1, -1, 1];
-// розстановка для попереднього перегляду й перетягування в меню
-const DEMO = [[-50, 0], [-32, -22], [-34, -7], [-34, 8], [-32, 22], [-10, -14], [-12, 2], [-8, 16], [16, -20], [22, 0], [15, 20]];
+// готові місця на схемі екрана; by — що саме мапа обходить, коли стоїть там
+const SPOTS = [
+  { x: 0, y: 0, name: 'Зліва вгорі' }, { x: 1, y: 0, name: 'Справа вгорі' }, { x: 0.5, y: 1, name: 'Знизу по центру' },
+  { x: 0, y: 1, name: 'Зліва внизу' }, { x: 1, y: 1, name: 'Справа внизу' },
+];
+const AVOID = { bug: 'під табло', pause: 'під кнопкою паузи', card: 'над карткою гравця', joy: 'над джойстиком' };
 
 const rgb = (h) => { const n = parseInt(String(h).slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const hex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
@@ -50,7 +55,7 @@ export class Minimap {
     this.head = 0; this.cnt = 0; this.acc = 0; this.demoT = 0; this.sampT = 0; this.blx = NaN; this.blz = 0; this.bvx = 0; this.bvz = 0;
     this.bx = 0; this.bz = 0; this.by = 0;
     this.w = 0; this.h = 0; this.vert = false; this.dpr = 1;
-    this.layer = null; this.cv = null; this.g = null;
+    this.layer = null; this.cv = null; this.g = null; this.sim = null;
     this.setKits('#d4202c', '#2b6fd6');
   }
 
@@ -126,19 +131,8 @@ export class Minimap {
     }
   }
 
-  /** Вигадана гра для попереднього перегляду й перетягування в меню. */
-  demo(dt) {
-    const t = this.demoT += dt, b = Math.sin(t * 0.35) * 34;
-    for (let i = 0; i < 11; i++) {
-      const d = DEMO[i], gk = i === 0 ? 0.25 : 1;
-      this.px[i] = d[0] + b * 0.35 * gk + Math.sin(t * 0.7 + i * 1.7) * 7 * gk; this.pz[i] = d[1] + Math.cos(t * 0.9 + i * 2.3) * 6 * gk;
-      this.px[i + 11] = -d[0] + b * 0.35 * gk + Math.sin(t * 0.6 + i * 2.9) * 6 * gk; this.pz[i + 11] = -d[1] + Math.cos(t * 0.8 + i * 1.3) * 6 * gk;
-      this.vis[i] = this.vis[i + 11] = 1;
-    }
-    this.bx = b; this.bz = Math.sin(t * 0.53 + 1) * 22; this.by = 0;
-    const q = this.quad, x = Math.max(-28, Math.min(28, b));
-    q[0] = x - 36; q[1] = -30; q[2] = x + 36; q[3] = -30; q[4] = x + 26; q[5] = 30; q[6] = x - 26; q[7] = 30;
-  }
+  /** Маленька гра для зразка в налаштуваннях і перетягування в меню. */
+  demo(dt) { (this.sim ??= new DemoMatch(this)).step(dt); }
 
   /** Рух пишемо в ігровому часі: у сповільненні, поки цілишся, лінія м'яча не стискається в крапку. */
   sample(dt) {
@@ -288,7 +282,8 @@ export class MapHud {
     this.mm = new Minimap(); this.mm.attach(this.el.querySelector('canvas'));
     this.prev = null; this.prevOn = false;
     this.shown = false; this.want = false; this.editing = false; this.fade = 1; this.alpha = -1;
-    this.rect = { l: 0, t: 0, w: 0, h: 0 };
+    this.rect = { l: 0, t: 0, w: 0, h: 0, by: '' };
+    this.planPos = null;
     this.drag = -1; this.dx = 0; this.dy = 0; this.snap = '';
     this.initDrag();
     addEventListener('resize', () => this.apply());
@@ -322,24 +317,59 @@ export class MapHud {
   layout() {
     const st = S.settings, vw = innerWidth, vh = innerHeight, u = Math.min(vh * 0.01, vw * 0.007);
     this.placeJoyZone(u);
+    const r = this.compute(st.mapX, st.mapY, this.rect), s = this.el.style;
+    s.left = r.l + 'px'; s.top = r.t + 'px'; s.width = r.w + 'px'; s.height = r.h + 'px';
+    this.mm.resize(r.w, r.h, r.vert);
+    if (this.editing) this.bar.classList.toggle('low', r.t < vh * 0.34 && r.l + r.w > vw * 0.2 && r.l < vw * 0.8);
+  }
+
+  /** Де реально стане мапа з цим місцем: той самий розрахунок для гри й для схеми екрана в налаштуваннях. */
+  compute(x, y, out) {
+    const st = S.settings, vw = innerWidth, vh = innerHeight, u = Math.min(vh * 0.01, vw * 0.007);
     const safe = this.zones.getBoundingClientRect(), vert = camPreset(st.camMode, vw / vh).yaw !== 0;
     let long = Math.max(150, Math.min(46 * u, 320)) * st.mapSize / 100;
     long = Math.min(long, (vert ? safe.height : safe.width) * 0.62, (vert ? safe.width : safe.height) * 0.62 * ASPECT);
     long = Math.round(long);
     const short = Math.round(long / ASPECT), w = vert ? short : long, h = vert ? long : short;
-    const l = safe.left + st.mapX * Math.max(0, safe.width - w);
-    let t = safe.top + st.mapY * Math.max(0, safe.height - h);
+    const l = safe.left + x * Math.max(0, safe.width - w);
+    let t = safe.top + y * Math.max(0, safe.height - h), by = '';
     const gap = u * 1.2;
     const hit = (z) => z.width > 0 && l < z.right && l + w > z.left && t < z.bottom && t + h > z.top;
     // табло й пауза зверху, картка й джойстик знизу: мапа стає поруч, а не поверх них
-    for (const e of [this.z.bug, this.z.pause]) { const z = e.getBoundingClientRect(); if (hit(z)) t = z.bottom + gap; }
-    for (const e of [this.z.card, this.z.joy]) { const z = e.getBoundingClientRect(); if (hit(z)) t = z.top - gap - h; }
+    for (const k of ['bug', 'pause']) { const z = this.z[k].getBoundingClientRect(); if (hit(z)) { t = z.bottom + gap; by = k; } }
+    for (const k of ['card', 'joy']) { const z = this.z[k].getBoundingClientRect(); if (hit(z)) { t = z.top - gap - h; by = k; } }
     t = Math.max(safe.top, Math.min(safe.bottom - h, t));
-    Object.assign(this.rect, { l, t, w, h });
-    const s = this.el.style;
-    s.left = l + 'px'; s.top = t + 'px'; s.width = w + 'px'; s.height = h + 'px';
-    this.mm.resize(w, h, vert);
-    if (this.editing) this.bar.classList.toggle('low', t < vh * 0.34 && l + w > vw * 0.2 && l < vw * 0.8);
+    return Object.assign(out || {}, { l, t, w, h, vert, by });
+  }
+
+  /** Схема екрана для налаштувань: HUD, п'ять готових місць і мапа там, де вона стоїть насправді. */
+  planHtml() {
+    const st = S.settings, vw = innerWidth, vh = innerHeight;
+    this.placeJoyZone(Math.min(vh * 0.01, vw * 0.007));
+    const pos = (r) => `left:${(r.left ?? r.l) / vw * 100}%;top:${(r.top ?? r.t) / vh * 100}%;width:${(r.width ?? r.w) / vw * 100}%;height:${(r.height ?? r.h) / vh * 100}%`;
+    const zone = (k, cls, label) => { const z = this.z[k].getBoundingClientRect(); return z.width ? `<i class="ms-z ${cls}" style="${pos(z)}">${label}</i>` : ''; };
+    const cur = this.compute(st.mapX, st.mapY), spot = SPOTS.find((p) => p.x === st.mapX && p.y === st.mapY);
+    const spots = SPOTS.map((p) => {
+      const r = this.compute(p.x, p.y), by = r.by ? ', ' + AVOID[r.by] : '';
+      return `<button class="ms-spot ${p === spot ? 'on' : ''}" style="${pos(r)}" data-act="map-at:${p.x},${p.y}" aria-label="${p.name}${by}" title="${p.name}${by}"></button>`;
+    }).join('');
+    const say = spot ? spot.name + (cur.by ? ', ' + AVOID[cur.by] : '') : 'Своє місце';
+    this.planTo = pos(cur);
+    return `<div class="map-screen" style="--r:${(vw / vh).toFixed(3)}">${zone('bug', 'ms-bug', 'табло')}${zone('pause', 'ms-pause', '')}${zone('card', 'ms-card', 'картка')}${zone('joy', 'ms-joy', '')}${spots}<b class="ms-cur" id="ms-cur" style="${this.planPos || this.planTo}"></b></div><small class="map-say">${say}</small>`;
+  }
+
+  /** Повзунок розміру: схема оновлюється, решта сторінки не чіпається. */
+  refreshPlan(host) {
+    const e = host.querySelector('#map-plan'); if (!e) return;
+    e.innerHTML = this.planHtml(); this.animatePlan(host);
+  }
+
+  /** Мапа на схемі пливе зі старого місця на нове: одразу видно, куди вона пересунулась. */
+  animatePlan(host) {
+    const e = host.querySelector('#ms-cur'); if (!e) return;
+    void e.offsetWidth;
+    e.style.cssText = this.planTo;
+    this.planPos = this.planTo;
   }
 
   /** Місце джойстика на схемі збігається зі справжнім, зокрема після його перетягування. */

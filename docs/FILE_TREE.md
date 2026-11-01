@@ -84,6 +84,7 @@ GAME-LOKO/
 │   │   └── squad.js                 ROSTER, навички, рівні, заміни, тренування, oppSquad, skillOf
 │   ├── ui/                          HTML-інтерфейс поверх canvas
 │   │   ├── hud.js                   Hud: табло, годинник, картка гравця, банери
+│   │   ├── minimap-demo.js          DemoMatch: маленька гра для зразка мінімапи в налаштуваннях
 │   │   ├── minimap.js               Minimap, MapHud: мінімапа матчу, траєкторія м'яча, напрямок бігу своїх, перетягування
 │   │   ├── icons.js                 SVG-іконки I, герби crest і lokoCrest
 │   │   ├── intro.js                 playIntro: заставка з потягом

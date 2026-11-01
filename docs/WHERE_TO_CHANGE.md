@@ -110,7 +110,8 @@
 | Екран результату | `showResult`, `renderResult` |
 | Табло й написи в матчі | `src/ui/hud.js`; для онлайну також `HUD_FWD` і `applyEvent` |
 | Мінімапа: вигляд, лінії | `Minimap` у `src/ui/minimap.js` (`bake` для поля, `drawBallPath`, `drawRuns`, `SAMPLE`, `BALL_CAP`) |
-| Мінімапа: місце, розмір, обхід HUD | `MapHud.layout`, зони `.z-*` у `src/style.css`; поля `map*` у `SETTINGS_DEFAULT`; вкладка `map` у `renderSettings` |
+| Зразок мінімапи в налаштуваннях | `DemoMatch` у `src/ui/minimap-demo.js`; схема екрана: `planHtml`, `SPOTS` у `src/ui/minimap.js` |
+| Мінімапа: місце, розмір, обхід HUD | `MapHud.compute`, зони `.z-*` у `src/style.css`; поля `map*` у `SETTINGS_DEFAULT`; вкладка `map` у `renderSettings` |
 | Іконки | `src/ui/icons.js`, `src/ui/vox.js` |
 | Звуки й музика | `AudioEngine` у `src/core/audio.js`; для онлайну також `SND_FWD` |
 | Клавіші, дотики, повний екран | `Game.bindInput`, `UI.key` |

@@ -136,6 +136,7 @@ export class UI {
       const k = t.dataset.range, v = +t.value;
       S.settings[k] = v; this.applyControls(); commit();
       if (k.startsWith('cam')) this.game.computeMatchBase();
+      if (k === 'mapSize') this.map.refreshPlan(this.el.settings);
       const o = t.parentElement.querySelector('output'); if (o) o.textContent = (t.dataset.sign && v > 0 ? '+' : '') + v + (t.dataset.unit || '%');
     });
     root.addEventListener('click', (e) => {
@@ -773,7 +774,7 @@ export class UI {
       cam: `<div class="tg q"><span>Камера в матчі</span><div class="seg cam-views">${Object.entries(CAM_PRESETS).map(([k, v]) => `<button class="${(s.camMode || 'classic') === k ? 'on' : ''}" data-act="cam-${k}">${v.name}</button>`).join('')}</div><small class="cam-note">${(CAM_PRESETS[s.camMode] || CAM_PRESETS.classic).note}</small></div>
         <div class="tg q joy-set"><div class="rng"><label>Відстань<output>${s.camDist}%</output></label><input type="range" min="70" max="140" step="5" value="${s.camDist}" data-range="camDist" aria-label="Відстань камери"/></div><div class="rng"><label>Нахил<output>${s.camTiltOff > 0 ? '+' : ''}${s.camTiltOff}°</output></label><input type="range" min="-15" max="20" step="1" value="${s.camTiltOff}" data-range="camTiltOff" data-unit="°" data-sign="1" aria-label="Нахил камери відносно пресету"/></div><div class="rng"><label>Слідкування за м'ячем<output>${s.camFollow}%</output></label><input type="range" min="50" max="220" step="10" value="${s.camFollow}" data-range="camFollow" aria-label="Швидкість слідкування камери"/></div></div>
         ${row('set-shake', 'Тряска камери', s.camShake !== false)}`,
-      map: `<div class="tg q map-top"><div class="map-prev"><canvas id="map-prev" aria-label="Зразок мінімапи"></canvas></div><div class="map-side"><span>Де стоїть</span><div class="seg map-at">${[['↖', 0, 0], ['↗', 1, 0], ['↓', 0.5, 1], ['↙', 0, 1], ['↘', 1, 1]].map(([t, x, y]) => `<button class="${s.mapX === x && s.mapY === y ? 'on' : ''}" data-act="map-at:${x},${y}">${t}</button>`).join('')}</div><button class="btn alt joy-mv" data-act="map-move"><b>ПЕРЕМІСТИТИ</b></button></div></div>
+      map: `<div class="tg q map-top"><div class="map-prev"><canvas id="map-prev" aria-label="Зразок мінімапи"></canvas></div><div class="map-side"><span>Де стоїть на екрані</span><div class="map-plan" id="map-plan">${this.map.planHtml()}</div><button class="btn alt joy-mv" data-act="map-move"><b>ПЕРЕМІСТИТИ</b></button></div></div>
         ${row('map-on', 'Мінімапа в матчі', s.mapOn)}${row('map-opp', 'Суперники на мапі', s.mapOpp)}
         ${row('map-ball', 'Траєкторія м’яча', s.mapBall)}${row('map-run', 'Напрямок бігу своїх', s.mapRun)}
         <div class="tg q map-rngs"><div class="rng"><label>Розмір<output>${s.mapSize}%</output></label><input type="range" min="60" max="170" step="5" value="${s.mapSize}" data-range="mapSize" aria-label="Розмір мінімапи"/></div><div class="rng"><label>Прозорість<output>${s.mapAlpha}%</output></label><input type="range" min="30" max="100" step="5" value="${s.mapAlpha}" data-range="mapAlpha" aria-label="Прозорість мінімапи"/></div><div class="rng"><label>Яскравість ліній<output>${s.mapTrailA}%</output></label><input type="range" min="15" max="100" step="5" value="${s.mapTrailA}" data-range="mapTrailA" aria-label="Яскравість ліній руху"/></div></div>
@@ -789,6 +790,7 @@ export class UI {
         <div class="set-grid st-${tab} ${keep ? 'still' : ''}">${pages[tab]}</div>
       </div></div>`, keep);
     this.map.bindPreview(tab === 'map' ? this.el.settings.querySelector('#map-prev') : null);
+    if (tab === 'map') this.map.animatePlan(this.el.settings);
   }
 
   // ---------------------------------------------------------------- пауза, результат

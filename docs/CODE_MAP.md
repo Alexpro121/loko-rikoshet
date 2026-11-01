@@ -365,7 +365,7 @@ World: фізика м'яча з кроком 120 Гц: борти, штанги
 - Експорти: STAT_KEYS:9, GK_KEYS:10, STAT_NAMES:11, STAT_HINT:12, keysFor:16, ROLE_UA:17, myKit:35, makeStats:38, ovr:43, xpNeed:48, trainCost:49, tierOf:50, newEntry:56, ROSTER:70, groupOf:83, defaultSquad:97, ensureSquad:105, allPlayers:119, swapTargets:122, swapPlayers:128, CAREER_FORMS:140, setTactic:146, swapStarters:148, bestLine:153, oppSquad:165, skillOf:185, gkBonus:192, squadLook:197, lookSig:204, gainXp:207, trainStat:223, signGraduate:232, squadRating:250
 - Внутрішні функції: rosterEntry:85, relabelSquad:142
 
-## src/style.css (1739 рядків)
+## src/style.css (1748 рядків)
 
 Стилі основної гри; розділи перелічені в docs/CODE_MAP.md.
 
@@ -391,14 +391,21 @@ playIntro: заставка запуску: станція, потяг, світ
 - Експорти: playIntro:120
 - Внутрішні функції: say:7
 
-## src/ui/minimap.js (436 рядків)
+## src/ui/minimap-demo.js (214 рядків)
+
+DemoMatch: маленька гра для зразка мінімапи в налаштуваннях: розстановки, пресинг, паси, удари, сейви, голи й аути. На справжній матч не впливає.
+
+- **DemoMatch** :14
+  constructor:15, lineUp:29, start:33, give:37, formation:40, press:54, stepPlayers:65, nearest:75, choosePass:83, pass:97, shoot:106, stepBall:113, goal:144, dead:149, step:154
+
+## src/ui/minimap.js (466 рядків)
 
 Мінімапа матчу: Minimap малює поле, гравців, напрямок бігу й траєкторію м'яча; MapHud ставить її на екран і веде режим перетягування.
 
-- **Minimap** :43
-  constructor:44, attach:57, setKits:59, resize:66, sx:76, sy:77, bake:79, reset:108, read:111, demo:130, sample:144, tick:167, draw:178, drawView:192, drawRuns:203, drawBallPath:218, drawTeam:246, nearBall:258, drawBall:264
-- **MapHud** :278
-  constructor:279, apply:298, setKits:310, applyAlpha:316, layout:322, placeJoyZone:346, update:356, ballCheck:370, bindPreview:379, place:387, resetPlace:388, setEdit:390, syncBar:396, initDrag:401
+- **Minimap** :48
+  constructor:49, attach:62, setKits:64, resize:71, sx:81, sy:82, bake:84, reset:113, read:116, demo:135, sample:138, tick:161, draw:172, drawView:186, drawRuns:197, drawBallPath:212, drawTeam:240, nearBall:252, drawBall:258
+- **MapHud** :272
+  constructor:273, apply:293, setKits:305, applyAlpha:311, layout:317, compute:327, planHtml:346, refreshPlan:362, animatePlan:368, placeJoyZone:376, update:386, ballCheck:400, bindPreview:409, place:417, resetPlace:418, setEdit:420, syncBar:426, initDrag:431
 
 ## src/ui/portrait.js (115 рядків)
 
@@ -415,13 +422,13 @@ Tactics: екран складу для кар'єри й онлайн-клубу
 - **Tactics** :17
   constructor:18, pos:19, token:23, formsHtml:27, popHtml:29, swapHtml:33, ttSig:38, ttHtml:39, html:43, afterRender:61, fill:68, patch:77, act:94
 
-## src/ui/ui.js (888 рядків)
+## src/ui/ui.js (890 рядків)
 
 UI: меню, панелі, пауза, налаштування, результат, джойстик. Кнопки: data-act -> UI.act.
 
 - Внутрішні функції: countTo:26, redraw:47
 - **UI** :53
-  constructor:54, onResize:160, key:170, isIOS:192, isStandalone:193, iosHint:194, useJoy:202, setMatchUi:206, applyControls:207, initJoy:227, act:275, menuTap:338, toast:346, setSlow:351, flash:352, showMenu:358, tiltNav:369, rollFlaps:381, hideMenu:398, leagueStrip:400, refresh:415, menuCards:432, clock:472, tickCash:477, claimCash:485, deny:493, pop:494, buyStadium:496, openPanel:507, panelCovers:516, closePanel:517, renderPanel:522, statBar:538, teamSheet:541, careerLook:553, careerDetail:554, squadHtml:567, train:586, transfersHtml:594, academyHtml:611, stadiumHtml:626, chronicleHtml:644, symbolsHtml:654, buy:665, equip:674, collectGraduate:680, boostAcademy:698, openCustom:708, closeCustom:711, customAct:712, renderCustom:729, openSettings:752, closeSettings:755, renderSettings:756, pause:795, showResult:809, renderResult:838, hideResult:887
+  constructor:54, onResize:161, key:171, isIOS:193, isStandalone:194, iosHint:195, useJoy:203, setMatchUi:207, applyControls:208, initJoy:228, act:276, menuTap:339, toast:347, setSlow:352, flash:353, showMenu:359, tiltNav:370, rollFlaps:382, hideMenu:399, leagueStrip:401, refresh:416, menuCards:433, clock:473, tickCash:478, claimCash:486, deny:494, pop:495, buyStadium:497, openPanel:508, panelCovers:517, closePanel:518, renderPanel:523, statBar:539, teamSheet:542, careerLook:554, careerDetail:555, squadHtml:568, train:587, transfersHtml:595, academyHtml:612, stadiumHtml:627, chronicleHtml:645, symbolsHtml:655, buy:666, equip:675, collectGraduate:681, boostAcademy:699, openCustom:709, closeCustom:712, customAct:713, renderCustom:730, openSettings:753, closeSettings:756, renderSettings:757, pause:797, showResult:811, renderResult:840, hideResult:889
 
 ## src/ui/vox.js (82 рядків)
 
