@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { rng } from './voxel.js';
 import { whenLogo, logoReady, logoImg } from './logo.js';
 
+/** Анізотропна фільтрація: на телефонах 4x (x16 дорого коштує кожному пікселю, а на маленькому екрані різниці не видно). */
+export const ANISO = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 4 : 16;
+
 function canvas(w, h) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -13,7 +16,7 @@ function tex(c, { repeat = false, mip = true, aniso = 16 } = {}) {
   t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) { t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping; }
   if (!mip) { t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; }
-  t.anisotropy = aniso;
+  t.anisotropy = Math.min(aniso, ANISO);
   return t;
 }
 

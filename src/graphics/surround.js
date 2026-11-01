@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ANISO } from './textures.js';
 import { PITCH } from '../config.js';
 import { VoxelBuilder, rng } from './voxel.js';
 import { whenLogo, logoReady, logoImg } from './logo.js';
@@ -8,7 +9,7 @@ const ROW_D = 1.45, ROW_H = 0.92;
 
 function canvasTex(w, h, draw, opts = {}) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO;
   if (opts.repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
   return t;
 }

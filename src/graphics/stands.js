@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ANISO } from './textures.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { PITCH } from '../config.js';
 import { VoxelBuilder, rng } from './voxel.js';
@@ -22,7 +23,7 @@ function bannerAtlas() {
     g.fillStyle = fg; g.fillText(t, x + BW / 2, y + BH / 2 + 3);
   });
   g.fillStyle = '#5a4630'; g.fillRect(0, (BR - 1) * BH, BC * BW, BH);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO;
   return t;
 }
 
@@ -43,6 +44,8 @@ function waveMat(mat) {
   return mat;
 }
 const SKINS = ['#e8bf9b', '#d4a074', '#b07a52', '#8a5a3c', '#f0cfb0'];
+
+const _fm = new THREE.Matrix4(), _fp = new THREE.Vector3(), _fs = new THREE.Vector3(), _fq = new THREE.Quaternion();
 
 /** Трибуни навколо арени: бетон, вболівальники одним InstancedMesh (тіло + голова). */
 export class Stands {
@@ -130,7 +133,7 @@ export class Stands {
     for (let i = 0; i < n; i++) { c.set(fans[i * 6 + 5]); this.arms.setColorAt(i * 2, c); this.arms.setColorAt(i * 2 + 1, c); }
     this.flashN = 140;
     this.flash = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.34, 0.1), new THREE.MeshBasicMaterial({ color: '#ffffff' }), this.flashN);
-    this.flash.frustumCulled = false; this.flashT = new Float32Array(this.flashN); this.flashI = new Int32Array(this.flashN);
+    this.flash.frustumCulled = false; this.flash.count = 0; this.flashT = new Float32Array(this.flashN); this.flashI = new Int32Array(this.flashN);
     const scm = new THREE.MeshLambertMaterial({ flatShading: true });
     this.scarf = new THREE.InstancedMesh(noBottom(new THREE.BoxGeometry(0.62, 0.09, 0.14)), scm, n);
     this.scarf.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.scarf.frustumCulled = false;
@@ -185,7 +188,7 @@ export class Stands {
   /** Банери гостей: полотнища з назвою суперника в його кольорах; перемальовуються на кожен матч. */
   buildAway(spots) {
     const c = document.createElement('canvas'); c.width = 768; c.height = 384; this.awayCanvas = c;
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; this.awayTex = t;
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO; this.awayTex = t;
     const mat = waveMat(new THREE.MeshLambertMaterial({ map: t, side: THREE.DoubleSide }));
     const BWW = 4.4, BHH = BWW * 128 / 384;
     this.away = [];
@@ -280,6 +283,7 @@ export class Stands {
   update(dt, t) {
     const rx = this.rx, ch = this.chantEnv(t), react = rx && (rx.type === 'goal' || rx.type === 'wave') ? Math.min(1, rx.t * 4) * (1 - rx.t / rx.dur) : 0;
     this.chant = ch;
+    this.arms.visible = this.scarf.visible = !!rx || ch > 0.01;       // поза реакціями й співами руки й шарфи згорнуті: не малюємо їх узагалі
     const amp = Math.min(1.3, 0.28 + 0.65 * ch + 0.8 * react);
     WAVE.uTime.value = t; WAVE.uAmp.value = amp;
     // полотнища й прапори: тряска в ритм співів, сильніше під час радості
@@ -300,7 +304,7 @@ export class Stands {
       if (rx.t >= rx.dur) { this.rx = null; this.writeMatrices(t); this.flash.count = 0; }
     } else if (ch > 0.01) { if ((this.frame & 1) === 0) this.writeMatrices(t); this.wasActive = true; }
     else if (this.wasActive) { this.wasActive = false; this.writeMatrices(t); }
-    else if ((this.frame & 3) === 0) this.writeMatrices(t, true);
+    else if ((this.frame & 7) === 0) this.writeMatrices(t, true);
     // димові шашки в домашньому секторі під час співів
     if (ch > 0.5 && this.particles && this.flagSmoke) {
       this.smokeT = (this.smokeT || 0) - dt;
@@ -314,7 +318,7 @@ export class Stands {
 
   /** Спалахи камер телефонів по трибунах. */
   runFlashes(dt) {
-    const dm = new THREE.Matrix4(), tmp = new THREE.Vector3(), sc = new THREE.Vector3(), q = new THREE.Quaternion();
+    const dm = _fm, tmp = _fp, sc = _fs, q = _fq;
     this.flash.count = this.flashN;
     for (let i = 0; i < this.flashN; i++) {
       this.flashT[i] -= dt;

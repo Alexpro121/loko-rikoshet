@@ -31,6 +31,7 @@ const BREAK_T = 4.0;                // перерва між таймами (к�
 const END_T = 9.4;                  // після фінального свистка: радість, рукостискання, загальний план — далі результат
 const LZ = -14;                     // лінія шикування: ближче до тунелю (команди доходять до неї без монтажних «стрибків»)
 const LANE_Z = LZ + 1.45;           // доріжка гостей — перед шеренгою господарів (між ними й трибуною), на відстані витягнутої руки
+const _fr = new THREE.Frustum(), _pv = new THREE.Matrix4(), _sp = new THREE.Sphere(new THREE.Vector3(), 2.5);
 const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3(), _cp = { x: 0, z: 0 };
 const H = 1 / PHYS.hz;
 const MAX_STEPS = Math.ceil(0.1 * PHYS.hz) + 1;   // кадр не довший за 0.1 с (game.js): усі кроки фізики вміщаються, м'яч не відстає від гравців на низькому FPS
@@ -2699,6 +2700,20 @@ export class Match {
   }
 
   // ------------------------------------------------------------------ візуальна синхронізація
+  /** Анімація гравців. У живій грі ті, кого камера зараз не бачить, рахуються ~30 разів на секунду (час не губиться, лише збирається). */
+  animatePlayers(dt) {
+    const cam = this.game.matchCam, lod = dt > 0 && this.phase === 'play' && !this.link && !this.rp && !this.hl;
+    if (lod) _fr.setFromProjectionMatrix(_pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i], p = a.p;
+      if (lod && !a.isGK && a !== this.holder && a !== this.taker && !a.receiver && !a.manual && !a.sliding && !a.dive && !p.downed && !p.rag) {
+        _sp.center.set(p.x, 1, p.z);
+        if (!_fr.intersectsSphere(_sp)) { p.lodT = (p.lodT || 0) + dt; if (p.lodT < 0.03) continue; const d = p.lodT; p.lodT = 0; p.animate(d); continue; }
+      }
+      const d = dt + (p.lodT || 0); p.lodT = 0; p.animate(d);
+    }
+  }
+
   syncView(dt) {
     const v = this.view, b = this.ball;
     const by = v.ball.group.position.y;                               // воротарі бачать м'яч: руки стежать за ним, ловлять і відбивають
@@ -2707,7 +2722,7 @@ export class Match {
     if (dt > 0) this.slaps.update(dt);
     // дрібні «живі» рухи (поправити футболку, витерти піт, руки на коліна…) — у всіх, крім тих, хто зараз із м'ячем чи на прийомі
     for (let i = 0; i < this.actors.length; i++) { const a = this.actors[i]; a.p.fidget = !(a === this.holder || a === this.taker || a.receiver || a.manual || a.sliding || a.dive); }
-    for (let i = 0; i < v.players.length; i++) v.players[i].animate(dt);
+    this.animatePlayers(dt);
     this.keeperBodies();
     v.ball.cam = this.game.matchCam;                                  // м'яч знає камеру: здалеку не губиться на екрані
     // фізика йде кроками 1/120 с, кадр — коли завгодно (60, 90, 144 Гц): м'яч малюємо між двома останніми кроками

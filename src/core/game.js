@@ -29,7 +29,7 @@ export class Game {
   constructor(canvas, ui) {
     this.canvas = canvas; this.ui = ui; ui.game = this;
     const coarse = matchMedia('(pointer: coarse)').matches;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false, alpha: false });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: S.settings.quality !== 'low', powerPreference: 'high-performance', stencil: false, alpha: false });
     this.renderer.setClearColor(COL.skyMenu, 1);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.1;
     this.coarse = coarse;
@@ -151,7 +151,10 @@ export class Game {
   basePixelRatio() {
     const q = S.settings.quality, dpr = window.devicePixelRatio || 1;
     if (q === 'low') return Math.min(dpr, 1);
-    return Math.min(dpr, this.coarse ? 2 : 2);
+    const pr = Math.min(dpr, 2);
+    if (q === 'high') return pr;
+    // авто: планшети й великі екрани не малюємо більше за ~1080p (телефон) і ~1440p (ПК): різниці майже не видно, а GPU вдвічі легше
+    return Math.min(pr, Math.max(1, Math.sqrt((this.coarse ? 2.2e6 : 4.2e6) / (this.w * this.h))));
   }
 
   applyPixelRatio(force) {
@@ -399,10 +402,12 @@ export class Game {
   // ---------------------------------------------------------------- цикл
   tick(now) {
     requestAnimationFrame(this.tick);
+    const calm = this.sm.name === 'MENU' && (this.ui.panel || !this.ui.started);   // острів під панеллю чи заставкою: ~30 кадрів достатньо
+    if (calm && now - this.last < 30) return;
     let dt = (now - this.last) / 1000; this.last = now;
     if (dt > 0.1) dt = 0.1; if (dt < 0) dt = 0;
     if (this.lost) return;
-    this.governor(dt);
+    if (!calm) this.governor(dt);
     this.sm.update(dt);
     if (this.link) this.link.frame();                 // онлайн-господар: кадр поз гостю
     const menu = this.sm.name === 'MENU';

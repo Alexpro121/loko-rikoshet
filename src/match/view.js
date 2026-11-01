@@ -97,7 +97,9 @@ export class MatchView {
     const wf = weather === 'fog' ? 0.6 : weather === 'rain' ? 0.8 : 1;
     for (const sp of this.glow.children) { if (sp.isSprite) sp.material.opacity = t.glow * wf; else { sp.visible = time === 'night'; sp.material.opacity = 0.055 * wf * (weather === 'fog' || weather === 'rain' ? 1.8 : 1); } }
     const spotI = time === 'night' ? 0.8 : time === 'dusk' ? 0.3 : 0;
-    for (const sl of this.spots) { sl.intensity = spotI; sl.visible = spotI > 0; }       // вимкнений прожектор не рахується у шейдері
+    // кожен прожектор — зайвий рахунок у кожному пікселі: на телефоні й низькій якості вночі два по діагоналі, яскравіші, а ввечері без них
+    const few = S.settings.quality === 'low' || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
+    this.spots.forEach((sl, i) => { sl.intensity = few ? spotI * 1.6 : spotI; sl.visible = spotI > 0 && (!few || (time === 'night' && i % 3 === 0)); });   // вимкнений прожектор не рахується у шейдері
     this.stars.visible = time === 'night' && (weather === 'clear' || weather === 'snow');
     this.weather.set(weather === 'rain' || weather === 'snow' ? weather : 'clear');
     this.exposure = t.exp;

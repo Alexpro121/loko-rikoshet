@@ -79,6 +79,7 @@ export class Particles {
       i++;
     }
     this.mesh.count = this.n;
+    if (this.n === 0) return;                                             // порожній пул не вантажимо в GPU щокадру
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
   }
