@@ -150,7 +150,8 @@ export const STADIUM_TIERS = [0, 2, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 26];
 export const STADIUM_TIER_NAMES = ['Перші трибуни', 'Бічні трибуни', 'Тунель і лавки', 'Прожектори', 'Другий ярус', 'LED-борти', 'Дах і табло', 'Прапори', 'Клубний магазин і кафе', 'Тренувальне поле', 'Музей клубу', 'Готель і офіс', 'Паркінг і автобуси', 'Золота арена'];
 
 export const SETTINGS_DEFAULT = { sfx: true, music: true, haptics: true, quality: 'auto', control: 'auto', hand: 'right', joySize: 135, joyAlpha: 70, joyX: -1, joyY: -1, timeOfDay: 'day', weather: 'clear',
-  camMode: 'classic', camDist: 100, camTiltOff: 0, camFollow: 100, camShake: true };
+  camMode: 'classic', camDist: 100, camTiltOff: 0, camFollow: 100, camShake: true,
+  mapOn: true, mapX: 1, mapY: 0, mapSize: 100, mapAlpha: 85, mapRun: true, mapBall: true, mapTrailA: 50, mapOpp: true, mapCam: true };
 /**
  * Пресети ігрової камери (core/camera.js). Усі — як у FIFA: сталий широкий план, що йде за м'ячем без відставання;
  * віддаляється лише тоді, коли важливі для моменту гравці не влазять (не далі, ніж grow).

@@ -405,11 +405,13 @@ export class Game {
     requestAnimationFrame(this.tick);
     const calm = this.sm.name === 'MENU' && (this.ui.panel || !this.ui.started);   // острів під панеллю чи заставкою: ~30 кадрів достатньо
     if (calm && now - this.last < 30) return;
+    if (calm && this.ui.panelCovers()) { this.last = now; return; }
     let dt = (now - this.last) / 1000; this.last = now;
     if (dt > 0.1) dt = 0.1; if (dt < 0) dt = 0;
     if (this.lost) return;
     if (!calm) this.governor(dt);
     this.sm.update(dt);
+    this.ui.map.update(dt);
     if (this.link) this.link.frame();                 // онлайн-господар: кадр поз гостю
     const menu = this.sm.name === 'MENU';
     // кінофокус; якщо пристрій його не тягне (буфер чи шейдер) — той самий кадр звичайним рендером

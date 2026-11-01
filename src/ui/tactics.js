@@ -22,7 +22,7 @@ export class Tactics {
   }
   token(e, i, bench) {
     const a = this.a;
-    return `<button class="on-tk ${bench ? 'bench' : ''} ${i === this.sel ? 'on' : ''}" data-hid="${esc(e.id)}" data-act="tk-sel:${i}" style="${bench ? '' : this.pos(i) + ';'}--rc:${a.col(e)}"><i class="on-tk-f"><img src="${a.portrait(e)}" alt=""/></i><b>${a.ovr(e)}</b><span>${esc(lastWord(e.name))}</span></button>`;
+    return `<button class="on-tk ${bench ? 'bench' : ''} ${i === this.sel ? 'on' : ''}" data-hid="${esc(e.id)}" data-act="tk-sel:${i}" style="${bench ? '' : this.pos(i) + ';'}--rc:${a.col(e)}"><i class="on-tk-f"><img data-pi alt=""/></i><b>${a.ovr(e)}</b><span>${esc(lastWord(e.name))}</span></button>`;
   }
   formsHtml() { return `<small>Схема</small><b>${formName(this.a.form())}</b><span>Змінити</span>`; }
   /** Усі схеми одразу, без прокрутки: кожна з міні-полем. Вікно лягає поверх лівої колонки й не забирає в поля висоти. */
@@ -33,7 +33,7 @@ export class Tactics {
   swapHtml() {
     if (!this.a.canSwap(this.sel)) return `<small class="on-note">${this.a.deny}</small>`;
     const on = this.swapFrom != null;
-    return `<button class="on-dice ${on ? 'lit' : ''}" data-act="tk-swap"><b>${on ? 'ТОРКНИСЬ ІНШОГО ГРАВЦЯ' : 'ПОМІНЯТИ МІСЦЯМИ'}</b></button>`;
+    return `<button class="on-dice ${on ? 'lit' : ''}" data-act="tk-swap"><b>${on ? 'ТОРКНИСЬ ІНШОГО' : 'ПОМІНЯТИ МІСЦЯМИ'}</b></button>`;
   }
   ttSig(e, i) { return `${this.a.view(e).key}|${this.a.ovr(e)}|${this.a.role(e, i)}`; }
   ttHtml(e, i) {
@@ -59,9 +59,19 @@ export class Tactics {
   }
   /** Після перемальовування панелі: живий перегляд сідає на своє місце. */
   afterRender() {
+    this.fill();
     const ph = this.a.host().querySelector('canvas[data-tt]'), e = this.a.list()[this.sel];
     if (!ph || !e) return;
-    const v = this.a.view(e); mountTurntable(ph, v.look, v.key, this.a.portrait(e));
+    const v = this.a.view(e); mountTurntable(ph, v.look, v.key, () => this.a.portrait(e));
+  }
+  /** Обличчя фішок: готові одразу, нові малюються частинами між кадрами, щоб відкриття панелі на телефоні не підвисало. */
+  fill() {
+    const a = this.a, L = a.list(), imgs = a.host().querySelectorAll('img[data-pi]'), t0 = performance.now();
+    for (const img of imgs) {
+      if (performance.now() - t0 > 8) { requestAnimationFrame(() => this.fill()); return; }
+      const e = L.find((p) => p.id === img.closest('[data-hid]').dataset.hid);
+      img.removeAttribute('data-pi'); if (e) img.src = a.portrait(e);
+    }
   }
   /** Вибір, обмін і схема без перемальовування панелі: фішки їдуть полем на нові місця, а не з'являються заново. */
   patch(newSel) {

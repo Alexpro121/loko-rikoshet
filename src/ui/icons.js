@@ -2,6 +2,7 @@
 const svg = (body, vb = '0 0 24 24', cls = 'ic') => `<svg class="${cls}" viewBox="${vb}" aria-hidden="true">${body}</svg>`;
 
 export const I = {
+  map: svg('<path d="M3 5.5h18v13H3zM12 5.5v13M3 9.5h3.5v5H3M21 9.5h-3.5v5H21" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>'),
   gear: svg('<path fill="currentColor" fill-rule="evenodd" d="M10.3 2h3.4l.5 2.5 1.7.7 2.1-1.4 2.4 2.4-1.4 2.1.7 1.7 2.5.5v3.4l-2.5.5-.7 1.7 1.4 2.1-2.4 2.4-2.1-1.4-1.7.7-.5 2.5h-3.4l-.5-2.5-1.7-.7-2.1 1.4-2.4-2.4 1.4-2.1-.7-1.7L2 13.7v-3.4l2.5-.5.7-1.7-1.4-2.1 2.4-2.4 2.1 1.4 1.7-.7zM12 8.6a3.4 3.4 0 100 6.8 3.4 3.4 0 000-6.8z"/>'),
   pause: svg('<rect x="6" y="4.5" width="4.2" height="15" rx="1" fill="currentColor"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1" fill="currentColor"/>'),
   play: svg('<path fill="currentColor" d="M7 4.5v15l12-7.5z"/>'),

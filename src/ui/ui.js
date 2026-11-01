@@ -7,6 +7,7 @@ import { I, crest, lokoCrest } from './icons.js';
 import { VOX } from './vox.js';
 import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact } from '../club.js';
 import { Hud } from './hud.js';
+import { MapHud } from './minimap.js';
 import { playIntro } from './intro.js';
 import { portrait } from './portrait.js';
 import { ensureSquad, oppSquad, allPlayers, swapPlayers, swapStarters, setTactic, bestLine, CAREER_FORMS, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook, myKit, lookSig } from '../state/squad.js';
@@ -40,6 +41,7 @@ const sheet = (title, body, cls = '') => `
   <div class="sheet-b">${body}</div>
 </div>`;
 
+const LOW_SCREEN = matchMedia('(max-height: 500px)');
 const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .on-bench, .sym, .on-play, .on-id, .on-fe-b, .set-grid, .cu-wrap, .cu-opts';
 /** Замінює вміст вікна; keep — те саме вікно малюється заново, тож прокрутка лишається на місці. */
 function redraw(host, html, keep) {
@@ -83,6 +85,7 @@ export class UI {
 </section>
 <section class="panel" id="panel" hidden></section>`);
     this.hud = new Hud(root);
+    this.map = new MapHud(root, this);
     root.insertAdjacentHTML('beforeend', `
 <section class="overlay result" id="result" hidden></section>
 <section class="overlay pause" id="pause" hidden>
@@ -176,6 +179,7 @@ export class UI {
     // e.code: P і F працюють у будь-якій розкладці; спершу закривається верхнє вікно, а вже потім пауза чи панель
     if (e.key === 'Escape' || e.code === 'KeyP') {
       if (this.joyEdit) this.act('joy-done');
+      else if (this.map.editing) this.act('map-done');
       else if (!this.el.settings.hidden) this.closeSettings();
       else if (!this.el.custom.hidden) this.closeCustom();
       else if (g.sm.name === 'MATCH') { if (!this.el.pause.hidden) this.act('resume'); else this.pause(); }
@@ -218,6 +222,7 @@ export class UI {
     const st = this.root.style;
     st.setProperty('--joy-s', (S.settings.joySize / 100).toFixed(2));
     st.setProperty('--joy-a', (S.settings.joyAlpha / 100).toFixed(2));
+    this.map.apply(this.matchActive && !this.cineOn);
   }
   initJoy() {
     const el = this.el.joy, ring = el.querySelector('.joy-ring'), knob = el.querySelector('.joy-knob');
@@ -298,6 +303,14 @@ export class UI {
       case 'joy-move': this.joyEdit = true; this.joyPause = !this.el.pause.hidden; this.el.pause.hidden = true; this.el.joy.classList.add('edit'); this.closeSettings(); this.root.querySelector('#joy-bar').hidden = false; this.applyControls(); return;
       case 'joy-done': this.joyEdit = false; if (this.joyPause && g.sm.name === 'MATCH') this.el.pause.hidden = false; this.joyPause = false; this.el.joy.classList.remove('edit'); this.root.querySelector('#joy-bar').hidden = true; this.applyControls(); commit(); this.openSettings(); return;
       case 'joy-reset': S.settings.joyX = S.settings.joyY = -1; this.applyControls(); commit(); return;
+      case 'map-move': this.mapPause = !this.el.pause.hidden; this.el.pause.hidden = true; this.closeSettings(); audio.click(); return this.map.setEdit(true);
+      case 'map-done': this.map.setEdit(false); if (this.mapPause && g.sm.name === 'MATCH') this.el.pause.hidden = false; this.mapPause = false; audio.click(); return this.openSettings();
+      case 'map-reset': this.map.resetPlace(); audio.click(); return;
+      case 'map-on': S.settings.mapOn = !S.settings.mapOn; commit(); this.applyControls(); audio.click(); return this.renderSettings();
+      case 'map-opp': S.settings.mapOpp = !S.settings.mapOpp; commit(); audio.click(); return this.renderSettings();
+      case 'map-run': S.settings.mapRun = !S.settings.mapRun; commit(); audio.click(); return this.renderSettings();
+      case 'map-ball': S.settings.mapBall = !S.settings.mapBall; commit(); audio.click(); return this.renderSettings();
+      case 'map-cam': S.settings.mapCam = !S.settings.mapCam; commit(); audio.click(); return this.renderSettings();
       case 'ctl-auto': case 'ctl-joy': case 'ctl-drag': S.settings.control = a.slice(4); commit(); this.applyControls(); audio.click(); return this.renderSettings();
       case 'hand-right': case 'hand-left': S.settings.hand = a.slice(5); commit(); this.applyControls(); audio.click(); return this.renderSettings();
       case 'set-sfx': S.settings.sfx = !S.settings.sfx; audio.applySettings(); audio.click(); commit(); return this.renderSettings();
@@ -309,8 +322,9 @@ export class UI {
       default:
         if (a.startsWith('tk-')) { const t = this.panel === 'online' ? this.online && this.online.tac : this.tac; return t && t.act(a); }
         if (a.startsWith('on-')) return this.online && this.online.act(a, el);
-        if (a.startsWith('cam-')) { if (CAM_PRESETS[a.slice(4)]) { S.settings.camMode = a.slice(4); commit(); g.computeMatchBase(); audio.click(); return this.renderSettings(); } }
+        if (a.startsWith('cam-')) { if (CAM_PRESETS[a.slice(4)]) { S.settings.camMode = a.slice(4); commit(); g.computeMatchBase(); this.map.apply(); audio.click(); return this.renderSettings(); } }
         if (a.startsWith('set-tab:')) { this.setTab = a.slice(8); audio.click(); return this.renderSettings(); }
+        if (a.startsWith('map-at:')) { const [x, y] = a.slice(7).split(',').map(Number); this.map.place(x, y); audio.click(); return this.renderSettings(); }
         if (a.startsWith('tod-')) { S.settings.timeOfDay = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
         if (a.startsWith('wth-')) { S.settings.weather = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
         if (a.startsWith('cust:')) return this.openCustom(+a.slice(5));
@@ -492,12 +506,16 @@ export class UI {
   // ---------------------------------------------------------------- панелі
   openPanel(name) {
     this.panel = name;
+    const wide = name === 'online' || name === 'transfers';           // ці панелі на низькому екрані займають його весь
+    this.el.menu.classList.toggle('panel-full', wide); this.el.panel.classList.toggle('full', wide);
     this.el.panel.hidden = false; this.el.menu.classList.add('panel-open');
     this.el.nav.querySelectorAll('.nb').forEach((b, i) => b.classList.toggle('on', ['match', 'transfers', 'academy', 'stadium', 'online'][i] === name));
     this.renderPanel();
   }
+  /** Панель закрила весь екран: острів за нею не видно, тож малювати його нема потреби. */
+  panelCovers() { return !!this.panel && this.el.panel.classList.contains('full') && LOW_SCREEN.matches; }
   closePanel(silent) {
-    this.panel = null; this._pv = null; this.el.panel.hidden = true; this.el.menu.classList.remove('panel-open');
+    this.panel = null; this._pv = null; this.el.panel.hidden = true; this.el.menu.classList.remove('panel-open', 'panel-full'); this.el.panel.classList.remove('full');
     this.el.nav.querySelectorAll('.nb').forEach((b, i) => b.classList.toggle('on', i === 0));
   }
 
@@ -552,7 +570,7 @@ export class UI {
       const TIER = { gold: '#e3b33a', silver: '#b4bcc4', bronze: '#b0793f' };
       const quiet = (fn) => (...x) => { this.holdPanel = true; try { return fn(...x); } finally { this.holdPanel = false; } };   // commit не перемальовує панель: фішки мають доїхати
       this.tac = new Tactics({
-        forms: CAREER_FORMS, deny: 'Воротаря можна поміняти лише на воротаря із запасу.',
+        forms: CAREER_FORMS, deny: 'Воротаря можна поміняти лише на воротаря',
         list: allPlayers, form: () => S.tactic, setForm: quiet(setTactic), ovr,
         swap: (i, j) => (i < 11 && j < 11 ? quiet(swapStarters)(i, j) : i < 11 ? swapPlayers(i, j - 11) : j < 11 ? swapPlayers(j, i - 11) : false),
         canSwap: () => true, col: (e) => TIER[tierOf(ovr(e))],
@@ -744,7 +762,7 @@ export class UI {
     const qb = (k, t) => `<button class="${s.quality === k ? 'on' : ''}" data-act="q-${k}">${t}</button>`;
     const tab = this.setTab || 'gen', keep = !open && this._st === tab;   // вікно з'являється лише при відкритті, сторінка — при зміні вкладки
     this._st = tab;
-    const tabs = [['gen', 'Загальне', I.gear], ['match', 'Матч', I.ball], ['cam', 'Камера', I.full], ['ctl', 'Керування', I.up]];
+    const tabs = [['gen', 'Загальне', I.gear], ['match', 'Матч', I.ball], ['cam', 'Камера', I.full], ['map', 'Мапа', I.map], ['ctl', 'Керування', I.up]];
     const pages = {
       gen: `${row('set-sfx', 'Звуки', s.sfx)}${row('set-music', 'Музика', s.music)}${row('set-haptics', 'Вібрація', s.haptics)}
         <button class="tg" data-act="fs"><span>На весь екран</span>${I.full}</button>
@@ -755,6 +773,11 @@ export class UI {
       cam: `<div class="tg q"><span>Камера в матчі</span><div class="seg cam-views">${Object.entries(CAM_PRESETS).map(([k, v]) => `<button class="${(s.camMode || 'classic') === k ? 'on' : ''}" data-act="cam-${k}">${v.name}</button>`).join('')}</div><small class="cam-note">${(CAM_PRESETS[s.camMode] || CAM_PRESETS.classic).note}</small></div>
         <div class="tg q joy-set"><div class="rng"><label>Відстань<output>${s.camDist}%</output></label><input type="range" min="70" max="140" step="5" value="${s.camDist}" data-range="camDist" aria-label="Відстань камери"/></div><div class="rng"><label>Нахил<output>${s.camTiltOff > 0 ? '+' : ''}${s.camTiltOff}°</output></label><input type="range" min="-15" max="20" step="1" value="${s.camTiltOff}" data-range="camTiltOff" data-unit="°" data-sign="1" aria-label="Нахил камери відносно пресету"/></div><div class="rng"><label>Слідкування за м'ячем<output>${s.camFollow}%</output></label><input type="range" min="50" max="220" step="10" value="${s.camFollow}" data-range="camFollow" aria-label="Швидкість слідкування камери"/></div></div>
         ${row('set-shake', 'Тряска камери', s.camShake !== false)}`,
+      map: `<div class="tg q map-top"><div class="map-prev"><canvas id="map-prev" aria-label="Зразок мінімапи"></canvas></div><div class="map-side"><span>Де стоїть</span><div class="seg map-at">${[['↖', 0, 0], ['↗', 1, 0], ['↓', 0.5, 1], ['↙', 0, 1], ['↘', 1, 1]].map(([t, x, y]) => `<button class="${s.mapX === x && s.mapY === y ? 'on' : ''}" data-act="map-at:${x},${y}">${t}</button>`).join('')}</div><button class="btn alt joy-mv" data-act="map-move"><b>ПЕРЕМІСТИТИ</b></button></div></div>
+        ${row('map-on', 'Мінімапа в матчі', s.mapOn)}${row('map-opp', 'Суперники на мапі', s.mapOpp)}
+        ${row('map-ball', 'Траєкторія м’яча', s.mapBall)}${row('map-run', 'Напрямок бігу своїх', s.mapRun)}
+        <div class="tg q map-rngs"><div class="rng"><label>Розмір<output>${s.mapSize}%</output></label><input type="range" min="60" max="170" step="5" value="${s.mapSize}" data-range="mapSize" aria-label="Розмір мінімапи"/></div><div class="rng"><label>Прозорість<output>${s.mapAlpha}%</output></label><input type="range" min="30" max="100" step="5" value="${s.mapAlpha}" data-range="mapAlpha" aria-label="Прозорість мінімапи"/></div><div class="rng"><label>Яскравість ліній<output>${s.mapTrailA}%</output></label><input type="range" min="15" max="100" step="5" value="${s.mapTrailA}" data-range="mapTrailA" aria-label="Яскравість ліній руху"/></div></div>
+        ${row('map-cam', 'Зона камери на мапі', s.mapCam)}`,
       ctl: `<div class="tg q"><span>Керування ударом</span><div class="seg">${cb('auto', 'АВТО')}${cb('joy', 'ДЖОЙСТИК')}${cb('drag', 'ВІДТЯГУВАННЯ')}</div></div>
         <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
         <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><button class="btn alt joy-mv" data-act="joy-move"><b>ПЕРЕМІСТИТИ</b></button><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>`,
@@ -765,12 +788,13 @@ export class UI {
         <nav class="st-tabs">${tabs.map(([k, t, ic]) => `<button class="${tab === k ? 'on' : ''}" data-act="set-tab:${k}"><i>${ic}</i><span>${t}</span></button>`).join('')}</nav>
         <div class="set-grid st-${tab} ${keep ? 'still' : ''}">${pages[tab]}</div>
       </div></div>`, keep);
+    this.map.bindPreview(tab === 'map' ? this.el.settings.querySelector('#map-prev') : null);
   }
 
   // ---------------------------------------------------------------- пауза, результат
   pause() {
     const g = this.game;
-    if (g.sm.name !== 'MATCH' || this.joyEdit || !g.match.isPlaying()) return;
+    if (g.sm.name !== 'MATCH' || this.joyEdit || this.map.editing || !g.match.isPlaying()) return;
     g.match.pause(); this.el.pause.hidden = false;
     // онлайн: гра не зупиняється (час спільний), пенальті немає, а вихід — це здача матчу
     const on = !!(g.online && g.online.inMatch());

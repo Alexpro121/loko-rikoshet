@@ -1,6 +1,7 @@
 // portrait: рендерить 3D-модель гравця один раз у PNG для карток.
 import * as THREE from 'three';
 import { Player } from '../graphics/player.js';
+import { S } from '../state/save.js';
 
 /** Портрети для карток: справжня 3D-модель гравця, відрендерена один раз у PNG. */
 let ctx = null;
@@ -48,16 +49,18 @@ export function portrait(renderer, look, key) {
 // Живий 3D у власному контексті WebGL: одна канва на всю гру переходить туди, де зараз відкрито перегляд.
 // Цикл працює, лише поки канву видно; обертається камера, а світло йде разом із нею, тож спина не темна.
 const SPIN = (Math.PI * 2) / 9, _box = new THREE.Box3(), TAN = Math.tan((13 * Math.PI) / 180);
-let v = null, vFailed = false;
+let v = null, vFailed = false, vRelease = 0;
+const RELEASE_MS = 15000;                                           // сховали надовго: контекст звільняємо, у матчі телефону пам'ять потрібніша
 
 function viewerInit() {
   const canvas = document.createElement('canvas'); canvas.className = 'on-tt-cv';
-  const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-  r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); r.setClearColor(0x000000, 0);
+  const low = S.settings.quality === 'low', coarse = matchMedia('(pointer: coarse)').matches;
+  const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: !low });
+  r.setPixelRatio(Math.min(window.devicePixelRatio || 1, low ? 1 : coarse ? 1.5 : 2)); r.setClearColor(0x000000, 0);
   const scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight(0xffffff, 0x9a7458, 1.25));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6); scene.add(sun);
-  v = { canvas, r, scene, sun, cam: new THREE.PerspectiveCamera(26, 1, 1, 60), player: null, key: null, ang: 0, vel: 0, spin: SPIN, wait: 0, drag: null, run: 0, w: 0, h: 0, fit: 2.6, last: 0, still: matchMedia('(prefers-reduced-motion: reduce)').matches };
+  v = { canvas, r, scene, sun, cam: new THREE.PerspectiveCamera(26, 1, 1, 60), player: null, key: null, ang: 0, vel: 0, spin: SPIN, wait: 0, drag: null, run: 0, w: 0, h: 0, fit: 2.6, last: 0, gap: coarse || low ? 30 : 0, still: matchMedia('(prefers-reduced-motion: reduce)').matches };
   canvas.addEventListener('pointerdown', (e) => { v.drag = { id: e.pointerId, x: e.clientX, t: performance.now() }; v.vel = 0; try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ } canvas.classList.add('grab'); });
   canvas.addEventListener('pointermove', (e) => {
     const d = v.drag; if (!d || e.pointerId !== d.id) return;
@@ -66,6 +69,10 @@ function viewerInit() {
   });
   const up = (e) => { const d = v.drag; if (!d || e.pointerId !== d.id) return; if (performance.now() - d.t > 90) v.vel = 0; v.drag = null; v.spin = 0; v.wait = performance.now() + 2200; canvas.classList.remove('grab'); };
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+}
+function viewerRelease() {
+  if (!v || v.run) return;
+  v.r.dispose(); v.r.forceContextLoss(); v = null;
 }
 function viewerLook(look, key) {
   if (v.key === key) return;
@@ -81,7 +88,8 @@ function viewerLook(look, key) {
 }
 function viewerTick(now) {
   const c = v.canvas;
-  if (!c.isConnected || !c.offsetParent) { v.run = 0; return; }
+  if (!c.isConnected || !c.offsetParent) { v.run = 0; clearTimeout(vRelease); vRelease = setTimeout(viewerRelease, RELEASE_MS); return; }
+  if (v.gap && now - v.last < v.gap) { requestAnimationFrame(viewerTick); return; }   // телефон: 30 кадрів, плавності вистачає
   const dt = Math.min(0.1, (now - v.last) / 1000); v.last = now;
   if (!v.drag && !v.still) {
     v.ang += v.vel * dt; v.vel *= Math.exp(-dt * 3.2);               // кинутий пальцем докручується й стихає
@@ -99,7 +107,8 @@ function viewerTick(now) {
 /** Ставить живого гравця на місце заглушки ph. Якщо WebGL недоступний, лишається звичайна картинка still. */
 export function mountTurntable(ph, look, key, still) {
   if (!v && !vFailed) { try { viewerInit(); } catch (_) { vFailed = true; } }
-  if (!v) { const img = new Image(); img.className = 'on-tt-cv'; img.src = still; img.alt = ''; ph.replaceWith(img); return; }
+  if (!v) { const img = new Image(); img.className = 'on-tt-cv'; img.src = still(); img.alt = ''; ph.replaceWith(img); return; }
+  clearTimeout(vRelease);
   viewerLook(look, key);
   ph.replaceWith(v.canvas);
   if (!v.run) { v.run = 1; v.last = performance.now(); requestAnimationFrame(viewerTick); }

@@ -16,13 +16,13 @@ const FE_TABS = { gen: 'Генератор', field: 'Поле', emblem: 'Зна�
 const SLOTS_UA = ['Футболка', 'Шорти', 'Третій', 'Знак', 'Плашка', 'Воротар'];
 const EDGE_UA = { none: 'Без рамки', thin: 'Тонка', white: 'Біла', gold: 'Золота', double: 'Подвійна', wide: 'Широка' };
 const PLATE_UA = { none: 'Без плашки', disc: 'Коло', shield: 'Щит', dia: 'Ромб', hex: 'Шестикутник', oct: 'Восьмикутник', sq: 'Квадрат', star: 'Зірка' };
-const WF_SLICES = 14, WF_PERIOD = 2.6;
+const WF_SLICES = matchMedia('(pointer: coarse)').matches ? 9 : 14, WF_PERIOD = 2.6;   // на телефоні менше смужок: кожна це окремий шар
 const LINE_UA = { D: 'захист', M: 'півзахист', W: 'фланг', F: 'напад' };
 
 /** Полотно, що майорить: смужки одного SVG хитаються зі зсувом. Фаза від годинника, тож перемальовування панелі не смикає хвилю. */
 const waveFlag = (flag, cls = '') => {
   let sl = ''; for (let i = 0; i < WF_SLICES; i++) sl += `<s style="--i:${i}"></s>`;
-  return `<div class="wf ${cls}" data-wf style="--fl:${flagUri(flag)};--ph:${(-(performance.now() / 1000) % WF_PERIOD).toFixed(2)}s"><i class="wf-pole"></i><div class="wf-cloth">${sl}</div></div>`;
+  return `<div class="wf ${cls}" data-wf style="--n:${WF_SLICES};--fl:${flagUri(flag)};--ph:${(-(performance.now() / 1000) % WF_PERIOD).toFixed(2)}s"><i class="wf-pole"></i><div class="wf-cloth">${sl}</div></div>`;
 };
 const tile = (label, val, cls = '') => `<div class="on-tile ${cls}"><small>${label}</small><b>${val}</b></div>`;
 
@@ -33,12 +33,15 @@ export class OnlineScreen {
     this.popKey = null; this.bump = false; this.rdy = { me: false, opp: false };
     const sig = () => { const k = kitOf(OP.club); return k.main + k.second + OP.club.gk; };
     this.tac = new Tactics({
-      forms: ONLINE_FORMS, deny: 'Воротар завжди в рамці. Обери польового гравця, щоб поміняти місцями.',
+      forms: ONLINE_FORMS, deny: 'Воротар завжди в рамці',
       list: () => OP.heroes, form: () => OP.club.form, setForm, swap: swapHeroes, canSwap: (i) => i !== 0, ovr,
       col: (e) => (RARITY[e.rar] || RARITY.c).col, portrait: (e) => portrait(game.renderer, this.look(e), 'on-' + e.id + e.num + sig()),
       view: (e) => ({ look: this.look(e), key: 'on-' + e.id + e.num + sig() }), role: (e) => ROLE_UA[e.role] || e.role, detail: (e, i) => this.heroDetail(e, i),
       defaultSel: () => 1, render: () => ui.renderPanel(), changed: () => this.s.sync(), toast: (t) => ui.toast(t), host: () => ui.el.panel,
     });
+    // екранна клавіатура закриває низ екрана: поле вводу піднімаємо, а Enter у назві й місті її ховає
+    ui.root.addEventListener('focusin', (e) => { if (e.target.matches('.on-name, .on-city, .on-code-in')) setTimeout(() => e.target.scrollIntoView({ block: 'center' }), 350); });
+    ui.root.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-oname], [data-ocity]')) e.target.blur(); });
     ui.root.addEventListener('change', (e) => { if (e.target.matches('[data-ocol]')) this.patchFe(); });   // свій колір: панель перемальовуємо лише після вибору, інакше палітра закриється
     this.s = new Online(game, ui);
     // запрошення за посиланням ?room=КОД: відкриваємо вкладку й одразу заходимо в кімнату
@@ -96,8 +99,8 @@ export class OnlineScreen {
     return `<div class="on-club">
       <section class="on-id on-a">
         <div class="on-stage big"><div class="on-kits" data-kits data-sig="${kitOf(c).main + kitOf(c).second + c.gk}">${this.kitsHtml()}</div>${waveFlag(c.flag)}</div>
-        <input class="on-name" data-oname maxlength="14" value="${esc(c.name)}" aria-label="Назва клубу"/>
-        <input class="on-city" data-ocity maxlength="18" value="${esc(c.city)}" aria-label="Місто"/>
+        <input class="on-name" data-oname enterkeyhint="done" maxlength="14" value="${esc(c.name)}" aria-label="Назва клубу"/>
+        <input class="on-city" data-ocity enterkeyhint="done" maxlength="18" value="${esc(c.city)}" aria-label="Місто"/>
         <div class="on-lvl"><div><span>Рівень <b>${OP.lvl}</b></span><small>${OP.xp}/${need} · новий рівень: +100 ${I.coin}</small></div><i class="on-bar"><u style="width:${Math.min(100, (OP.xp / need) * 100)}%"></u></i></div>
         <div class="on-tiles four">${tile('Рейтинг', OP.rating)}${tile('Сила', teamRating())}${tile('Матчі', OP.games)}${tile('Голи', OP.goals)}</div>
         <div class="on-rec"><span>Перемоги <b>${OP.rec.w}</b></span><span>Нічиї <b>${OP.rec.d}</b></span><span>Поразки <b>${OP.rec.l}</b></span><span>Відсоток <b>${w}%</b></span></div>
@@ -171,8 +174,11 @@ export class OnlineScreen {
   patchFe() {
     const P = this.ui.el.panel, b = P.querySelector('[data-febody]'); if (!b) return;
     const y = b.scrollTop; b.innerHTML = this.feHtml(); b.scrollTop = y;
-    const ks = P.querySelector('[data-kits]'), k = kitOf(OP.club), sig = k.main + k.second + OP.club.gk;   // картинку міняємо лише з новими кольорами, інакше вона блимає
-    if (ks && ks.dataset.sig !== sig) { ks.dataset.sig = sig; ks.innerHTML = this.kitsHtml(); }
+    clearTimeout(this.kitT);                                         // рендер форми відкладаємо: кнопка має реагувати миттєво, а серія кліків малює лише останній колір
+    this.kitT = setTimeout(() => {
+      const ks = this.ui.el.panel.querySelector('[data-kits]'), k = kitOf(OP.club), sig = k.main + k.second + OP.club.gk;   // картинку міняємо лише з новими кольорами, інакше вона блимає
+      if (ks && ks.dataset.sig !== sig) { ks.dataset.sig = sig; ks.innerHTML = this.kitsHtml(); }
+    }, 180);
   }
   /** Прапор змінився кнопкою: зберегти, показати, сказати супернику (із затримкою, щоб серія кліків не засипала канал). */
   flagDone(pop = true) {
@@ -215,7 +221,7 @@ export class OnlineScreen {
         <section class="on-card on-go on-a" style="--d:1">
           <button class="on-create" data-act="on-create"><i class="on-sweep"></i><span>${I.play}</span><b>СТВОРИТИ КІМНАТУ<small>отримаєш код для друга</small></b></button>
           <div class="on-or"><span>або введи код друга</span></div>
-          <div class="on-join"><input class="on-code-in" data-ocode maxlength="5" placeholder="КОД" value="${esc(this.codeIn)}" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Код кімнати"/><button class="btn alt" data-act="on-join"><b>УВІЙТИ</b></button></div>${err}
+          <div class="on-join"><input class="on-code-in" data-ocode enterkeyhint="go" maxlength="5" placeholder="КОД" value="${esc(this.codeIn)}" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Код кімнати"/><button class="btn alt" data-act="on-join"><b>УВІЙТИ</b></button></div>${err}
           <p class="fine">Матч 1 на 1: кожен керує своєю командою, коли м’яч у його гравця. Потрібен інтернет в обох. Сервер лише знайомить гравців, далі гра йде напряму між пристроями.</p></section></div>`;
     }
     if (st === 'creating' || st === 'joining' || st === 'wait') {

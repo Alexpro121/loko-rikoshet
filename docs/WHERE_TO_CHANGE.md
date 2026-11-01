@@ -104,6 +104,8 @@
 | Пауза | `UI.pause` |
 | Екран результату | `showResult`, `renderResult` |
 | Табло й написи в матчі | `src/ui/hud.js`; для онлайну також `HUD_FWD` і `applyEvent` |
+| Мінімапа: вигляд, лінії | `Minimap` у `src/ui/minimap.js` (`bake` для поля, `drawBallPath`, `drawRuns`, `SAMPLE`, `BALL_CAP`) |
+| Мінімапа: місце, розмір, обхід HUD | `MapHud.layout`, зони `.z-*` у `src/style.css`; поля `map*` у `SETTINGS_DEFAULT`; вкладка `map` у `renderSettings` |
 | Іконки | `src/ui/icons.js`, `src/ui/vox.js` |
 | Звуки й музика | `AudioEngine` у `src/core/audio.js`; для онлайну також `SND_FWD` |
 | Клавіші, дотики, повний екран | `Game.bindInput`, `UI.key` |
@@ -118,7 +120,8 @@
 | Імена героїв: списки, частки зразків за рідкістю | `FIRST_NAMES`, `ENKO`, `COSSACK`, `EPIC`, `MIX`, `newName` у `src/online/names.js` |
 | Схеми онлайн-клубу, обмін героїв | `ONLINE_FORMS`, `setForm`, `swapHeroes` у `src/online/profile.js`; нова схема також у `FORMATIONS` у `src/config.js` |
 | Тактичне поле, запас, обмін | клас `Tactics` і `DEPTH` у `src/ui/tactics.js`; адаптери: `squadHtml` у `src/ui/ui.js`, конструктор `OnlineScreen` |
-| Гравець на весь зріст | `mountTurntable` у `src/ui/portrait.js` |
+| Гравець на весь зріст | `mountTurntable`, `RELEASE_MS` у `src/ui/portrait.js` |
+| Панель на весь низький екран, сон острова | `panelCovers` у `src/ui/ui.js`, блоки `max-height: 500px` і `pointer: coarse` в онлайн-розділі `src/style.css` |
 | Схема в кар'єрі | `S.tactic`, `CAREER_FORMS`, `setTactic`, `swapStarters` у `src/state/squad.js` |
 | Прапор: візерунки, знаки, оздоба, стилі генератора, палітра | `PATS`, `EMB`, `PLATE`, `OV`, `STYLE`, `FLAG_COLS`, `rollFlag`, `normFlag` у `src/online/flag.js` |
 | Редактор прапора | `feHtml`, `patchFlag`, `flagDone` у `src/online/screen.js` |
