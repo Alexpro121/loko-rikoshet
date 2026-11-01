@@ -98,14 +98,14 @@ buildPitch: газон, розмітка, борти, ворота й сітки
 - Експорти: OUTLINE:13, buildPitch:35
 - Внутрішні функції: lineSeg:15, insetPolygon:20
 
-## src/graphics/player.js (2430 рядків)
+## src/graphics/player.js (2432 рядків)
 
 Player: воксельна модель гравця, усі анімації (Player.animate), IK рук і ніг, пози воротаря.
 
 - Експорти: angDiff:21, GK_STRIKE:47, diveKin:89
 - Внутрішні функції: accent:68, jumpPhase:69, atlasMat:108, printMat:118, hairBlock:233, headGeo:295, bodyGeo:317
 - **Player** :351
-  constructor:353, setLook:429, setExpr:448, setMode:458, kick:459, backLeg:470, cheer:480, react:492, sad:499, reach:513, engage:515, solveReach:521, poleIK:554, bodyGuard:577, impulse:622, jolt:626, gesture:632, tapBall:641, faceNow:643, control:648, receive:654, chest:660, header:661, block:662, hit:663, tackle:665, stumble:672, downed:677, stagger:682, knock:691, dropRag:705, slideTackle:712, kneel:713, rest:715, bakeSlide:717, hug:719, gkDive:721, diveReset:726, setAim:727, startPDive:734, planDive:748, startPKick:780, gkJump:781, saveSide:783, gkPunch:791, gkTip:793, gkFoot:795, gkStar:797, parry:802, ballAt:812, perceive:826, catchBall:844, catchMk:851, gkKnee:857, gkFall:859, throwBall:860, setThreat:861, fendAt:863, hipTurn:872, jostle:899, rise:902, animate:932, groundGuard:1976, diveTakeoff:1998, armGuard:2026, hitbox:2093, handsIK:2126, plantFeet:2353, solveArms:2406
+  constructor:353, setLook:429, setExpr:448, setMode:458, kick:459, backLeg:470, cheer:480, react:492, sad:499, reach:513, engage:515, solveReach:521, poleIK:554, bodyGuard:577, impulse:622, jolt:626, gesture:632, tapBall:641, faceNow:643, control:648, receive:654, chest:660, header:661, block:662, hit:663, tackle:665, stumble:672, downed:677, stagger:682, knock:691, dropRag:705, slideTackle:712, kneel:713, rest:715, bakeSlide:717, hug:719, gkDive:721, diveReset:726, setAim:727, startPDive:734, planDive:748, startPKick:782, gkJump:783, saveSide:785, gkPunch:793, gkTip:795, gkFoot:797, gkStar:799, parry:804, ballAt:814, perceive:828, catchBall:846, catchMk:853, gkKnee:859, gkFall:861, throwBall:862, setThreat:863, fendAt:865, hipTurn:874, jostle:901, rise:904, animate:934, groundGuard:1978, diveTakeoff:2000, armGuard:2028, hitbox:2095, handsIK:2128, plantFeet:2355, solveArms:2408
 
 ## src/graphics/ragdoll.js (401 рядків)
 

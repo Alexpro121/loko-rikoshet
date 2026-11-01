@@ -752,8 +752,10 @@ export class Player {
     // низом — трохи довший присід (є час): коліна згинаються й таз опускається до відштовхування
     const t0 = this.diveKind === 2 ? clamp(tArr * 0.35, 0.12, 0.26) : clamp(tArr * 0.3, 0.12, 0.2), Tc = 0.3 * t0, Tp = t0 - Tc, tf = Math.max(0.12, tArr - t0);
     const PA = [0.5, 0.52, 0.55][this.diveKind], roll = diveKin(PA, this.diveKind).roll;
-    const fx = Math.sin(this.bodyYaw), fz = Math.cos(this.bodyYaw);
-    let ux = aim.x - this.x, uz = aim.z - this.z; const fw = ux * fx + uz * fz; ux -= fw * fx; uz -= fw * fz;
+    // летить прямо до мети, а не вбік від корпусу: корпус на старті ще може бути повернутий, і раніше тіло йшло навскіс
+    // у ворота чи в поле, не долітаючи до м'яча. yaw — куди корпус розвертається на відштовхуванні
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    let ux = aim.x - this.x, uz = aim.z - this.z;
     const lat = Math.hypot(ux, uz) || 1e-6; ux /= lat; uz /= lat;
     const Lb = 1.45 * s / 0.82, reachH = Lb * Math.sin(roll);
     // куди має прилетіти таз: убік — до мети мінус дотяг рук, трохи вперед назустріч м'ячу; угору — під мету на висоту рук
@@ -942,7 +944,7 @@ export class Player {
     {   // поворот корпусу: швидкість обмежена (повільніше на великій швидкості) — тіло має інерцію
       // ціль курсу згладжена: гра (ІІ) смикає напрям від кадру до кадру — тіло цього не повторює
       // в ударі, випаді й підкаті тіло розвертається різко — на опорній нозі, а не плавним поворотом бігу
-      const act = this.kicking > 0 || this.mode === 'tackle' || this.mode === 'slide' || this.mode === 'header';
+      const act = this.kicking > 0 || this.mode === 'tackle' || this.mode === 'slide' || this.mode === 'header' || this.mode === 'pdive';
       this.yawF = this.yawF === undefined ? this.yaw : this.yawF + angDiff(this.yawF, this.yaw) * Math.min(1, dt * (act ? 25 : 7));
       // куди розвернути таз, коли гравець дивиться в одну сторону (на гру), а рухається в іншу — як футболіст:
       //  убік повільно — приставний крок (таз за поглядом); убік швидше — «відкриває стегна» в бік руху на 45–60°;
@@ -1480,7 +1482,7 @@ export class Player {
         let P = P0;
         if (this.rag && this.rag.dive && this.ragDone < 0) P = Math.min(P0, 1);                     // ще летить або ковзає — поза не встає
         else if (Ps !== undefined && Ps > 1) P = P0 > Ps ? 1 + (P0 - Ps) / Math.max(0.05, 1.5 - Ps) * 0.5 : 1;
-        const sg = (Math.sign(Math.sin(this.bodyYaw)) || 1) * this.diveDir, low = this.diveKind === 2;
+        const sg = (Math.sign(Math.sin(this.yaw)) || 1) * this.diveDir, low = this.diveKind === 2;   // за ціллю курсу: корпус ще розвертається
         const sm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
         const K = diveKin(P, this.diveKind);
         if (P < 1) {

@@ -2431,9 +2431,9 @@ export class Match {
         g.dive = { t: 0, dur: 0.9, z0: g.p.z, dist: dir * reach, kind };
         // стрибок за фізикою: воротар відштовхується так, щоб руки встигли туди, де м'яч перетне його лінію; сила ніг — за навичкою.
         // Не встигає (задалеко, запізно) — летить, скільки дозволяють ноги, як справжній
-        // тіло — до м'яча (удар збоку — навскіс), а не різко прямо в поле
+        // летить уздовж лінії, тож і площина тіла вздовж неї: до м'яча корпус довертається лише на ~11°, і не миттю, а на відштовхуванні
         const st0 = side > 0 ? Math.PI / 2 : -Math.PI / 2, yb = Math.atan2(b.x - g.p.x, b.z - g.p.z), dy0 = Math.atan2(Math.sin(yb - st0), Math.cos(yb - st0));
-        g.manual = true; g.p.yaw = g.p.bodyYaw = st0 + clamp(dy0, -0.9, 0.9); g.p.gkDive(dir, kind, { x: line, y: PITCH.BALL_VIS + predY, z: predZ }, eta, vLeg + 0.5 * carry);
+        g.manual = true; g.p.yaw = st0 + clamp(dy0, -0.2, 0.2); g.p.gkDive(dir, kind, { x: line, y: PITCH.BALL_VIS + predY, z: predZ }, eta, vLeg + 0.5 * carry);
         audio.slide(); this.floatAt(g.p.x, g.p.z, 'СТРИБОК!', side > 0 ? 'good' : 'warn');
       }
     }
