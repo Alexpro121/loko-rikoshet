@@ -28,8 +28,10 @@ function openPeer(Peer, id) {
   return new Promise((res, rej) => {
     const p = id ? new Peer(id, PEER_CFG) : new Peer(PEER_CFG);
     const to = setTimeout(() => { rej(Object.assign(new Error('timeout'), { type: 'timeout' })); try { p.destroy(); } catch (_) { /* ignore */ } }, 12000);
-    p.once('open', () => { clearTimeout(to); res(p); });
-    p.once('error', (e) => { clearTimeout(to); try { p.destroy(); } catch (_) { /* ignore */ } rej(e); });
+    // лише до відкриття: пізніша помилка (сервер кімнат моргнув, збій WebRTC) не має знищувати peer разом із живим з'єднанням
+    const onErr = (e) => { clearTimeout(to); try { p.destroy(); } catch (_) { /* ignore */ } rej(e); };
+    p.once('open', () => { clearTimeout(to); p.off('error', onErr); res(p); });
+    p.once('error', onErr);
   });
 }
 
@@ -37,9 +39,24 @@ export class Net {
   constructor() {
     this.h = {}; this.peer = null; this.conn = null; this.st = null; this.role = null; this.code = '';
     this.open = false; this.rtt = 0; this.lastRx = 0; this.closed = false; this._ping = 0; this.retry = 0;
+    this.tk = Math.random().toString(36).slice(2); this.guestTk = null;   // мітка гостя: за нею господар упізнає свого після обриву
   }
   on(ev, fn) { (this.h[ev] ??= []).push(fn); return this; }
   emit(ev, ...a) { for (const f of this.h[ev] || []) { try { f(...a); } catch (e) { console.error(e); } } }
+
+  /** Скасували, поки йшло підключення: peer уже нікому не потрібен (інакше «закрита» кімната лишиться на сервері). */
+  kept(p) {
+    if (!this.closed) return p;
+    try { p.destroy(); } catch (_) { /* ignore */ }
+    throw Object.assign(new Error('closed'), { type: 'closed' });
+  }
+  /** Обрив із сервером кімнат — ще не обрив гри (WebRTC живе окремо): повертаємось до сервера з паузою, поки не закриємо самі. */
+  watch(p) {
+    p.on('disconnected', () => {
+      if (this.closed) return;
+      setTimeout(() => { if (!this.closed && p.disconnected && !p.destroyed) try { p.reconnect(); } catch (_) { /* ignore */ } }, 2000);
+    });
+  }
 
   /** Створити кімнату: повертає код. Якщо код зайнятий — пробуємо інший. */
   async host() {
@@ -47,15 +64,18 @@ export class Net {
     let last;
     for (let i = 0; i < 5; i++) {
       const code = makeCode();
-      try { this.peer = await openPeer(Peer, PREFIX + code); this.code = code; break; } catch (e) { last = e; if (e.type !== 'unavailable-id') throw e; }
+      try { this.peer = this.kept(await openPeer(Peer, PREFIX + code)); this.code = code; break; } catch (e) { last = e; if (e.type !== 'unavailable-id') throw e; }
     }
     if (!this.peer) throw last;
     this.peer.on('connection', (c) => {
+      if (this.closed) { c.close(); return; }
       // кімната на двох: поки суперник на зв'язку, інших не пускаємо; втрачений суперник може повернутися з тим самим кодом
-      if (this.open) { c.on('open', () => { try { c.send({ t: 'full' }); } catch (_) { /* ignore */ } setTimeout(() => c.close(), 400); }); return; }
-      this.attach(c);
+      const tk = c.metadata && c.metadata.tk;
+      if (this.open && tk !== this.guestTk) { c.on('open', () => { try { c.send({ t: 'full' }); } catch (_) { /* ignore */ } setTimeout(() => c.close(), 400); }); return; }
+      if (this.open) this.lost();                            // це наш гість, а ми ще не помітили обрив: старе з'єднання вже мертве
+      this.guestTk = tk; this.attach(c);
     });
-    this.peer.on('disconnected', () => { if (!this.closed) try { this.peer.reconnect(); } catch (_) { /* ignore */ } });
+    this.watch(this.peer);
     this.peer.on('error', (e) => { if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error') this.emit('warn', e.type); });
     return this.code;
   }
@@ -63,14 +83,16 @@ export class Net {
   /** Приєднатися за кодом. */
   async join(code) {
     const Peer = await loadPeer(); this.role = 'guest'; this.code = cleanCode(code);
-    if (!this.peer || this.peer.destroyed) this.peer = await openPeer(Peer);
+    if (!this.peer || this.peer.destroyed) { this.peer = this.kept(await openPeer(Peer)); this.watch(this.peer); }
+    const peer = this.peer;
+    if (peer.disconnected) throw Object.assign(new Error('network'), { type: 'network' });   // сервер кімнат ще недоступний: rejoin спробує ще
     return new Promise((res, rej) => {
       const fail = (e) => { cleanup(); rej(e); };
       const onErr = (e) => { if (e.type === 'peer-unavailable') fail(Object.assign(new Error('no-room'), { type: 'no-room' })); else fail(e); };
       const to = setTimeout(() => fail(Object.assign(new Error('timeout'), { type: 'timeout' })), 15000);
-      const cleanup = () => { clearTimeout(to); this.peer.off('error', onErr); };
-      this.peer.on('error', onErr);
-      const c = this.peer.connect(PREFIX + this.code, { label: 'ctl', reliable: true, serialization: 'json', metadata: { v: PROTO } });
+      const cleanup = () => { clearTimeout(to); peer.off('error', onErr); };
+      peer.on('error', onErr);
+      const c = peer.connect(PREFIX + this.code, { label: 'ctl', reliable: true, serialization: 'json', metadata: { v: PROTO, tk: this.tk } });
       this.attach(c, () => { cleanup(); res(); });
     });
   }
@@ -143,10 +165,15 @@ export class Net {
     try { await this.join(this.code); } catch (_) { setTimeout(() => this.rejoin(), 2500); }
   }
 
-  close() {
+  /** linger — скільки ще тримати з'єднання: закриття обриває те, що браузер не встиг надіслати (прощальне повідомлення). */
+  close(linger = 0) {
     this.closed = true; this.open = false; clearInterval(this._ping);
-    try { if (this.conn) this.conn.close(); } catch (_) { /* ignore */ }
-    try { if (this.peer) this.peer.destroy(); } catch (_) { /* ignore */ }
+    const conn = this.conn, peer = this.peer;
     this.conn = null; this.peer = null; this.st = null; this.h = {};
+    const end = () => {
+      try { if (conn) conn.close(); } catch (_) { /* ignore */ }
+      try { if (peer) peer.destroy(); } catch (_) { /* ignore */ }
+    };
+    if (linger) setTimeout(end, linger); else end();
   }
 }

@@ -12,14 +12,13 @@ const FRAME_MS = 50;
 export class HostLink {
   constructor(session, game) {
     this.s = session; this.game = game; this.net = session.net;
-    this.seq = 0; this.lastSend = 0; this.orig = []; this.last = {}; this.shot = 0; this.prevCam = null;
+    this.seq = 0; this.nextSend = 0; this.orig = []; this.last = {}; this.goalOn = false; this.shot = 0; this.prevCam = null;
   }
 
   /** Підключити до матчу (після Match.start): перехоплюємо табло, звуки й ефекти, щоб віддзеркалити їх гостю. */
   install(m) {
     this.m = m; this.ref = captureRef(m.view);
-    // поза спокою — гостю (надійно, одразу після «start»): кадри шлють лише зсунуті суглоби відносно неї
-    this.net.send({ t: 'ref', d: Array.from(this.ref, (v) => Math.round(v * 1e5) / 1e5) });
+    this.sendRef();
     const hook = (obj, name, fn) => { const f = obj[name]; if (typeof f !== 'function') return; this.orig.push([obj, name, f]); obj[name] = function (...a) { const r = f.apply(this, a); try { fn(a); } catch (_) { /* ignore */ } return r; }; };
     const hud = m.ui.hud;
     for (const n of HUD_FWD) hook(hud, n, (a) => this.hud(n, a));
@@ -28,6 +27,13 @@ export class HostLink {
     hook(m.view.stands, 'react', (a) => this.ev(['crowd', a[0], a[1] || null]));
   }
   uninstall() { for (const [o, n, f] of this.orig.reverse()) o[n] = f; this.orig = []; }
+  /** Поза спокою — гостю (надійно, одразу після «start»): кадри шлють лише зсунуті суглоби відносно неї. */
+  sendRef() { this.net.send({ t: 'ref', d: Array.from(this.ref, (v) => Math.round(v * 1e5) / 1e5) }); }
+  /** Гість повернувся: події за час обриву пропали — шлемо стан табло, щоб не лишилось завислого (кіносмуга, картка, банер). */
+  resync() {
+    for (const n of ['setTime', 'setProg', 'addedTime', 'setSignal', 'setCard', 'cine']) if (this.last[n]) this.ev(['hud', n, JSON.parse(this.last[n])]);
+    if (!this.goalOn) this.ev(['hud', 'clearGoal', []]);
+  }
 
   /** Табло: шлемо лише змінене (годинник оновлюється щокадру, а секунда змінюється раз на секунду). */
   hud(n, a) {
@@ -35,6 +41,7 @@ export class HostLink {
     const k = JSON.stringify(a);
     if ((n === 'setTime' || n === 'setProg' || n === 'setSignal' || n === 'setCard') && this.last[n] === k) return;
     this.last[n] = k;
+    if (n === 'goal') this.goalOn = true; else if (n === 'clearGoal') this.goalOn = false;
     this.ev(['hud', n, a]);
   }
   /** ht — час господаря: гість застосує подію саме тоді, коли покаже кадр того ж моменту (звук удару — разом з ударом). */
@@ -44,10 +51,16 @@ export class HostLink {
   onMsg(msg) {
     const m = this.m; if (!m) return;
     const fin = (v) => Number.isFinite(v);
-    if (msg.t === 'cmd' && fin(msg.dx) && fin(msg.dz) && fin(msg.pw) && Math.hypot(msg.dx, msg.dz) > 1e-3) {
-      if (m.remoteWaiting()) m.netCmd = { dx: msg.dx, dz: msg.dz, pw: Math.max(0, Math.min(1, msg.pw)) };
+    // напрямок — лише одиничний вектор: чужий клієнт не загонить фізику в NaN завеликими числами
+    const dir = () => {
+      if (!fin(msg.dx) || !fin(msg.dz) || !fin(msg.pw)) return null;
+      const l = Math.hypot(msg.dx, msg.dz);
+      return fin(l) && l > 1e-3 ? { dx: msg.dx / l, dz: msg.dz / l, pw: Math.max(0, Math.min(1, msg.pw)) } : null;
+    };
+    if (msg.t === 'cmd') {
+      const d = dir(); if (d && m.remoteWaiting()) m.netCmd = d;
     } else if (msg.t === 'aim') {
-      m.netAim = msg.on && fin(msg.dx) && fin(msg.dz) && fin(msg.pw) ? { dx: msg.dx, dz: msg.dz, pw: Math.max(0, Math.min(1, msg.pw)) } : null;
+      m.netAim = msg.on ? dir() : null;
     } else if (msg.t === 'tap') {
       const g = this.game;
       if (g.sm.name === 'GOAL') m.skipCine();
@@ -55,11 +68,11 @@ export class HostLink {
     }
   }
 
-  /** Щокадру (після камери): раз на 50 мс — кадр поз гостю. */
+  /** Щокадру (після камери): у середньому раз на 50 мс — кадр поз гостю. Відлік за розкладом: «минуло ≥50 мс» на 60 Гц дало б лише 15–17 Гц. */
   frame() {
     const m = this.m, g = this.game, now = performance.now();
-    if (!m || !this.net.open || now - this.lastSend < FRAME_MS) return;
-    this.lastSend = now;
+    if (!m || !this.net.open || now < this.nextSend) return;
+    this.nextSend = Math.max(this.nextSend + FRAME_MS, now);
     const sm = g.sm.name, b = m.ball;
     let flags = 0;
     if (m.slow) flags |= F.SLOW;

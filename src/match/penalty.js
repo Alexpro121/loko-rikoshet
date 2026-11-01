@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PITCH } from '../config.js';
 import { audio } from '../core/audio.js';
 import { ovr } from '../state/squad.js';
+import { esc } from '../online/profile.js';
 
 const { L, G, R } = PITCH;
 const H = PITCH.GOAL_H, SPOT = 12, RUN = 3.6;     // висота воріт, відстань крапки до лінії, розбіг
@@ -59,12 +60,13 @@ export class Penalties {
       b.addEventListener('pointerdown', on(1)); b.addEventListener('pointerup', on(0)); b.addEventListener('pointerleave', on(0)); b.addEventListener('pointercancel', on(0));
     }
     const key = (v) => (e) => {
-      if (!this.el.isConnected) { removeEventListener('keydown', this.kd); removeEventListener('keyup', this.ku); return; }
+      if (!this.el.isConnected) { this.unbindKeys(); return; }
       const c = e.code;
       if (c === 'ArrowLeft' || c === 'KeyA') this.move.l = v; else if (c === 'ArrowRight' || c === 'KeyD') this.move.r = v; else return;
       e.preventDefault();
     };
     this.kd = key(1); this.ku = key(0); addEventListener('keydown', this.kd); addEventListener('keyup', this.ku);
+    this.bl = () => { this.move.l = this.move.r = 0; }; addEventListener('blur', this.bl);   // клавішу відпустили поза вікном — keyup не прийде
     this.go.addEventListener('click', () => { if (this.state === 'aim' && this.mark) { audio.click(); this.fire(); } });
     this.go.style.visibility = 'hidden';
     this.dots();
@@ -138,7 +140,7 @@ export class Penalties {
     gp.x = this.gx - this.dir * 0.8; gp.z = 0; gp.vx = gp.vz = 0; gp.yaw = this.dir > 0 ? -Math.PI / 2 : Math.PI / 2; gp.setMode('gkwait', 999); gp.gkAlert = 1;
     this.state = 'aim'; this.t = 0; this.live = false; this.mark = null; this.markEl.hidden = true; this.go.disabled = true; this.go.style.visibility = 'visible';
     this.go.querySelector('b').textContent = me ? 'УДАР!' : 'СТРИБОК!';
-    this.msg.innerHTML = me ? `<b>№${this.kicker.info.num} ${this.kicker.info.name.split(' ')[0]}</b> б’є пенальті<small>Тапни у ворота, куди бити</small>` : `<b>Б’є ${this.kicker.info.name.split(' ')[0]}</b><small>Тапни у ворота, куди стрибне воротар · ◀ ▶ — рух по лінії</small>`;
+    this.msg.innerHTML = me ? `<b>№${this.kicker.info.num} ${esc(this.kicker.info.name.split(' ')[0])}</b> б’є пенальті<small>Тапни у ворота, куди бити</small>` : `<b>Б’є ${esc(this.kicker.info.name.split(' ')[0])}</b><small>Тапни у ворота, куди стрибне воротар · ◀ ▶ — рух по лінії</small>`;
     this.moveEl.hidden = me; this.move.v = 0;
     this.m.ui.hud.setCard(null);
     audio.whistle(false);
@@ -428,7 +430,8 @@ export class Penalties {
   }
 
   /** Прибрати панель серії й клавіші (кінець серії або вихід із матчу посеред неї). */
-  dispose() { if (this.el) this.el.remove(); removeEventListener('keydown', this.kd); removeEventListener('keyup', this.ku); }
+  dispose() { if (this.el) this.el.remove(); this.unbindKeys(); }
+  unbindKeys() { removeEventListener('keydown', this.kd); removeEventListener('keyup', this.ku); removeEventListener('blur', this.bl); }
 
   /** Після syncView: висота м'яча (syncView її перезаписує). */
   post() { if (!this.over) { const b = this.m.view.ball; b.group.position.y = Math.max(R + this.by, b.rad); } }   // збільшений здалеку м'яч не провалюється в газон

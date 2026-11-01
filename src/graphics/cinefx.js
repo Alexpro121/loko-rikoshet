@@ -44,10 +44,13 @@ const DofShader = {
     }`,
 };
 
+// буфери кат-сцен не більші за ~1080p: на HiDPI зі згладжуванням вони з'їдали б сотні МБ відеопам'яті (фокус це однаково м'якшить)
+const fit = (s) => { const k = Math.min(1, Math.sqrt(2.1e6 / (s.x * s.y))); return s.set(Math.round(s.x * k), Math.round(s.y * k)); };
+
 export class CineFX {
   constructor(renderer) {
     this.r = renderer;
-    const s = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const s = fit(renderer.getDrawingBufferSize(new THREE.Vector2()));
     const coarse = matchMedia('(pointer: coarse)').matches, ext = renderer.extensions;
     // буфер з плаваючою точністю — лише там, де в нього справді можна малювати (на багатьох телефонах — ні: білий екран);
     // на телефонах — звичайний 8-бітний, без згладжування
@@ -75,12 +78,12 @@ export class CineFX {
     r.setRenderTarget(null);
     this.checked = true;
   }
-  resize() { const s = this.r.getDrawingBufferSize(new THREE.Vector2()); this.comp.setPixelRatio(1); this.comp.setSize(s.x, s.y); }
+  resize() { const s = fit(this.r.getDrawingBufferSize(new THREE.Vector2())); this.comp.setPixelRatio(1); this.comp.setSize(s.x, s.y); }
   /** Кадр із фокусом на відстані focus (м); aperture — наскільки «мала глибина різкості» (0 — без розмиття). */
   render(scene, cam, focus, aperture, dt) {
     if (!this.checked) this.verify();
     if (!this.ok) return false;
-    const s = this.r.getDrawingBufferSize(_s);
+    const s = fit(this.r.getDrawingBufferSize(_s));
     if (s.x !== this.comp.renderTarget1.width || s.y !== this.comp.renderTarget1.height) this.resize();
     this.rp.scene = scene; this.rp.camera = cam;
     const u = this.dof.uniforms;

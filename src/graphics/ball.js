@@ -64,8 +64,8 @@ export class BallView {
   update(dt, x, z, vx, vz, y = 0, w = 0) {
     const sp = Math.hypot(vx, vz);
     if (sp > 0.05) {
-      _ax.set(-vz / sp, 0, vx / sp);
-      _q.setFromAxisAngle(_ax, (sp / PITCH.BALL_VIS) * dt * (y > 0 ? 0.35 : 1));   // у повітрі котіння не «наганяє» швидкість
+      _ax.set(vz / sp, 0, -vx / sp);                                            // вісь котіння: ŷ × v (верх м'яча йде вперед)
+      _q.setFromAxisAngle(_ax, (sp / (PITCH.BALL_VIS * this.vs)) * dt * (y > 0 ? 0.35 : 1));   // у повітрі котіння не «наганяє» швидкість; збільшений здалеку м'яч крутиться повільніше
       this.spin.quaternion.premultiply(_q);
     }
     if (w !== 0) { _q.setFromAxisAngle(_UP, w * 2.2 * dt); this.spin.quaternion.premultiply(_q); }

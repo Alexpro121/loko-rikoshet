@@ -6,6 +6,7 @@ import { makeStats, keysFor, ovr, gainXp } from '../state/squad.js';
 const KEY = 'loko-online-v1';
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const pick = (a, rnd = Math.random) => a[(rnd() * a.length) | 0];
+const surname = (n) => String(n).split(' ').slice(-1)[0];   // так героя показує табло, і за цим йому зараховують голи
 
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -51,8 +52,8 @@ const lineOf = (s) => (s.name === 'GK' ? 'G' : s.line);
 /** Новий герой на слот: випадкове ім'я й вигляд (зі ширшого вибору редактора), рідкість, риса й навички. */
 export function newHero(slot, used = new Set(), rar = rollRar()) {
   const line = lineOf(slot), R = RARITY[rar];
-  let name = ''; for (let i = 0; i < 20; i++) { name = pick(FIRST) + ' ' + pick(LAST); if (!used.has(name)) break; }
-  used.add(name);
+  let name = ''; for (let i = 0; i < 20; i++) { name = pick(FIRST) + ' ' + pick(LAST); if (!used.has(surname(name))) break; }
+  used.add(surname(name));
   const trait = pick(line === 'G' ? GK_TRAITS : FIELD_TRAITS[line]);
   const stats = makeStats(line, R.base, Math.random, 6), t = TRAITS[trait];
   stats[t.stat] = clamp(stats[t.stat] + t.b, 8, 99);
@@ -134,7 +135,7 @@ export function trainHero(i, k) {
 /** Скаут: на слот приходить новий випадковий герой (рідкість — за шансом, легенда — 5%). */
 export function scoutHero(i) {
   if (OP.coins < SCOUT_PRICE) return null;
-  const used = new Set(OP.heroes.map((e) => e.name));
+  const used = new Set(OP.heroes.map((e) => surname(e.name)));
   const slot = SLOTS[i]; OP.coins -= SCOUT_PRICE;
   const h = newHero(slot, used); h.num = OP.heroes[i].num; OP.heroes[i] = h; saveOP(); return h;
 }
@@ -197,10 +198,12 @@ export function applyResult(outcome, myGoals, oppRating, scorers = []) {
   OP.rec[win ? 'w' : draw ? 'd' : 'l']++;
   const xp = win ? 60 : draw ? 35 : 20; OP.xp += xp;
   let clubUp = false; while (OP.xp >= clubXpNeed(OP.lvl)) { OP.xp -= clubXpNeed(OP.lvl); OP.lvl++; OP.coins += 100; clubUp = true; }
-  const ups = [];
+  const ups = [], left = scorers.slice();                    // кожен гол — одному героєві, навіть якщо в старому клубі є однофамільці
   for (const e of OP.heroes) {
     e.apps++;
-    const g = scorers.filter((n) => n === String(e.name).split(' ').slice(-1)[0]).length; e.goals += g;
+    const sn = surname(e.name); let g = 0;
+    for (let i = left.indexOf(sn); i >= 0; i = left.indexOf(sn)) { left.splice(i, 1); g++; }
+    e.goals += g;
     gainXp(e, (win ? 30 : draw ? 20 : 12) + g * 25, ups);
   }
   saveOP();

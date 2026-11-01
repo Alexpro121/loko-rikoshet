@@ -33,6 +33,8 @@ const LZ = -14;                     // лінія шикування: ближч
 const LANE_Z = LZ + 1.45;           // доріжка гостей — перед шеренгою господарів (між ними й трибуною), на відстані витягнутої руки
 const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3(), _cp = { x: 0, z: 0 };
 const H = 1 / PHYS.hz;
+const MAX_STEPS = Math.ceil(0.1 * PHYS.hz) + 1;   // кадр не довший за 0.1 с (game.js): усі кроки фізики вміщаються, м'яч не відстає від гравців на низькому FPS
+const AIM_UNIT = 3;                 // скаутинг: одиниця «довго цілиться» — ~3 с реального часу (пороги — у rivals.js)
 const GK_THROW = 1.25;              // сила кидка воротаря рукою (×1.25 до колишньої)
 const GK_CLEAR = 7;                 // на скільки суперники відходять від воротаря з м'ячем у руках
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -53,6 +55,7 @@ export class Match {
     this.mine = v.mine.map((p, i) => new Actor(p, 1, i === 0 ? 0.95 : 0.5));
     this.opp = v.opp.map((p, i) => new Actor(p, -1, i === 0 ? 0.95 : 0.5));
     this.oppBodies = this.opp.map((a) => a.body);
+    this.keepers = [this.mine[0], this.opp[0]];
     this.mine[0].body.e = this.opp[0].body.e = 0.8; this.mine[0].body.sep = this.opp[0].body.sep = 4;
     this.myTeam = new Team(1, this.mine); this.oppTeam = new Team(-1, this.opp);
     this.actors = [...this.mine, ...this.opp];
@@ -97,7 +100,7 @@ export class Match {
     this.mine.forEach((a, i) => { a.info = this.mySquad[i]; a.sk = skillOf(a.info, i === 0 ? gb : 0); });
     this.opp.forEach((a, i) => { a.info = this.oppSq[i]; a.sk = skillOf(a.info); });
     // воротарі — як люди: час реакції (≈0.26 с у новачка → 0.13 с у топа, «Реакція») і швидкість рук (~5.5–9 м/с, «Ловля»)
-    for (const g of [this.mine[0], this.opp[0]]) { g.p.reactT = 0.26 - 0.13 * g.sk.react; g.p.handV = 5.5 + 3.5 * g.sk.hands; }
+    for (const g of this.keepers) { g.p.reactT = 0.26 - 0.13 * g.sk.react; g.p.handV = 5.5 + 3.5 * g.sk.hands; }
     this.xp = new Array(11).fill(0); this.levelUps = [];
     this.kk = on ? ONLINE_GK : keeper(); this.st = on ? ONLINE_AIM : striker();
     this.myTeam.setFormation(MY_FORMATION); this.oppTeam.setFormation(spec.formation);
@@ -113,7 +116,7 @@ export class Match {
     this.clock = spec.time; this.period = 1; this.periodEnd = false; this.timeUp = false; this.timeUpWait = 0;
     this.periodGoals = 0; this.addMin = 0; this.addShown = false; this.scorers = [];
     this.coins = 0; this.stats = { goals: 0, combo: 1, saves: 0 };
-    this.phase = 'intro'; this.introT = 0; this.hitStop = 0; this.ts = 1; this.acc = 0;
+    this.phase = 'intro'; this.introT = 0; this.skipAt = undefined; this.hitStop = 0; this.ts = 1; this.acc = 0;
     this.aiming = false; this.endT = 0; this.goalT = 0; this.resultSent = false;
     this.lastClock = -1;
     this.holder = null; this.taker = null;
@@ -272,7 +275,7 @@ export class Match {
     this.aiming = false; this.hideAim();
     if (!this.shot.valid) { this.bs = 'ready'; this.holder.p.setMode('idle'); return; }
     this.bs = 'wind'; this.ts = 1;
-    if (!this.holder.isGK) this.scoutLog.aims.push(this.readyT);   // скільки цілився — суперники це помічають
+    if (!this.holder.isGK) this.scoutLog.aims.push(this.readyReal / AIM_UNIT);   // скільки цілився (реальний час: у сповільненні ігровий майже стоїть) — суперники це помічають
     const hp = this.holder.p, hands = this.holder.isGK && !this.holder.footBall;
     // рукою воротар кидає одразу; ногою — гравець спершу підходить до м'яча (обходить його, розбігається), удар — у мить,
     // коли опорна нога стає біля м'яча (kickApproach / kickReady), м'яч летить через ~0.13 с, у контакті
@@ -332,8 +335,14 @@ export class Match {
     sh.vx = sh.dirx * speed; sh.vz = sh.dirz * speed;
     const v = this.view;
     if (this.aimDirty) {
-      this.path.setCircles(this.oppBodies, null);      // свої не заважають сильному удару, тож приціл рахує лише суперника
+      // суперник упритул до м'яча на мить не блокує удар (ghostBall у launchShot) — приціл теж його не бачить
+      const cs = (this._aimC ??= []); cs.length = 0;
+      for (let i = 0; i < this.oppBodies.length; i++) { const q = this.oppBodies[i]; if (Math.hypot(q.x - b.x, q.z - b.z) >= 1.9) cs.push(q); }
+      this.path.setCircles(cs, null);
       this.path.simulate(b.x, b.z, sh.vx, sh.vz, this.st.bounces);
+      // удар у створ проходить між своїми; пас і удар мимо — ні: пунктир закінчується на тому, до кого м'яч дійде
+      const ok = (sh.dirx > 0.05 && Math.abs(b.z + sh.dirz * (L - b.x) / sh.dirx) < G + 1.2 && L - b.x < 60) || (sh.power >= 0.45 && this.path.goal && this.path.x[this.path.n - 1] > 0);
+      if (!ok) this.cutAimAtMates();
       this.aimDirty = false;
       v.aim.mat.color.setHex(0xffffff);
       v.ring.visible = true; v.band.visible = true;
@@ -347,6 +356,22 @@ export class Match {
     const p = this.holder.p;
     if (this.holder.isGK && !this.holder.footBall) p.yaw = Math.atan2(sh.dirx, sh.dirz);   // з м'ячем у руках — просто розвертається
     p.setMode('aim'); p.power = sh.power;
+  }
+
+  /** Обриває пунктир на першому своєму гравці на шляху (крім виконавця й тих, хто впритул до м'яча: вони на мить не тверді). */
+  cutAimAtMates() {
+    const pa = this.path, b = this.ball;
+    for (let i = 1; i < pa.n; i++) {
+      const x0 = pa.x[i - 1], z0 = pa.z[i - 1], ex = pa.x[i] - x0, ez = pa.z[i] - z0, l2 = ex * ex + ez * ez || 1e-6;
+      for (let j = 0; j < this.mine.length; j++) {
+        const m = this.mine[j]; if (m === this.holder) continue;
+        const rr = m.body.r + R, t = clamp(((m.p.x - x0) * ex + (m.p.z - z0) * ez) / l2, 0, 1), dx = x0 + ex * t - m.p.x, dz = z0 + ez * t - m.p.z;
+        if (dx * dx + dz * dz >= rr * rr || Math.hypot(m.p.x - b.x, m.p.z - b.z) < 1.9) continue;
+        pa.x[i] = x0 + ex * t; pa.z[i] = z0 + ez * t; pa.cum[i] = pa.cum[i - 1] + (pa.cum[i] - pa.cum[i - 1]) * t;
+        pa.n = i + 1; pa.length = pa.cum[i]; pa.goal = false;
+        return;
+      }
+    }
   }
 
   // ------------------------------------------------------------------ події фізики
@@ -373,7 +398,7 @@ export class Match {
     const a = b.ref, v = this.view;
     if (a.sliding && this.bs === 'roll') return this.onSlideContact(a, speed, nx, nz);
     if (this.bs === 'ready' || this.bs === 'aim') {          // суперник дотягнувся до м'яча, який ми тримаємо
-      if (a.side < 0 && !(this.holder && this.holder.isGK) && !(a.tkl > 0) && a.stun <= 0 && a.noTrap <= 0) this.startTackle(a);   // м'яч у руках воротаря забрати не можна
+      if (a.side < 0 && !(this.holder && this.holder.isGK && !this.holder.footBall) && !(a.tkl > 0) && a.stun <= 0 && a.noTrap <= 0) this.startTackle(a);   // м'яч у руках воротаря забрати не можна
       return true;
     }
     if (this.bs !== 'roll') return true;
@@ -427,7 +452,7 @@ export class Match {
       if (speed > 24) { const q = Math.random(); if (q < 0.4) a.p.header(); else if (q < 0.7) a.p.block(); else a.p.hit(); }
       else if (speed > 6 && a.p.mode === 'idle' && !a.p.kicking) a.p.receive(this.ball.y, speed);   // зачепив, але не втримав — рух ногою/тілом видно
     }
-    v.ball.squash(nx, nz, 0.22);
+    v.ball.squash(nx, nz, 0.22); this.planT = 0;                       // м'яч змінив курс — прогноз перерахувати одразу
     return false;
   }
 
@@ -454,7 +479,9 @@ export class Match {
     const b = this.ball, p = a.p;
     if (b.y > 1.5 || (a.side > 0 && this.shotBy === 1 && this.shotOnTarget && Math.hypot(b.vx, b.vz) > 18)) return 0;
     const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), chest = b.y > 0.6;
-    const reach = a.body.r + R + (chest ? 0.25 : 0.45) + 0.2 * a.sk.drib;
+    // м'яч притиснуло до борту: гравець не стане ближче ~1.3 м до нього (межа поля), нога дотягується через цю межу
+    const wall = Math.abs(b.z) > W - 0.7 || (Math.abs(b.x) > L - 0.7 && Math.abs(b.z) > G);
+    const reach = a.body.r + R + (chest ? 0.25 : 0.45) + 0.2 * a.sk.drib + (wall ? 0.3 : 0);
     if (d > reach) return 0;
     const vr = Math.hypot(b.vx - p.vx, b.vz - p.vz);
     const vmax = (a.receiver ? 30 : 13 + 15 * a.sk.drib) * (chest ? 0.7 : 1) * (a.side < 0 && this.protectT > 0 && !a.receiver ? 0.6 : 1);
@@ -520,7 +547,7 @@ export class Match {
     // наш виконавець веде м'яч, переставляючи його (швидкість м'яча 0) — рух м'яча беремо з його бігу
     const hp = (this.bs === 'ready' || this.bs === 'aim') && this.holder ? this.holder.p : null, bvx = hp ? hp.vx : b.vx, bvz = hp ? hp.vz : b.vz;
     a.tkl = T; a.tklX = b.x + bvx * lead; a.tklZ = b.z + bvz * lead; a.nearT = 0;
-    a.frozen = Math.max(a.frozen, T + 0.3);                          // ІІ команди не кермує, поки триває випад
+    a.frozen = Math.max(a.frozen, T + 0.42);                         // ІІ команди не кермує, поки триває випад і відновлення (анімація tackle: T + 0.4)
     a.p.yaw = Math.atan2(a.tklX - a.p.x, a.tklZ - a.p.z);
     a.p.tackle(T);
     // дриблер бачить випад і може піти вбік (навичка «Дриблінг»)
@@ -553,8 +580,8 @@ export class Match {
   resolveTackle(a) {
     const b = this.ball, fy = a.p.yaw, fx = a.p.x + Math.sin(fy) * 0.85, fz = a.p.z + Math.cos(fy) * 0.85;
     const reach = 0.7 + 0.4 * a.sk.tack, near = Math.hypot(b.x - fx, b.z - fz) < reach;
-    const vsMine = a.side < 0 && (this.bs === 'ready' || this.bs === 'aim') && this.holder && !this.holder.isGK;
-    const vsOpp = a.side > 0 && this.bs === 'held' && this.taker && !this.taker.isGK;
+    const vsMine = a.side < 0 && (this.bs === 'ready' || this.bs === 'aim') && this.holder && !(this.holder.isGK && !this.holder.footBall);   // воротар ногою — як польовий
+    const vsOpp = a.side > 0 && this.bs === 'held' && this.taker && !(this.taker.isGK && !this.taker.footBall);
     if (!vsMine && !vsOpp) { a.stun = Math.max(a.stun, 0.4); return; }   // м'яч уже пішов — нога в порожнечу
     const h = vsMine ? this.holder : this.taker;
     const chance = vsMine ? this.tackleChance(a) : clamp(0.5 + (a.sk.tack - h.sk.drib) * 0.6, 0.2, 0.92);
@@ -622,7 +649,7 @@ export class Match {
 
   makeReady(a, kickoff) {
     this.pendKick = null; this.holdStop = false;
-    this.bs = 'ready'; this.owner = 1; this.readyT = 0; this.shotBy = 0;
+    this.bs = 'ready'; this.owner = 1; this.readyT = 0; this.readyReal = 0; this.shotBy = 0; this.telegraph = false; this.shotWound = false;
     if (this.holder && this.holder !== a) this.holder.manual = false;
     if (this.holder && this.holder !== a) this.holder.p.setThreat(0, 0);
     this.holder = a; a.manual = true;
@@ -797,7 +824,7 @@ export class Match {
     let ux = dx, uz = dz;
     if (hv > 1) { const cur = Math.atan2(b.vx, b.vz), na = cur + clamp(angDiff(cur, Math.atan2(dx, dz)), -1.25, 1.25); ux = Math.sin(na); uz = Math.cos(na); }
     a.avx = a.avz = 0;
-    a.move(b.x + b.vx * 0.2 - ux * 0.55, b.z + b.vz * 0.2 - uz * 0.55, (a.side > 0 ? this.myTeam : this.oppTeam).speed * 0.85, dt);
+    a.move(b.x + b.vx * 0.2 - ux * 0.55, b.z + b.vz * 0.2 - uz * 0.55, (a.side > 0 ? this.myTeam : this.oppTeam).speed * 0.85 * (0.84 + 0.34 * a.sk.pace), dt);
     if (Math.hypot(p.vx, p.vz) > 0.5) p.yaw = Math.atan2(p.vx, p.vz);
     dribbleStep(ds, p, b, ux, uz, dt);
     // де м'яч буде відносно тіла в мить контакту (через ~0.13 с замаху): нога дістає до ~1 м, і м'яч має бути попереду
@@ -899,6 +926,7 @@ export class Match {
         // корпус повернутий достатньо (пас — внутрішньою стороною стопи, до ~85° від бігу; довгий — до ~45°)
         k.w += dt;
         if (this.dribbleKick(a, k.dx, k.dz, dt, k.pw > 0.6 ? 0.8 : 1.75) || k.w > 1.1) { a.p.yaw = Math.atan2(k.dx, k.dz); k.swing(); k.t = 0.13; a.kickV = null; }
+        else this.matesTackle(a, dt);                                // поки ще веде м'яч під пас, його можна встигнути відібрати
       } else {                                                       // замах на бігу: м'яч котиться до ноги, тіло його наздоганяє
         k.t -= dt;
         if (!k.hands) this.kickFollow(a, k.dx, k.dz, dt, k.t); else { a.p.vx *= 0.85; a.p.vz *= 0.85; }
@@ -907,6 +935,7 @@ export class Match {
       return;
     }
     const rc = this.remoteCtl();                                   // онлайн: цим гравцем керує гість — ІІ лише веде й тримає м'яч
+    if (!rc && this.netAim) { this.netAim = null; if (a.p.mode === 'aim') a.p.setMode('idle'); }   // гість зник чи здався ІІ — приціл не тримає гравця в позі
     if (rc && this.netCmd && this.remoteWaiting()) { const c = this.netCmd; this.netCmd = null; this.remoteKick(a, c); return; }
     if (this.kickoff) {                                            // розведення суперника: мить постоїть у центрі, потім гра пішла
       this.kickT = (this.kickT || 0) + dt; a.p.vx = a.p.vz = 0;
@@ -959,7 +988,7 @@ export class Match {
       const ds = (a.dribSt ??= { t: 0, steps: 0 });
       if (this.dribbleT < 0.05) { ds.t = 0; b.vx = a.p.vx; b.vz = a.p.vz; }
       this.oppTeam.avoid(a, this.actors);
-      a.move(b.x + b.vx * 0.2 - dx * 0.55, b.z + b.vz * 0.2 - dz * 0.55, this.oppTeam.speed * (pm < 4 ? 1.0 : 0.9), dt);
+      a.move(b.x + b.vx * 0.2 - dx * 0.55, b.z + b.vz * 0.2 - dz * 0.55, this.oppTeam.speed * (pm < 4 ? 1.0 : 0.9) * (0.84 + 0.34 * a.sk.pace), dt);
       if (Math.hypot(a.p.vx, a.p.vz) > 0.5) a.p.yaw = Math.atan2(a.p.vx, a.p.vz);
       dribbleStep(ds, a.p, b, dx, dz, dt);
     } else {
@@ -968,14 +997,7 @@ export class Match {
       if (rc) this.remoteAimPose(a);
     }
     this.glideT = 0;
-    // наші захисники: стоять у стійці перед дриблером і в слушну мить роблять випад (результат — у resolveTackle)
-    if (!a.isGK && !this.mine.some((m) => m.tkl > 0)) {
-      for (let i = 1; i < this.mine.length; i++) {
-        const m = this.mine[i];
-        if (m.manual || m.frozen > 0 || m.stun > 0 || m.noTrap > 0 || m.sliding) { m.nearT = 0; continue; }
-        if (this.tackleReady(m, Math.hypot(m.p.x - b.x, m.p.z - b.z), 0.2 + 0.4 * (1 - m.sk.iq), dt)) { this.startTackle(m); break; }
-      }
-    }
+    this.matesTackle(a, dt);
     if (this.telegraph) {
       this.shootT -= dt;
       this.view.aim.draw(this.path, 1.1, 1.3, this.time * 3);
@@ -983,6 +1005,18 @@ export class Match {
       if (a.isGK && this.shootT <= 0.13 && !this.shotWound) { this.shotWound = true; this.shotWT = 0.13; a.p.yaw = Math.atan2(this.counterV.vx, this.counterV.vz); a.p.dribble = false; a.p.throwBall(); }
       // м'яч летить у мить контакту ноги — через ~0.13 с після початку замаху (польовий б'є, коли підійшов, див. вище)
       if (this.shotWound && (this.shotWT -= dt) <= 0) this.releaseCounter();
+    }
+  }
+
+  /** Наші захисники: стоять у стійці перед дриблером і в слушну мить роблять випад (результат — у resolveTackle). Воротар у руках — поза грою. */
+  matesTackle(a, dt) {
+    if (a.isGK && !a.footBall) return;
+    const b = this.ball;
+    for (let i = 1; i < this.mine.length; i++) if (this.mine[i].tkl > 0) return;
+    for (let i = 1; i < this.mine.length; i++) {
+      const m = this.mine[i];
+      if (m.manual || m.frozen > 0 || m.stun > 0 || m.noTrap > 0 || m.sliding) { m.nearT = 0; continue; }
+      if (this.tackleReady(m, Math.hypot(m.p.x - b.x, m.p.z - b.z), 0.2 + 0.4 * (1 - m.sk.iq), dt)) { this.startTackle(m); break; }
     }
   }
 
@@ -999,8 +1033,8 @@ export class Match {
   }
 
   // ------------------------------------------------------------------ онлайн: гравець гостя
-  /** Чи керує зараз м'ячем гість онлайн-матчу (його гравець із м'ячем, ще не б'є). 14 с без удару — далі ІІ. */
-  remoteCtl() { return !!this.link && !this.netAuto && this.phase === 'play' && this.bs === 'held' && !!this.taker && !this.pendKick && !this.telegraph; }
+  /** Чи керує зараз м'ячем гість онлайн-матчу (його гравець із м'ячем, ще не б'є). Гість не на зв'язку або 14 с без удару — ІІ. */
+  remoteCtl() { return !!this.link && this.link.net.open && !this.netAuto && this.phase === 'play' && this.bs === 'held' && !!this.taker && !this.pendKick && !this.telegraph; }
   /** Воротар гостя тримає м'яч, поки наші не відійшли (як і наш) — бити ще не можна. */
   gkHoldNow() { const a = this.taker; return !!a && a.isGK && (this.gkHoldT > 0 || (!a.footBall && !this.gkClear && this.gkHoldT > -0.8)); }
   remoteWaiting() { return this.remoteCtl() && !this.gkHoldNow(); }
@@ -1047,7 +1081,7 @@ export class Match {
     this.ui.hud.setCard(null); this.ui.hud.warn(null); this.hideAim();
     // у створ наших воріт — це удар (наш воротар реагує); інакше пас: свій найкращий на лінії м'яча біжить приймати
     const v = Math.hypot(b.vx, b.vz) || 1, ux = b.vx / v, uz = b.vz / v, zAt = ux < -0.05 ? b.z + uz * (-L - b.x) / ux : 99;
-    const onT = ux < -0.05 && Math.abs(zAt) < G + 1.2 && b.x + L < 60;
+    const onT = (ux < -0.05 && Math.abs(zAt) < G + 1.2 && b.x + L < 60) || (pw >= 0.45 && !a.isGK && this.ricochetGoal(-1, b.vx, b.vz, this.st.bounces));
     this.shotBy = onT ? -1 : -2;
     if (!onT) this.pickOppReceiver(a); else this.clearReceivers();
     for (let i = 0; i < this.actors.length; i++) { const q = this.actors[i]; if (q !== a && Math.hypot(q.p.x - b.x, q.p.z - b.z) < 1.9) { q.ghostBall = 0.22; q.body.on = false; } }
@@ -1072,15 +1106,23 @@ export class Match {
   }
 
   /**
-   * Удар у створ (м'яч іде в ворота суперника) — свої його пропускають, щоб не заблокувати. Будь-який інший удар — це пас:
+   * Удар у створ (м'яч іде в ворота суперника, прямо чи рикошетом від бортів) — свої його пропускають, щоб не заблокувати. Будь-який інший удар — це пас:
    * партнер, що найкраще стоїть на лінії м'яча й встигає до неї, стає приймачем — біжить на перехоплення й гасить навіть
    * сильний м'яч (до ~30–40 м/с за «Дриблінгом»), а інші свої на шляху теж не пропускають його повз себе.
    */
+  /** Чи заходить удар у ворота суперника (side — хто б'є) після відскоків: той самий прогноз, що й приціл; гравців не рахує, як і прямий удар. */
+  ricochetGoal(side, vx, vz, bounces) {
+    const pa = this.path, b = this.ball, np = this.world.netPush;
+    pa.nc = 0; pa.simulate(b.x, b.z, vx, vz, bounces); this.world.netPush = np;   // прогноз не прогинає справжню сітку
+    return pa.goal && pa.x[pa.n - 1] * side > 0;
+  }
+
   pickMyReceiver(h) {
     const b = this.ball, v = Math.hypot(b.vx, b.vz) || 1, ux = b.vx / v, uz = b.vz / v;
     this.clearReceivers();
     const zAt = ux > 0.05 ? b.z + uz * (L - b.x) / ux : 99;
-    this.shotOnTarget = ux > 0.05 && Math.abs(zAt) < G + 1.2 && (L - b.x) < 60;
+    this.shotOnTarget = ux > 0.05 && Math.abs(zAt) < G + 1.2 && (L - b.x) < 60; this.shotGz = zAt;
+    if (!this.shotOnTarget && this.shot.power >= 0.45 && !(h.isGK && !h.footBall) && this.ricochetGoal(1, b.vx, b.vz, this.st.bounces)) { this.shotOnTarget = true; this.shotGz = this.path.z[this.path.n - 1]; }
     if (this.shotOnTarget) return;
     let best = null, bs = 1e9;
     for (let i = 1; i < this.mine.length; i++) {
@@ -1106,8 +1148,7 @@ export class Match {
     h.p.setThreat(0, 0); this.shooter = h;
     this.pickMyReceiver(h);
     if (this.shotOnTarget && !h.isGK) {                // удар у створ — суперники запам'ятовують, куди й звідки ми б'ємо
-      const v = Math.hypot(b.vx, b.vz) || 1, ux = b.vx / v, uz = b.vz / v;
-      this.scoutLog.shots.push({ gz: b.z + uz * (L - b.x) / ux, bz: b.z, dist: L - b.x });
+      this.scoutLog.shots.push({ gz: this.shotGz, bz: b.z, dist: L - b.x });
     }
     // ті, хто впритул до м'яча, на мить не блокують удар
     for (let i = 0; i < this.actors.length; i++) { const q = this.actors[i]; if (q !== h && Math.hypot(q.p.x - b.x, q.p.z - b.z) < 1.9) { q.ghostBall = 0.22; q.body.on = false; } }
@@ -1237,7 +1278,7 @@ export class Match {
     this.period++; this.periodEnd = false; this.periodGoals = 0; this.addShown = false; this.addMin = 0;
     this.clock = this.spec.time * (1 - n / 4);
     audio.whistle(true);
-    this.ui.hud.addedTime(null);
+    this.ui.hud.addedTime(null); this.clearSlow();
     this.ui.hud.scoreCard({ title: 'Кінець ' + n + '-го тайму', me: this.score.me, opp: this.score.opp, scorers: this.scorers, note: n === 2 ? 'Перерва · далі 3-й тайм' : 'Далі ' + (n + 1) + '-й тайм' }, 3.4);
     this.startBreak(n);
     this.setClockHud();
@@ -1248,7 +1289,7 @@ export class Match {
     if (this.score.me === this.score.opp && !this.penRes && !this.spec.online) {   // онлайн: нічия — це нічия
       audio.whistle(true);
       this.ui.hud.scoreCard({ title: 'Кінець основного часу', me: this.score.me, opp: this.score.opp, scorers: this.scorers, note: 'Нічия · серія пенальті' }, 3);
-      this.pens = new Penalties(this); this.pens.start();
+      this.clearSlow(); this.pens = new Penalties(this); this.pens.start();
       return;
     }
     this.end();
@@ -1584,18 +1625,30 @@ export class Match {
     const an = -0.7 + 0.12 * us; return { p: V3(C + Math.sin(an) * 10, 5, Z + Math.cos(an) * 10), l: V3(C, 1, Z), fov: 46, shot: 'W4' + id, rate: 2, dof: 0.008 };
   }
 
+  /** Серію запустили посеред кат-сцени: прибрати її залишки — кадр повтору, перерву, доріжку, прапори, кінорежим. */
+  clearCine() {
+    if (this.hl) this.replay.restoreLive();
+    this.rp = null; this.hl = null; this.brk = null; this.world.netPush = null;
+    if (this.phase === 'intro') {
+      this.view.pitch.decals.fadeOut(); this.view.tunnel.userData.carpet.visible = false; this.walk.hide(); this.slaps.clear();
+      for (const a of this.actors) a.p.root.visible = true;
+    }
+    this.setGaze(false); this.ui.hud.cine(false); this.clearSlow();
+  }
+
   /** Запуск серії пенальті достроково (з паузи). */
   startPens() {
     if (this.link) return;
     if (this.phase === 'pens' || this.phase === 'end' || this.phase === 'idle') return;
     this.cancelAim(); this.penRes = null; this.timeUp = false;
+    this.clearCine();
     this.pens = new Penalties(this); this.pens.start();
   }
   /** Що важливо для ігрової камери (core/camera.js): м'яч, хто з ним, адресат паса, куди цілимось. Наші атакують +X. */
   camInfo(o) {
     const b = this.ball, pl = o.pl;
     o.bx = b.x; o.bz = b.z; o.bvx = b.vx; o.bvz = b.vz;
-    this.actors.forEach((a, i) => { const q = pl[i] || (pl[i] = {}); q.x = a.p.x; q.z = a.p.z; q.side = a.side; q.gk = a.isGK; });
+    for (let i = 0; i < this.actors.length; i++) { const a = this.actors[i], q = pl[i] || (pl[i] = {}); q.x = a.p.x; q.z = a.p.z; q.side = a.side; q.gk = a.isGK; }
     o.n = this.actors.length;
     const bs = this.bs, h = bs === 'ready' || bs === 'aim' || bs === 'wind' ? this.holder : bs === 'held' ? this.taker : null;
     o.carrier = h ? this.actors.indexOf(h) : -1;
@@ -1847,6 +1900,9 @@ export class Match {
     return { p: _c1.set(0, L2(16, 38, q), L2(30, 58, q)), l: _c2.set(0, 0, 0), fov: L2(40, 44, q), shot: 'end4', rate: 1.6 };
   }
 
+  /** Гра зупинилась (перерва, пенальті, фінал): віньєтка й приглушений натовп не лишаються — updateSlow там уже не працює. */
+  clearSlow() { if (this.slow) { this.slow = false; this.ui.setSlow(false); audio.slowmo(false); } }
+
   /** Режим володіння: поки м'яч у нас, час сповільнюється до удару або до відбору. */
   updateSlow(rawDt) {
     // сповільнення — лише коли ви справді прицілюєтесь. Поки ваш воротар тримає м'яч і суперники відходять (цілитись ще не
@@ -1873,7 +1929,7 @@ export class Match {
 
   /** Суперник, що дістався до м'яча або до самого виконавця (з будь-якого боку), намагається відібрати. */
   checkTackles(dt) {
-    if (this.holder.isGK) return;                                   // воротар тримає м'яч у руках: захисники не втручаються
+    if (this.holder.isGK && !this.holder.footBall) return;          // воротар тримає м'яч у руках: захисники не втручаються
     const b = this.ball;
     for (let i = 1; i < this.opp.length; i++) {
       const a = this.opp[i];
@@ -1924,12 +1980,13 @@ export class Match {
     ctx.holdV = (this.bs === 'ready' || this.bs === 'aim') && this.holder ? Math.hypot(this.holder.p.vx, this.holder.p.vz) : 0;   // темп нашого виконавця — захисник не відстає
     if (this.bs !== 'roll' && this.bs !== 'net') ground(b);                 // м'яч у ногах чи руках
     if (this.bs === 'roll') {                                             // прогноз польоту: раз на 0.1 с або одразу після удару
+      // таблиця рахує час від миті побудови, а ІІ й воротарі читають її як «від зараз»: швидкий м'яч — щокадру, повільний — раз на 0.1 с
       this.planT -= dt;
-      if (this.planT <= 0 || this.planShot !== this.shotId) { this.plan.build(b); this.planT = 0.1; this.planShot = this.shotId; }
+      if (bs > 12 || this.planT <= 0 || this.planShot !== this.shotId) { const np = this.world.netPush; this.plan.build(b); this.world.netPush = np; this.planT = 0.1; this.planShot = this.shotId; }
       ctx.plan = this.plan;
     } else ctx.plan = null;
-    if (this.phase !== 'play') this.readyT = 0;
-    else if (this.bs === 'ready' || this.bs === 'aim' || this.bs === 'wind') this.readyT += dt; else this.readyT = 0;
+    if (this.phase !== 'play') this.readyT = this.readyReal = 0;
+    else if (this.bs === 'ready' || this.bs === 'aim' || this.bs === 'wind') { this.readyT += dt; this.readyReal += rawDt; } else this.readyT = this.readyReal = 0;
     ctx.readyT = this.readyT;
     if (this.bs === 'net') this.updateCelebration(dt);
     else {
@@ -1961,7 +2018,7 @@ export class Match {
         // веде м'яч — б'є з ходу: удар у бік бігу одразу; під кутом — рішучий розворот із м'ячем на бігу (без зупинки) і удар,
         // щойно кут прийнятний (пас — внутрішньою стороною стопи до ~90°, удар — до ~35°). Перед ударом трохи прискорюється
         const want = Math.atan2(sh.dirx, sh.dirz), okA = sh.power < 0.45 ? 1.55 : 0.6;
-        const hd = this.carry(a, dt, want, 5.5, 3.6 + 1.6 * sh.power);
+        const hd = this.carry(a, dt, want, 5.5, (3.6 + 1.6 * sh.power) * (0.84 + 0.34 * a.sk.pace));
         if (Math.abs(angDiff(hd, want)) < okA || w.t > 1.0) {
           w.kicked = true; this.windT = 0.13; h.yaw = this.kickYaw(h, sh.dirx, sh.dirz); h.kick(sh.power);
         }
@@ -1970,7 +2027,9 @@ export class Match {
         const okA = sh.power < 0.45 ? 1.25 : 0.65;
         const st = this.kickApproach(a, sh.dirx, sh.dirz, 0.95, 4.5 + 2.5 * sh.power, dt, w.run, okA);
         if (st.ang < okA && st.behind > 0.6) w.run = true;
-        if (this.kickReady(a, st, sh.dirx, sh.dirz, okA) || w.t > 1.3) {
+        // м'яч біля борту, удар у поле: стати за м'ячем не дасть межа поля — б'є збоку, не чекаючи таймаута
+        const blocked = Math.abs(b.x - sh.dirx * 0.45) > L - 1.3 || Math.abs(b.z - sh.dirz * 0.45) > W - 1.3;
+        if (this.kickReady(a, st, sh.dirx, sh.dirz, okA) || w.t > (blocked ? 0.5 : 1.3)) {
           w.kicked = true; this.windT = 0.13; h.yaw = Math.atan2(sh.dirx, sh.dirz);
           h.kick(sh.power, Math.hypot(h.vx, h.vz) < 1.2 ? 1 : undefined);   // з місця — правою, як у стійці прицілу
         }
@@ -1983,12 +2042,12 @@ export class Match {
       }
     }
     if (this.bs === 'roll') {
-      if (bs < 2.5) { this.looseT += dt; if (this.looseT > 1.3) this.fallbackPick(); } else this.looseT = 0;
+      if (bs < 2.5 && this.ball.y < 0.3) { this.looseT += dt; if (this.looseT > 1.3) this.fallbackPick(); } else this.looseT = 0;
     }
     for (let i = 0; i < this.actors.length; i++) this.actors[i].sync();
     this.acc += dt;
     let steps = 0;
-    while (this.acc >= H && steps < 8) {
+    while (this.acc >= H && steps < MAX_STEPS) {
       this.acc -= H; steps++;
       this.bpx = b.x; this.bpz = b.z; this.bpy = b.y;                      // стан до кроку — для плавного малювання між кроками
       if (this.bs === 'net') this.world.integrate(b, H, null, false);
@@ -2068,7 +2127,7 @@ export class Match {
       const k = 1.3 * Math.max(0, 1 - s.t / s.dur);                     // гальмує до нуля (раніше обривалось із ~⅓ швидкості)
       a.p.x += s.vx * dt * k; a.p.z += s.vz * dt * k; a.p.vx = a.p.vz = 0;
       if (s.t >= s.dur) {
-        a.slide = null; a.sliding = false; a.body.r = a.baseR; a.frozen = 1.15; a.stun = 1.3; a.slideCool = 4;
+        a.slide = null; a.sliding = false; a.body.r = a.baseR; a.frozen = Math.max(1.15, a.p.mode === 'slide' ? a.p.modeT + 0.02 : 0); a.stun = 1.3; a.slideCool = 4;   // встає до кінця анімації (її час має випадковий розкид)
         a.manual = a === this.holder || a === this.taker;
       }
     }
@@ -2123,7 +2182,7 @@ export class Match {
       this.floatAt(a.p.x, a.p.z, 'ПІДКАТ! ВИБИВ', a.side > 0 ? 'good' : 'warn');
       audio.thud(); this.game.addTrauma(0.3); this.hitStop = Math.max(this.hitStop, 0.04); v.ball.squash(nx, nz, 0.3); if (a.side > 0) this.addXp(a, 25);
       v.particles.burst(a.p.x, 0.3, a.p.z, 12, 5, 0.6, 0.3, ['#4f7d3a', '#8fb98a', '#f1efe8'], 10, 0.8);
-      this.shotBy = 0; this.protectT = 0;
+      this.shotBy = 0; this.protectT = 0; this.planT = 0;
     } else {
       this.floatAt(a.p.x, a.p.z, 'ПРОСКОЧИВ', 'good'); audio.wall(0, 6);
     }
@@ -2137,7 +2196,7 @@ export class Match {
   keeperCollect() {
     if (this.bs !== 'roll' || this.phase !== 'play') return;
     const b = this.ball, sp = Math.hypot(b.vx, b.vz);
-    for (const g of [this.mine[0], this.opp[0]]) {
+    for (const g of this.keepers) {
       if (g.dive || g.frozen > 0 || g.cool > 0 || g.noTrap > 0 || g.stun > 0 || g.p.downed || (this.shotBy === g.side && this.shooter === g)) continue;
       const goalX = -g.side * L, inBox = (b.x - goalX) * g.side < 20 && Math.abs(b.z) < 18;
       if (!inBox || b.y > 1.9 + 0.5 * (g.sk.reach ?? 0.5)) continue;          // вище витягнутих рук — не дістає
@@ -2202,7 +2261,7 @@ export class Match {
    */
   gkRush(dt) {
     if (this.phase !== 'play' || this.kickoff) return;
-    for (const g of [this.mine[0], this.opp[0]]) {
+    for (const g of this.keepers) {
       if (g.dive || g.frozen > 0 || g.stun > 0 || g.p.downed || g.manual) { g.rushT = 0; continue; }
       const vsMine = g.side < 0 && (this.bs === 'ready' || this.bs === 'aim') && this.holder && !this.holder.isGK;
       const vsOpp = g.side > 0 && this.bs === 'held' && this.taker && !this.taker.isGK;
@@ -2240,7 +2299,7 @@ export class Match {
 
   /** Воротарі реагують заздалегідь: стрибок у куток, стрибок на місці або тільки руки; потім лежать і встають. */
   updateKeepers(dt) {
-    const keepers = [this.mine[0], this.opp[0]];
+    const keepers = this.keepers;
     for (let k = 0; k < 2; k++) {
       const g = keepers[k], d = g.dive;
       // випад-крок у сейві на місці: таз плавно переходить до м'яча за час до його прильоту
@@ -2560,7 +2619,7 @@ export class Match {
     const b = this.ball; let best = null, bd = 1e9;
     for (let i = 0; i < this.actors.length; i++) {
       const a = this.actors[i];
-      if (a.frozen > 0 || a.sliding || a.dive || a.manual) continue;
+      if (a.frozen > 0 || a.sliding || a.dive || a.manual || a.p.downed) continue;
       const d = Math.hypot(a.p.x - b.x, a.p.z - b.z) * (a.side > 0 ? 0.82 : 1);
       if (d < bd) { bd = d; best = a; }
     }
@@ -2609,7 +2668,7 @@ export class Match {
   keeperBodies() {
     // м'яч тепер літає: частини тіла воротаря — справжні 3D-капсули (руки й рукавиці ловлять і високі м'ячі);
     // коло «дотягу» навколо воротаря — лише до пояса, вище працюють руки
-    for (const a of [this.mine[0], this.opp[0]]) {
+    for (const a of this.keepers) {
       const hit = a.p.hitCaps, b = a.body; if (!hit) continue;
       const cs = (b.caps ??= Object.assign(hit.map(() => ({ ax: 0, ay: 0, az: 0, bx: 0, by: 0, bz: 0, r: 0, vx: 0, vy: 0, vz: 0 })), { n: 0 }));
       let n = 0;
@@ -2629,7 +2688,7 @@ export class Match {
   updateSolidity(bs) {
     const holding = this.bs === 'ready' || this.bs === 'aim' || this.bs === 'wind' || this.bs === 'held';
     const oppShot = this.shotBy === -1 && this.bs === 'roll' && bs > 18;
-    const mineSolid = !(this.shotBy === 1 && this.bs === 'roll' && bs > 26 && this.shotOnTarget);   // удар у створ проходить між своїми, пас — ні
+    const mineSolid = !(this.shotBy === 1 && this.bs === 'roll' && bs > 18 && this.shotOnTarget);   // удар у створ проходить між своїми (повільніший — приймають, controlScore), пас — ні
     for (let i = 0; i < this.mine.length; i++) { const a = this.mine[i]; a.body.on = !holding && mineSolid && a.cool <= 0 && !(a.ghostBall > 0) && (!a.manual || a.sliding || !!a.dive); }
     const stand = this.bs === 'ready' || this.bs === 'aim';
     for (let i = 0; i < this.opp.length; i++) { const a = this.opp[i]; a.body.on = (stand || !oppShot) && a.cool <= 0 && !(a.ghostBall > 0) && (!a.manual || a.sliding || !!a.dive); }
@@ -2657,7 +2716,7 @@ export class Match {
     const h = v.ball.update(dt, rx, rz, b.vx, b.vz, ry, b.w);
     {   // м'яч у руках воротаря: поки той тримає його (до удару чи кидка), видимий м'яч — між рукавицями; віддав — плавно до ноги
       let gk = null;
-      for (const g of [this.mine[0], this.opp[0]]) {
+      for (const g of this.keepers) {
         const holding = (this.holder === g && (this.bs === 'ready' || this.bs === 'aim')) || (this.taker === g && this.bs === 'held');
         g.p.holdBall = holding && !g.footBall; if (holding && !g.footBall) gk = g;
       }
@@ -2670,21 +2729,25 @@ export class Match {
       const gp = v.ball.group.position, ex = v.ball.rad - R;
       if (ex > 0) {
         const zl = W - v.ball.rad; gp.z = Math.max(-zl, Math.min(zl, gp.z));
-        if (Math.abs(gp.z) > G - 0.2) { const xl = L - v.ball.rad; gp.x = Math.max(-xl, Math.min(xl, gp.x)); }
+        // у воротах межі немає: м'яч біля бічної сітки не вискакує за лінію
+        if (Math.abs(gp.z) > G - 0.2 && Math.abs(b.x) <= L) { const xl = L - v.ball.rad; gp.x = Math.max(-xl, Math.min(xl, gp.x)); }
       }
     }
     v.updateShadows(rx, rz, h);
     this.netBulge(dt);
     v.stands.update(dt, this.time); v.weather.update(dt); v.surround.update(dt); v.pitch.decals.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
     v.particles.update(dt);
-    if (this.bs === 'ready') {
+    // кільце володіння — лише в живій грі (не в інтро, перерві, пенальті чи на фіналі)
+    const live = (this.phase === 'paused' ? this.prevPhase : this.phase) === 'play';
+    if (!live) { v.ring.visible = false; v.band.visible = false; }
+    if (live && this.bs === 'ready') {
       const pr = this.danger;
       const k = 1.15 + Math.sin(this.time * (5 + pr * 8)) * 0.12;
       v.ring.visible = true; v.band.visible = false; v.ring.material.color.setHSL(0.36 * (1 - pr * pr), 0.55 + 0.3 * pr, 0.65 - 0.1 * pr);
       v.ring.position.set(b.x, 0.07, b.z); v.ring.scale.setScalar(k);
       if (pr > 0.62 && !this.pressWarn) { this.pressWarn = true; this.ui.hud.warn('ТИСК! БИЙ ЗАРАЗ'); }
       else if (pr < 0.45 && this.pressWarn) { this.pressWarn = false; this.ui.hud.warn(null); }
-    } else if (this.pressWarn && this.bs !== 'ready') { this.pressWarn = false; if (this.bs !== 'held') this.ui.hud.warn(null); }
+    } else if (this.pressWarn) { this.pressWarn = false; if (this.bs !== 'held') this.ui.hud.warn(null); }
     if (this.phase === 'play' && !this.rp && (this.bs !== 'net' || this.time < this.goalTime + 1.2)) { this.replay.rec(this.time); this.takeMoments(); }   // запис для підбірки моментів
     const sp = Math.hypot(b.vx, b.vz);
     if (sp > 20 && dt > 0 && Math.random() < 0.6) v.particles.emit(b.x, 0.25, b.z, (Math.random() - 0.5) * 1.2, 0.7, (Math.random() - 0.5) * 1.2, 0.3, 0.17, '#e8f2e4', 0, 1, 0, -1);
@@ -2711,7 +2774,7 @@ export class Match {
 
   // ------------------------------------------------------------------ завершення
   pause() { if (this.link) return; if (this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens' || this.phase === 'break') { this.prevPhase = this.phase; this.phase = 'paused'; this.cancelAim(); audio.crowd(0.2); } }
-  resume() { if (this.phase === 'paused') { this.phase = this.prevPhase; audio.crowd(0.7); } }
+  resume() { if (this.phase === 'paused') { this.phase = this.prevPhase; audio.crowd(this.slow ? 0.18 : 0.7); } }
   isPlaying() { return this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens' || this.phase === 'break'; }
 
   /** Після фінального свистка: переможці збігаються до свого воротаря (кожен на своє місце довкола) і радіють; решта стоїть. */
@@ -2780,7 +2843,7 @@ export class Match {
     const outcome = this.penRes ? (this.penRes.win ? 'win' : 'loss') : me > opp ? 'win' : me < opp ? 'loss' : 'draw';
     this.phase = 'end'; this.endT = 0; this.resultSent = false; this.cancelAim(); this.setGaze(true);
     this.ui.hud.warn(null); this.ui.hud.clearGoal();
-    audio.whistle(true); audio.crowd(0.35);
+    this.clearSlow(); audio.whistle(true); audio.crowd(0.35);
     const win = outcome === 'win';
     this.endWin = outcome === 'draw' ? null : win ? this.mine : this.opp; this.endLose = outcome === 'draw' ? null : win ? this.opp : this.mine;
     for (const a of this.actors) { a.endHug = false; a.manual = false; a.frozen = 0; }
@@ -2825,7 +2888,7 @@ export class Match {
       S.fixture++;
       if (S.fixture >= FIXTURES.length) { S.fixture = 0; S.season++; newSeason = true; }
       if (cup) { S.trophies++; tickets += 3; }
-      if (FIXTURES[S.fixture].league !== prevLeague) promoted = FIXTURES[S.fixture].league;
+      if (!newSeason && FIXTURES[S.fixture].league !== prevLeague) promoted = FIXTURES[S.fixture].league;
     }
     S.tickets += tickets;
     S.academy.progress = Math.min(ACADEMY.need, S.academy.progress + (win ? 2 : 1));

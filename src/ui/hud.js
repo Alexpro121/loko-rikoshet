@@ -1,5 +1,6 @@
 import { I, crest, lokoCrest } from './icons.js';
 import { KIT_LOKO } from '../config.js';
+import { esc } from '../online/profile.js';
 
 /** HUD матчу: чистий HTML/CSS поверх канвасу. Оновлюються лише змінені значення. */
 export class Hud {
@@ -118,7 +119,7 @@ export class Hud {
   scoreCard(d, dur = 3.5) {
     const sp = this.spec, el = this.t.scard;
     if (!sp) return;
-    const list = (mine) => d.scorers.filter((g) => g.mine === mine).map((g, i) => `<li style="--i:${i}">${g.name} <em>${g.min}</em></li>`).join('');
+    const list = (mine) => d.scorers.filter((g) => g.mine === mine).map((g, i) => `<li style="--i:${i}">${esc(g.name)} <em>${g.min}</em></li>`).join('');
     el.innerHTML = `<div class="sc-in ${d.final ? 'final' : ''}">
       <div class="sc-top"><b>${d.title}</b><span>${sp.leagueName} · матч ${sp.no}</span></div>
       <div class="sc-row">
@@ -194,7 +195,7 @@ export class Hud {
     if (this._card === key) return;
     this._card = key;
     el.className = 'pcard ' + (side > 0 ? 'me' : 'opp'); el.hidden = false;
-    el.innerHTML = `<b class="pc-ovr ${c.tier}">${c.ovr}</b><div class="pc-info"><span class="pc-name">${c.name}</span><small>№${c.num} · ${c.role}</small>${c.bars.map((b) => `<div class="pc-bar"><em>${b[0]}</em><i><u style="width:${b[1]}%"></u></i><s>${b[1]}</s></div>`).join('')}</div>`;
+    el.innerHTML = `<b class="pc-ovr ${c.tier}">${c.ovr}</b><div class="pc-info"><span class="pc-name">${esc(c.name)}</span><small>№${c.num} · ${c.role}</small>${c.bars.map((b) => `<div class="pc-bar"><em>${b[0]}</em><i><u style="width:${b[1]}%"></u></i><s>${b[1]}</s></div>`).join('')}</div>`;
   }
 
   float(x, y, text, kind = '') {

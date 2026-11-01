@@ -477,7 +477,10 @@ export class Player {
   }
   /** Радість; style — конкретна (або випадкова з набору). Лежить після стрибка — спершу підведеться. */
   cheer(t = 2.4, style) {
-    if (this.mode === 'pdive' && this.dvPlan) { this.pendingCheer = t; this.pendingCheerStyle = style; this.setExpr('happy', t + 2); return; }
+    if (this.mode === 'pdive' && this.dvPlan) { this.pendingCheer = t; this.pendingCheerStyle = style; this.cheerTill = 0; this.setExpr('happy', t + 2); return; }
+    // збитий: спершу впаде й підведеться (інакше поза вистрибує з фізики в радість), радість — якщо ще на часі
+    if (this.mode === 'stumble') { this.pendingCheer = t; this.pendingCheerStyle = style; this.cheerTill = this.t + 3.5; this.setExpr('happy', t + 2); return; }
+    this.pendingSad = 0;
     this.setMode('cheer', t); this.setExpr('happy', t);
     this.emoRate = (0.85 + 0.35 * Math.random()) * this.persona.tempo; this.emoPh = Math.random() * 10;
     const pool = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 6, 7, 10, 12, 13, 14, 15, 16, 17, 13, 16, 17, 18, 19, 20, 21, 18, 20];
@@ -494,10 +497,10 @@ export class Player {
   }
   sad(t = 2.4, style) {
     // лежить після стрибка (пропустив): не схоплюється в стійку, а повільно, важко підводиться — і вже тоді засмучений
-    if (this.mode === 'pdive' && this.dvPlan) { this.pendingSad = t; this.pendingSadStyle = style; this.slowRise = true; this.setExpr('shock', t + 2); return; }
+    if (this.mode === 'pdive' && this.dvPlan) { this.pendingSad = t; this.pendingSadStyle = style; this.sadTill = 0; this.slowRise = true; this.setExpr('shock', t + 2); return; }
     // біг чи якась дія: спершу зупиняється / довершує (кожен трохи по-своєму, ~0.3–0.9 с), а тоді вже сумує
     const sp = Math.hypot(this.vx, this.vz);
-    if (!this.sadNow && (sp > 1.2 || (this.mode !== 'idle' && this.mode !== 'sad' && this.mode !== 'gkwait'))) { this.pendingSad = t; this.pendingSadStyle = style; this.sadAt = this.t + 0.3 + 0.08 * sp + Math.random() * 0.35; this.setExpr('shock', t + 1); return; }
+    if (!this.sadNow && (sp > 1.2 || (this.mode !== 'idle' && this.mode !== 'sad' && this.mode !== 'gkwait'))) { this.pendingSad = t; this.pendingSadStyle = style; this.sadAt = this.t + 0.3 + 0.08 * sp + Math.random() * 0.35; this.sadTill = this.sadAt + 3; this.setExpr('shock', t + 1); return; }
     this.sadNow = false;
     this.setMode('sad', t); this.setExpr('shock', t); this.style = style ?? (Math.random() < 0.6 ? this.persona.sad[(Math.random() * 2) | 0] : (Math.random() * 9) | 0);
   }
@@ -626,6 +629,7 @@ export class Player {
     this.setExpr('happy', 1.2);
   }
   gesture(t = 1.4, style) {
+    if (this.mode === 'stumble') return;                                  // збитий — не до жестів
     // старі «оплески» (6 — на рівні грудей, 16 — над головою, 2 — «зібрались!») — тепер справжні, з дотиком долонь: кожен
     // гравець плеще по-своєму (свої 2 улюблені варіанти)
     if (style === 6) style = this.persona.clapV[(Math.random() * 2) | 0]; else if (style === 16) style = 31; else if (style === 2) style = 35;
@@ -691,7 +695,18 @@ export class Player {
     this.setMode('stumble', 999); this.setExpr('shock', 1.2);
     this.kicking = 0;
     this.rag = new Ragdoll(this, { x: this.vx, z: this.vz }, { x: dx / l * power, z: dz / l * power, up: 0.8 + 0.4 * Math.random() }, trip, { active: true });
-    this.ragDone = -1; this.riseT0 = -1.05;
+    this.ragDone = -1; this.riseT0 = -1.05; this.ragX = this.x; this.ragZ = this.z;
+  }
+  /**
+   * Гра перервала ragdoll (розстановка, м'яч у ноги лежачому): фізику скидаємо до малювання кадру. Польовий під час падіння
+   * ще стоїть коренем у точці удару: якщо його не переставили, лишається там, де тіло, а не стрибає назад.
+   */
+  dropRag() {
+    if (!this.rag.dive && this.ragDone < 0 && Math.hypot(this.x - this.ragX, this.z - this.ragZ) < 0.5) {
+      const P = this.rag.pos;
+      this.x = this.lpx = (P[0].x + P[1].x) / 2; this.z = this.lpz = (P[0].z + P[1].z) / 2; this.gaitSys.ready = false;
+    }
+    this.rag = null;
   }
   slideTackle() { this.setMode('slide', 1.6); this.setExpr('angry', 0.7); }
   kneel() { this.setMode('kneel', 1.5); this.setExpr('happy', 1.5); this.kSlide = 0; }
@@ -700,7 +715,7 @@ export class Player {
   /** Ковзання на колінах зсуває тіло візуально; коли воно закінчується (чи перервалось), зсув стає справжньою позицією — без ривка назад. */
   bakeSlide() { if (this.mode === 'kneel' && this.kSlide) { this.x += Math.sin(this.yaw) * this.kSlide; this.z += Math.cos(this.yaw) * this.kSlide; this.lpx = this.x; this.lpz = this.z; } this.kSlide = 0; }
   /** Обійми: руки обхоплюють партнера (yaw — до нього), корпус уперед, разом підстрибують. */
-  hug(t = 1.8) { this.setMode('hug', t); this.setExpr('happy', t + 0.5); this.emoPh = Math.random() * 3; this.emoRate = 0.9 + 0.2 * Math.random(); }
+  hug(t = 1.8) { if (this.mode === 'stumble') { this.cheer(t); return; } this.pendingSad = 0; this.setMode('hug', t); this.setExpr('happy', t + 0.5); this.emoPh = Math.random() * 3; this.emoRate = 0.9 + 0.2 * Math.random(); }
   /** aim — куди стрибок принесе рукавиці (світ {x,y,z}); руки тягнуться лише до м'яча, що пролітає біля цієї точки. */
   gkDive(dir, kind = 0, aim = null, tArr = null, vmax = 5.5) {
     if (aim && tArr != null) { this.startPDive(dir, kind, aim, tArr, vmax); this.setExpr('shock', 1.0); return; }   // з метою й часом — за фізикою
@@ -915,6 +930,7 @@ export class Player {
   /** Кінематика: біг із фазами кроку, згином колін і ліктів, контр-обертанням плечей; удар, прийом, підкат, сейви, радість. */
   animate(dt) {
     this.t += dt;
+    if (this.rag && !(this.rag.dive ? this.mode === 'pdive' || this.mode === 'gkdive' : this.mode === 'stumble')) this.dropRag();
     const speed = Math.hypot(this.vx, this.vz);
     const sp = clamp(speed / 8.5, 0, 1);
     const prevYaw = this.bodyYaw;
@@ -980,6 +996,12 @@ export class Player {
     this.breathUp = 0;
 
     if (this.exprT > 0) { this.exprT -= dt; if (this.exprT <= 0) this.setExpr('neutral'); }
+    // відкладена реакція лише вчасно: на пізніше (гравець усе ще біжить, уже нова ситуація) вона не переноситься
+    if (this.pendingSad && this.mode !== 'pdive' && this.t > (this.sadTill ?? 0)) this.pendingSad = 0;
+    if (this.pendingCheer && this.mode !== 'pdive') {
+      if (this.t > this.cheerTill) this.pendingCheer = 0;
+      else if (this.mode === 'idle' || this.mode === 'gkwait') { const pc = this.pendingCheer; this.pendingCheer = 0; this.cheer(pc, this.pendingCheerStyle); }
+    }
     if (this.pendingSad && this.mode !== 'pdive' && this.t >= (this.sadAt ?? 0) && (this.mode === 'idle' || this.mode === 'gkwait' || this.modeT <= 0) && Math.hypot(this.vx, this.vz) < 2.6) { const ps = this.pendingSad; this.pendingSad = 0; this.sadNow = true; this.sad(ps, this.pendingSadStyle); }
     if (this.modeT > 0) { this.modeT -= dt; if (this.modeT <= 0) { this.bakeSlide(); this.mode = 'idle'; } }
     if (this.mode === 'stagger' && this.stag) {                // поштовх несе тіло, ноги його наздоганяють; сила гаситься кроками
@@ -1906,7 +1928,7 @@ export class Player {
       const dive = this.rag.dive;
       if (dive && this.ragDone < 0) {
         // м'язи ведуть тіло за позою стрибка (оберт на бік, руки з IK, ноги) відносно центру мас; удар об газон на мить «пропускають»
-        this.rag.setDrive(ragPoints(this, this.dvNow ??= []), this.touchT > 0 ? DRIVE_TOUCH : DRIVE_DIVE);   // у мить контакту з м'ячем руки м'якші — гасять удар, а не смикають тіло
+        this.rag.setDrive(ragPoints(this, this.dvNow ??= []), this.touchT > 0 ? DRIVE_TOUCH : DRIVE_DIVE, false, dt);   // у мить контакту з м'ячем руки м'якші — гасять удар, а не смикають тіло
       }
       const settled = this.rag.step(dt);
       if (dive) {
@@ -1929,7 +1951,7 @@ export class Player {
         // гравець тепер там, де впав, і розвернутий так, як лежить: на животі — головою вперед, на спині — ногами вперед
         const P = this.rag.pos, hx = (P[0].x + P[1].x) / 2, hz = (P[0].z + P[1].z) / 2, dx = P[9].x - hx, dz = P[9].z - hz;
         this.x = hx; this.z = hz;
-        if (Math.hypot(dx, dz) > 0.05) this.yaw = this.bodyYaw = this.riseT0 > 0 ? Math.atan2(dx, dz) : Math.atan2(-dx, -dz);
+        if (Math.hypot(dx, dz) > 0.05) this.yaw = this.bodyYaw = this.bodyYawT = this.yawF = this.riseT0 > 0 ? Math.atan2(dx, dz) : Math.atan2(-dx, -dz);   // і згладжена ціль курсу, інакше корпус тягне назад до старого
         this.body.rotation.y = this.bodyYaw; this.root.position.set(this.x, 0, this.z); this.root.updateMatrixWorld(true);
       }
       if (this.ragDone >= 0) this.ragDone += dt;

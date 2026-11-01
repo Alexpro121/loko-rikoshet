@@ -31,7 +31,7 @@ class AudioEngine {
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       this.startCrowd();
     }
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    this.resume();
     this.applySettings();
     this.music(this.want || 'off');
   }
@@ -44,7 +44,8 @@ class AudioEngine {
   }
 
   suspend() { if (this.ctx && this.ctx.state === 'running') this.ctx.suspend(); }
-  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); }
+  // interrupted — стан iOS після дзвінка чи блокування; без жесту браузер може відмовити, тоді спробуємо на наступному дотику
+  resume() { if (this.ctx && (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted')) this.ctx.resume().catch(() => {}); }
 
   // --- примітиви ---
   tone(type, f0, f1, dur, vol, when = 0, dest = this.sfx) {
@@ -171,7 +172,7 @@ class AudioEngine {
   }
   schedule() {
     const c = this.ctx;
-    if (!c || c.state !== 'running') { if (c) this.nextT = Math.max(this.nextT, c.currentTime); return; }
+    if (!c || c.state !== 'running' || !S.settings.music) { if (c) this.nextT = Math.max(this.nextT, c.currentTime); return; }
     const bpm = this.musicMode === 'match' ? 126 : 104;
     const dt = 60 / bpm / 4;
     const scale = [220, 261.6, 293.7, 329.6, 392, 440, 523.3, 587.3];

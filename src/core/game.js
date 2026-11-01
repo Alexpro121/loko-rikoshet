@@ -14,6 +14,17 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const _v = new THREE.Vector3();
 const _d = new THREE.Vector3();
 
+/** Екран поверх усього: графіка не запустилась або не повернулась (замість мовчазного порожнього поля). */
+export function gfxFail(text) {
+  const root = document.getElementById('ui');
+  if (root.querySelector('#gfx-fail')) return;
+  const el = document.createElement('section');
+  el.className = 'overlay'; el.id = 'gfx-fail'; el.style.zIndex = 99; el.style.background = '#08402c';
+  el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:calc(var(--u) * 3);max-width:80vw;text-align:center;color:#fff;font-weight:800;font-size:var(--fs-m)">${text}<button type="button" class="big"><b>ОНОВИТИ СТОРІНКУ</b></button></div>`;
+  el.querySelector('button').addEventListener('click', () => location.reload());
+  root.appendChild(el);
+}
+
 export class Game {
   constructor(canvas, ui) {
     this.canvas = canvas; this.ui = ui; ui.game = this;
@@ -23,6 +34,7 @@ export class Game {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.1;
     this.coarse = coarse;
     this.res = coarse ? 0.85 : 1; this.ema = 16; this.evalT = 0; this.goodRuns = 0; this.pr = 0;
+    this.slowT = 1; this.govBase = 0; this.govRes = 1; this.govStuck = false; this.upNeed = 3;
     this.trauma = 0; this.fov = 0; this.time = 0;
     this.w = 1; this.h = 1;
 
@@ -48,8 +60,8 @@ export class Game {
     addEventListener('orientationchange', () => setTimeout(() => this.resize(), 200));
     if (window.visualViewport) visualViewport.addEventListener('resize', () => this.resize());
     document.addEventListener('visibilitychange', () => this.onVisibility());
-    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.lost = true; });
-    canvas.addEventListener('webglcontextrestored', () => { this.lost = false; });
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.onGlLost(); });
+    canvas.addEventListener('webglcontextrestored', () => this.onGlRestored());
 
     this.island.setTier(stadiumTier(), false);
     this.island.setTrophies(S.trophies);
@@ -154,19 +166,48 @@ export class Game {
 
   /** Динамічна роздільність: тримаємо ~60 fps, не чіпаючи картинку без потреби. */
   governor(dt) {
-    this.ema += (dt * 1000 - this.ema) * 0.08;
+    // поодинокий фриз (збірка сцени, GC) — не навантаження: у середнє не йде
+    const slow = dt > 0.05, lone = slow && this.slowT > 0.5;
+    this.slowT = slow ? 0 : this.slowT + dt;
+    if (!lone) this.ema += (dt * 1000 - this.ema) * 0.08;
     this.evalT += dt;
     if (this.evalT < 1.4 || S.settings.quality !== 'auto') return;
     this.evalT = 0;
-    if (this.ema > 20.5 && this.res > 0.7) { this.res = Math.max(0.7, this.res - 0.1); this.goodRuns = 0; this.applyPixelRatio(false); }
-    else if (this.ema < 14.2 && this.res < 1) { if (++this.goodRuns >= 3) { this.res = Math.min(1, this.res + 0.06); this.goodRuns = 0; this.applyPixelRatio(false); } }
+    if (this.ema > 20.5) {
+      if (this.govStuck) return;
+      if (this.res > 0.7) {
+        if (!this.govBase) { this.govBase = this.ema; this.govRes = this.res; this.upNeed = Math.min(96, this.upNeed * 2); }   // кожен новий спад — обережніше піднімаємо назад
+        this.res = Math.max(0.7, this.res - 0.1); this.goodRuns = 0; this.applyPixelRatio(false);
+      } else if (this.govBase && this.ema > this.govBase * 0.9) {
+        // роздільність не допомогла: упираємось не в GPU (режим економії 30 Гц, процесор) — повертаємо чітку картинку
+        this.res = this.govRes; this.govStuck = true; this.goodRuns = 0; this.applyPixelRatio(false);
+      }
+      return;
+    }
+    this.govStuck = false; this.govBase = 0;
+    // рівні 60 Гц дають ~16.7 мс: поріг вище за них, інакше на таких екранах роздільність не верталась би ніколи
+    if (this.ema < 17.6 && this.res < 1) { if (++this.goodRuns >= this.upNeed) { this.res = Math.min(1, this.res + 0.06); this.goodRuns = 0; this.applyPixelRatio(false); } }
     else this.goodRuns = 0;
+  }
+
+  /** Контекст WebGL загублено: зупиняємо гру й звук; якщо не повернувся за кілька секунд — кажемо гравцю, що робити. */
+  onGlLost() {
+    this.lost = true; audio.suspend();
+    if (this.match && this.match.isPlaying() && !(this.online && this.online.inMatch())) this.ui.pause();
+    this.ui.toast('Графіку втрачено, відновлюємо…');
+    clearTimeout(this.lostT);
+    this.lostT = setTimeout(() => { if (this.lost) gfxFail('Графіка не повернулась. Онови сторінку, щоб продовжити.'); }, 5000);
+  }
+  onGlRestored() {
+    this.lost = false; clearTimeout(this.lostT); this.last = performance.now();
+    const f = document.getElementById('gfx-fail'); if (f) f.remove();
+    if (!document.hidden) audio.resume();
   }
 
   onVisibility() {
     // онлайн-матч не стає на паузу (час спільний) — меню паузи не вискакує
     if (document.hidden) { audio.suspend(); if (this.match && this.match.isPlaying() && !(this.online && this.online.inMatch())) this.ui.pause(); }
-    else { audio.resume(); this.last = performance.now(); if (this.ui.started) this.acquireWake(); }
+    else { if (!this.lost) audio.resume(); this.last = performance.now(); if (this.ui.started) this.acquireWake(); }
   }
 
   // ---------------------------------------------------------------- камери
@@ -299,7 +340,12 @@ export class Game {
   bindInput() {
     const c = this.canvas;
     let pid = -1, sx = 0, sy = 0, lx = 0, moved = false, t0 = 0;
+    // палець на джойстику цілиться сам: дотики по полю його приціл не завершують і не скасовують
+    const joyAim = () => this.ui.joyActive && this.match && this.match.joyMode;
+    // iOS після дзвінка чи блокування не дає відновити звук без жесту: пробуємо на кожному дотику
+    for (const t of ['pointerdown', 'touchend', 'click']) addEventListener(t, () => { if (!this.lost && !document.hidden) audio.resume(); }, { capture: true, passive: true });
     c.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;   // приціл і тап — лише лівою кнопкою
       if (pid !== -1 && this.match && !this.ui.joyActive) this.match.cancelAim();   // попередній жест загубився: починаємо спочатку (приціл джойстиком не чіпаємо)
       pid = e.pointerId; try { c.setPointerCapture(pid); } catch (_) { /* ignore */ }
       sx = lx = e.clientX; sy = e.clientY; moved = false; t0 = performance.now();
@@ -320,16 +366,20 @@ export class Game {
     const up = (e) => {
       if (e.pointerId !== pid) return;
       pid = -1; try { c.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-      if (this.sm.name === 'MATCH' && this.match) this.match.pointerUp();
+      if (this.sm.name === 'MATCH' && this.match && !joyAim()) this.match.pointerUp();
       if (this.sm.name === 'MENU') {
         this.orbit.dragging = false;
         if (!moved && performance.now() - t0 < 500) this.ui.menuTap();
       }
     };
     c.addEventListener('pointerup', up);
-    c.addEventListener('pointercancel', (e) => { if (e.pointerId === pid) { pid = -1; this.orbit.dragging = false; if (this.match) this.match.cancelAim(); } });
+    c.addEventListener('pointercancel', (e) => { if (e.pointerId === pid) { pid = -1; this.orbit.dragging = false; if (this.match && !joyAim()) this.match.cancelAim(); } });
     c.addEventListener('contextmenu', (e) => e.preventDefault());
-    addEventListener('blur', () => { pid = -1; this.orbit.dragging = false; if (this.match) this.match.cancelAim(); });
+    addEventListener('blur', () => {
+      pid = -1; this.orbit.dragging = false; if (this.match) this.match.cancelAim();
+      // ПК: вікно втратило фокус, але лишилось видимим (visibilitychange мовчить) — матч не йде без гравця
+      if (!this.coarse && this.match && this.match.isPlaying() && !(this.online && this.online.inMatch())) this.ui.pause();
+    });
   }
 
   // ---------------------------------------------------------------- повний екран

@@ -1,4 +1,4 @@
-import { S, commit, resetAll, subscribe } from '../state/save.js';
+import { S, commit, resetAll, subscribe, onSaveError } from '../state/save.js';
 import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, KITS, matchSpec, CAM_PRESETS } from '../config.js';
 import { stadiumCost, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
 import { audio, vibrate } from '../core/audio.js';
@@ -12,17 +12,20 @@ import { ensureSquad, oppSquad, allPlayers, swapTargets, swapPlayers, ovr, tierO
 
 /** Тестові інструменти (+10 000 монет) лише з ?test в адресі або в dev-збірці. */
 const TEST_MODE = !!(import.meta.env && import.meta.env.DEV) || /[?&]test/.test(location.search);
-import { striker } from '../state/economy.js';
+import { esc } from '../online/profile.js';
 import { rivalOf, scoutNote } from '../state/rivals.js';
 
 const rarCol = (id) => ACADEMY.rarities.find((r) => r.id === id) || ACADEMY.rarities[0];
+const acKey = (p) => 'ac-' + p.id + p.num + p.skin + p.hair + p.hairCol + (S.kitId || 'home');
+/** Родовий відмінок назв ліг (порядок як у LEAGUES). */
+const LEAGUE_GEN = ['Другої ліги', 'Першої ліги', 'Прем’єр-ліги УПЛ', 'Ліги чемпіонів'];
 
 function countTo(el, to, ms = 650, fmtFn = fmt) {
   const from = Number(el.dataset.v || 0); el.dataset.v = to;
-  if (from === to) { el.textContent = fmtFn(to); return; }
+  if (!ms || from === to) { el.textContent = fmtFn(to); return; }
   const t0 = performance.now();
   const step = (now) => {
-    const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+    const k = Math.max(0, Math.min(1, (now - t0) / ms)), e = 1 - Math.pow(1 - k, 3);   // мітка кадру буває раніша за t0
     el.textContent = fmtFn(from + (to - from) * e);
     if (k < 1) requestAnimationFrame(step);
   };
@@ -34,6 +37,14 @@ const sheet = (title, body, cls = '') => `
   <header class="sheet-h"><h2>${title}</h2><button class="sq btn-red" data-act="close-panel" aria-label="Закрити">${I.close}</button></header>
   <div class="sheet-b">${body}</div>
 </div>`;
+
+const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .sym, .on-play, .on-club section, .set-grid, .cu-wrap, .cu-opts';
+/** Замінює вміст вікна; keep — те саме вікно малюється заново, тож прокрутка лишається на місці. */
+function redraw(host, html, keep) {
+  const sc = keep ? [...host.querySelectorAll(SCROLLS)].map((n) => [n.scrollLeft, n.scrollTop]) : [];
+  host.innerHTML = html;
+  if (keep) host.querySelectorAll(SCROLLS).forEach((n, i) => { if (sc[i]) { if (sc[i][0]) n.scrollLeft = sc[i][0]; if (sc[i][1]) n.scrollTop = sc[i][1]; } });
+}
 
 export class UI {
   constructor(root) {
@@ -115,7 +126,7 @@ export class UI {
     root.addEventListener('input', (e) => {
       if (this.online && this.online.input(e.target)) return;
       const nm = e.target.closest('[data-cname]');
-      if (nm && this.cu != null) { const pl = allPlayers()[this.cu]; if (pl) { pl.name = nm.value.slice(0, 22) || pl.name; pl.custom = true; commit(); } return; }
+      if (nm && this.cu != null) { const pl = allPlayers()[this.cu]; if (pl) { pl.name = nm.value.trim().slice(0, 22) || pl.name; pl.custom = true; commit(); } return; }
       const t = e.target.closest('[data-range]'); if (!t) return;
       const k = t.dataset.range, v = +t.value;
       S.settings[k] = v; this.applyControls(); commit();
@@ -135,6 +146,7 @@ export class UI {
     this.applyControls();
     this.iosHint();
     subscribe(() => this.refresh());
+    onSaveError(() => this.toast('Прогрес не зберігається'));
     addEventListener('keydown', (e) => this.key(e));
     setInterval(() => this.tickCash(), 1000);
   }
@@ -159,12 +171,15 @@ export class UI {
       return;
     }
     const g = this.game;
-    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-      if (g.sm.name === 'MATCH') { if (!this.el.pause.hidden) this.act('resume'); else this.pause(); }
+    // e.code: P і F працюють у будь-якій розкладці; спершу закривається верхнє вікно, а вже потім пауза чи панель
+    if (e.key === 'Escape' || e.code === 'KeyP') {
+      if (this.joyEdit) this.act('joy-done');
       else if (!this.el.settings.hidden) this.closeSettings();
+      else if (!this.el.custom.hidden) this.closeCustom();
+      else if (g.sm.name === 'MATCH') { if (!this.el.pause.hidden) this.act('resume'); else this.pause(); }
       else if (this.panel) this.closePanel();
-    } else if (e.key === 'f' || e.key === 'F') g.toggleFullscreen();
-    else if ((e.key === ' ' || e.key === 'Enter') && g.sm.name === 'MENU' && !this.panel && this.el.splash.hidden && this.el.settings.hidden) this.menuTap();
+    } else if (e.code === 'KeyF') g.toggleFullscreen();
+    else if ((e.key === ' ' || e.key === 'Enter') && e.target.tagName !== 'BUTTON' && g.sm.name === 'MENU' && !this.panel && this.el.splash.hidden && this.el.settings.hidden) this.menuTap();   // на сфокусованій кнопці ці клавіші тиснуть її саму
   }
 
   /** iPhone не вміє fullscreen API: пропонуємо встановити гру на початковий екран (тоді вона відкривається без рядка Safari). */
@@ -253,7 +268,8 @@ export class UI {
   act(a, el) {
     const g = this.game;
     switch (a) {
-      case 'start': this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.click(); g.ensureMatch(); playIntro(this.root, () => { audio.music('menu'); this.showMenu(); }); return;
+      case 'start': if (this.started) { audio.click(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); return; }   // екран повернула підказка iPhone: заставку вдруге не граємо
+        this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.click(); g.ensureMatch(); playIntro(this.root, () => { audio.music('menu'); this.showMenu(); }); return;
       case 'play': return this.menuTap();
       case 'test-coins': if (!TEST_MODE) return; S.coins += 10000; commit(); audio.coin(3); this.toast('+10 000 монет (тест)'); return;
       case 'pens': { const mm = g.match; if (!mm) return; audio.click(); this.el.pause.hidden = true; if (mm.phase === 'paused') mm.resume(); mm.startPens(); return; }
@@ -277,8 +293,8 @@ export class UI {
       case 'result-menu': audio.click(); return g.toMenu();
       case 'result-next': audio.click(); return g.play();
       case 'result-retry': audio.click(); return g.play();
-      case 'joy-move': this.joyEdit = true; this.el.joy.classList.add('edit'); this.closeSettings(); this.root.querySelector('#joy-bar').hidden = false; this.applyControls(); return;
-      case 'joy-done': this.joyEdit = false; this.el.joy.classList.remove('edit'); this.root.querySelector('#joy-bar').hidden = true; this.applyControls(); commit(); this.openSettings(); return;
+      case 'joy-move': this.joyEdit = true; this.joyPause = !this.el.pause.hidden; this.el.pause.hidden = true; this.el.joy.classList.add('edit'); this.closeSettings(); this.root.querySelector('#joy-bar').hidden = false; this.applyControls(); return;
+      case 'joy-done': this.joyEdit = false; if (this.joyPause && g.sm.name === 'MATCH') this.el.pause.hidden = false; this.joyPause = false; this.el.joy.classList.remove('edit'); this.root.querySelector('#joy-bar').hidden = true; this.applyControls(); commit(); this.openSettings(); return;
       case 'joy-reset': S.settings.joyX = S.settings.joyY = -1; this.applyControls(); commit(); return;
       case 'ctl-auto': case 'ctl-joy': case 'ctl-drag': S.settings.control = a.slice(4); commit(); this.applyControls(); audio.click(); return this.renderSettings();
       case 'hand-right': case 'hand-left': S.settings.hand = a.slice(5); commit(); this.applyControls(); audio.click(); return this.renderSettings();
@@ -290,7 +306,7 @@ export class UI {
       case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
       default:
         if (a.startsWith('on-')) return this.online && this.online.act(a, el);
-        if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); return this.renderPanel(); }
+        if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); this.renderPanel(); const d = this.el.panel.querySelector('.sq-d'); if (d) d.scrollTop = 0; return; }   // інший гравець: картка з початку
         if (a.startsWith('cam-')) { if (CAM_PRESETS[a.slice(4)]) { S.settings.camMode = a.slice(4); commit(); g.computeMatchBase(); audio.click(); return this.renderSettings(); } }
         if (a.startsWith('set-tab:')) { this.setTab = a.slice(8); audio.click(); return this.renderSettings(); }
         if (a.startsWith('tod-')) { S.settings.timeOfDay = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
@@ -306,7 +322,7 @@ export class UI {
 
   menuTap() {
     const g = this.game; this.el.cta.classList.remove('punch'); void this.el.cta.offsetWidth; this.el.cta.classList.add('punch');
-    if (g.sm.name !== 'MENU' || !this.el.splash.hidden || !this.el.settings.hidden || !this.el.reveal.hidden) return;
+    if (g.sm.name !== 'MENU' || this.el.menu.hidden || !this.el.splash.hidden || !this.el.settings.hidden || !this.el.reveal.hidden) return;   // меню сховане: іде заставка
     if (this.panel) this.closePanel(true);                                             // локомотив видно й над панеллю: їде одразу
     audio.click(); audio.unlock();
     g.play();
@@ -325,7 +341,7 @@ export class UI {
 
   // ---------------------------------------------------------------- меню
   showMenu() {
-    if (!this.started) return;
+    if (!this.started || this.game.sm.name !== 'MENU') return;
     const m = this.el.menu;
     m.hidden = false; m.classList.remove('hide', 'enter'); void m.offsetWidth; m.classList.add('enter');
     clearTimeout(this._enterT); this._enterT = setTimeout(() => m.classList.remove('enter'), 2600);
@@ -417,7 +433,7 @@ export class UI {
       const rt = this.el.club.querySelector('#m-rating');
       if (force) countTo(rt, rating, 900, (v) => String(Math.round(v))); else { rt.dataset.v = rating; rt.textContent = rating; }
     }
-    const nk = [S.fixture, S.season, rating, S.up.stadium, S.stats.matches].join('|');
+    const nk = [S.fixture, S.season, rating, incomePct(), S.stats.matches].join('|');
     if (force || this._nextKey !== nk) {
       this._nextKey = nk;
       const rv = rivalOf(spec), note = scoutNote(spec);
@@ -480,7 +496,7 @@ export class UI {
     this.renderPanel();
   }
   closePanel(silent) {
-    this.panel = null; this.el.panel.hidden = true; this.el.menu.classList.remove('panel-open');
+    this.panel = null; this._pv = null; this.el.panel.hidden = true; this.el.menu.classList.remove('panel-open');
     this.el.nav.querySelectorAll('.nb').forEach((b, i) => b.classList.toggle('on', i === 0));
   }
 
@@ -488,10 +504,12 @@ export class UI {
     if (!this.panel) return;
     const p = this.panel;
     const html = p === 'transfers' ? this.transfersHtml() : p === 'academy' ? this.academyHtml() : p === 'online' ? this.online.html() : this.stadiumHtml();
-    const keep = this.el.panel.querySelector('.scroller');
-    const sl = keep ? keep.scrollLeft : 0;
-    this.el.panel.innerHTML = html;
-    const sc = this.el.panel.querySelector('.scroller'); if (sc) sc.scrollLeft = sl;
+    const sub = p === 'transfers' ? this.tab : p === 'stadium' ? this.stTab : p === 'online' ? this.online.tab : '';
+    // вхідна анімація лише при відкритті панелі; у межах тієї самої вкладки прокрутка не скидається
+    const again = this._pv === p;
+    redraw(this.el.panel, html, again && this._ps === sub);
+    const box = this.el.panel.querySelector('.sheet'); if (box && again) box.classList.add('still');
+    this._pv = p; this._ps = sub;
   }
 
   statBar(label, v) { return `<div class="stat"><span>${label}</span><i><u style="width:${Math.round(v * 100)}%"></u></i></div>`; }
@@ -508,16 +526,16 @@ export class UI {
     const all = allPlayers();
     const cards = all.map((e, i) => {
       const L = squadLook(e), gk = e.line === 'G', o = ovr(e);
-      const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : myKit(), num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, beard: L.beard, gk, scale: 0.9 }, 'sq-' + e.id + e.num + lookSig(e) + (e.role === 'ST' && !e.custom ? striker().id : ''));
-      return `<button class="sq-card ${i === this.sel ? 'on' : ''} ${i >= 11 ? 'sub' : ''}" data-act="sel:${i}"><i class="ovr ${tierOf(o)}">${o}</i><img src="${img}" alt=""/><b>${e.name.split(' ').slice(-1)[0]}</b><em>№${e.num} · ${i >= 11 ? 'запас' : e.role}</em></button>`;
+      const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : myKit(), num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, beard: L.beard, gk, scale: 0.9 }, 'sq-' + e.id + e.num + lookSig(e));
+      return `<button class="sq-card ${i === this.sel ? 'on' : ''} ${i >= 11 ? 'sub' : ''}" data-act="sel:${i}"><i class="ovr ${tierOf(o)}">${o}</i><img src="${img}" alt=""/><b>${esc(e.name.trim().split(' ').slice(-1)[0])}</b><em>№${e.num} · ${i >= 11 ? 'запас' : e.role}</em></button>`;
     }).join('');
     const e = all[this.sel], o = ovr(e), need = xpNeed(e.lvl), isSub = this.sel >= 11;
-    const swaps = isSub ? `<div class="swaps"><small>Замінити в основі:</small>${swapTargets(e).map((si) => `<button class="btn sw" data-act="swap:${this.sel}:${si}"><b>№${S.squad[si].num} ${S.squad[si].name.split(' ')[0]}</b><em>${S.squad[si].role} · ${ovr(S.squad[si])}</em></button>`).join('')}</div>` : '';
+    const swaps = isSub ? `<div class="swaps"><small>Замінити в основі:</small>${swapTargets(e).map((si) => `<button class="btn sw" data-act="swap:${this.sel}:${si}"><b>№${S.squad[si].num} ${esc(S.squad[si].name.trim().split(' ')[0])}</b><em>${S.squad[si].role} · ${ovr(S.squad[si])}</em></button>`).join('')}</div>` : '';
     const tiles = keysFor(e.line).map((k) => {
       const v = e.stats[k], c = trainCost(v), can = S.coins >= c && v < 99;
       return `<div class="st"><div class="st-t"><span>${STAT_NAMES[k]}</span><b>${v}</b></div><i><u style="width:${v}%"></u></i><button class="btn buy ${can ? 'can' : ''}" data-act="train:${this.sel}:${k}" ${v >= 99 ? 'disabled' : ''}><b>+1 · ${fmt(c)}</b>${I.coin}</button><small>${STAT_HINT[k]}</small></div>`;
     }).join('');
-    const detail = `<div class="sq-d"><div class="sq-h"><i class="ovr big ${tierOf(o)}">${o}</i><div><h3>${e.name}</h3><button class="btn alt cust" data-act="cust:${this.sel}"><b>ВИГЛЯД</b></button><p>№${e.num} · ${ROLE_UA[isSub ? (e.pos || e.role) : e.role]}${isSub ? ' · запасний' : ''}</p><div class="xp"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></div><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small></div></div>${swaps}<div class="st-grid">${tiles}</div></div>`;
+    const detail = `<div class="sq-d"><div class="sq-h"><i class="ovr big ${tierOf(o)}">${o}</i><div><h3>${esc(e.name)}</h3><button class="btn alt cust" data-act="cust:${this.sel}"><b>ВИГЛЯД</b></button><p>№${e.num} · ${ROLE_UA[isSub ? (e.pos || e.role) : e.role]}${isSub ? ' · запасний' : ''}</p><div class="xp"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></div><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small></div></div>${swaps}<div class="st-grid">${tiles}</div></div>`;
     return sheet('Команда · рейтинг ' + squadRating(), this.teamTabs() + `<div class="sq-wrap"><div class="sq-list scroller">${cards}</div>${detail}</div>`, 'wide');
   }
 
@@ -534,7 +552,7 @@ export class UI {
     const list = st ? STRIKERS : KEEPERS, owned = st ? S.strikers : S.keepers, cur = st ? S.striker : S.keeper;
     const cards = list.map((c) => {
       const kit = st ? myKit() : KIT_GK_LOKO;
-      const img = portrait(g.renderer, { kit, num: st ? 9 : 1, skin: c.skin, hair: c.hair, hairCol: c.hairCol, gk: !st, scale: 0.9 }, 'tr-' + c.id);
+      const img = portrait(g.renderer, { kit, num: st ? 9 : 1, skin: c.skin, hair: c.hair, hairCol: c.hairCol, gk: !st, scale: 0.9 }, 'tr-' + c.id + (st ? S.kitId || 'home' : ''));
       const has = owned.includes(c.id), eq = cur === c.id;
       const stats = st
         ? this.statBar('Точність', 1 - c.jitter / 4.5) + this.statBar('Приціл', c.bounces / 6)
@@ -552,7 +570,7 @@ export class UI {
     const slots = Array.from({ length: A.slots }, (_, i) => {
       const p = S.academy.players[i];
       if (!p) return `<div class="slot empty"><span>${I.lock}</span><em>вільне місце</em></div>`;
-      const img = portrait(g.renderer, { kit: myKit(), num: p.num, skin: p.skin, hair: p.hair, hairCol: p.hairCol, gk: false, scale: 0.9 }, 'ac-' + p.id);
+      const img = portrait(g.renderer, { kit: myKit(), num: p.num, skin: p.skin, hair: p.hair, hairCol: p.hairCol, gk: false, scale: 0.9 }, acKey(p));
       return `<div class="slot" style="--rc:${rarCol(p.rar).col}"><img src="${img}" alt=""/><b>${p.name}</b><em>№${p.num} · +${p.bonus}% дохід</em></div>`;
     }).join('');
     const act = ready ? `<button class="btn go big" data-act="acad-collect"><b>ЗАБРАТИ ВИПУСКНИКА</b></button>` : `<button class="btn buy ${S.tickets > 0 ? 'can' : ''}" data-act="acad-boost"><b>Прискорити: 1</b>${I.ticket}</button>`;
@@ -628,7 +646,7 @@ export class UI {
     S.academy.progress = 0; S.academy.ready = false;
     commit(); audio.win();
     const r = rarCol(gr.rar);
-    const img = portrait(this.game.renderer, { kit: myKit(), num: gr.num, skin: gr.skin, hair: gr.hair, hairCol: gr.hairCol, gk: false, scale: 0.9 }, 'ac-' + gr.id);
+    const img = portrait(this.game.renderer, { kit: myKit(), num: gr.num, skin: gr.skin, hair: gr.hair, hairCol: gr.hairCol, gk: false, scale: 0.9 }, acKey(gr));
     this.el.reveal.innerHTML = `<div class="reveal-in" style="--rc:${r.col}" data-act="close-reveal"><div class="rays"></div><img src="${img}" alt=""/><small>${r.name}</small><h2>${gr.name}</h2><p>№${gr.num} · +${gr.bonus}% до доходу ${note ? '· ' + note : ''}</p><button class="btn go"><b>ВІТАЮ</b></button></div>`;
     this.el.reveal.hidden = false;
   }
@@ -643,7 +661,7 @@ export class UI {
   // ---------------------------------------------------------------- налаштування
   // ---------------------------------------------------------------- редактор вигляду гравця й форми
   openCustom(idx) {
-    this.cu = idx; this.el.custom.hidden = false; this.renderCustom(); audio.click();
+    this.cu = idx; this.el.custom.hidden = false; this.renderCustom(true); audio.click();
   }
   closeCustom() { this.el.custom.hidden = true; this.cu = null; if (this.panel) this.renderPanel(); }
   customAct(a, el) {
@@ -663,7 +681,7 @@ export class UI {
     if (k !== 'reset') e.custom = true;
     commit(); audio.click(); this.renderCustom();
   }
-  renderCustom() {
+  renderCustom(open) {
     const g = this.game, e = allPlayers()[this.cu]; if (!e) return;
     const L = squadLook(e), gk = e.line === 'G';
     const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : myKit(), num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, beard: L.beard, gk, scale: 1.0 }, 'cu-' + e.id + e.num + lookSig(e));
@@ -671,10 +689,10 @@ export class UI {
     const opt = (arr, cur, act, names) => arr.map((c, i) => `<button class="chip-b ${c === cur ? 'on' : ''}" data-act="${act}:${c}">${names ? names[i] : c}</button>`).join('');
     const HN = { crop: 'Класика', buzz: 'Під нуль', slick: 'Зачіс', curly: 'Кучері', pony: 'Хвіст', long: 'Довге', mohawk: 'Мохавк', band: 'Пов’язка', bald: 'Лисий' };
     const kits = Object.entries(KITS).map(([id, v]) => `<button class="kit-b ${S.kitId === id ? 'on' : ''}" data-act="cu-kit:${id}"><i style="background:linear-gradient(90deg,${v.kit.main} 0 60%,${v.kit.second} 60% 100%)"></i><span>${v.name}</span></button>`).join('');
-    this.el.custom.innerHTML = `<div class="card-box wide cu-box">
+    redraw(this.el.custom, `<div class="card-box wide cu-box ${open ? '' : 'still'}">
       <header class="sheet-h"><h2>Вигляд · №${e.num}</h2><button class="sq btn-red" data-act="cu-done" aria-label="Готово">${I.check}</button></header>
       <div class="cu-wrap">
-        <div class="cu-prev"><img src="${img}" alt=""/><input class="cu-name" data-cname maxlength="22" value="${e.name.replace(/"/g, '&quot;')}" aria-label="Ім’я"/>
+        <div class="cu-prev"><img src="${img}" alt=""/><input class="cu-name" data-cname maxlength="22" value="${esc(e.name)}" aria-label="Ім’я"/>
           <div class="cu-num"><button class="btn alt" data-act="cu-num:-"><b>−</b></button><span>№${e.num}</span><button class="btn alt" data-act="cu-num:+"><b>+</b></button></div>
           <button class="btn alt" data-act="cu-reset"><b>ЗАЛИШИТИ ЗА ЗАМОВЧУВАННЯМ</b></button></div>
         <div class="cu-opts scroller">
@@ -683,21 +701,22 @@ export class UI {
           <div class="cu-r"><small>Зачіска</small><div class="chips">${opt(ACADEMY.allHairs, L.hair, 'cu-hair', ACADEMY.allHairs.map((h) => HN[h]))}</div></div>
           <div class="cu-r"><small>Колір волосся</small><div class="sws">${sw(ACADEMY.allHairCols, L.hairCol, 'cu-col')}</div></div>
           <div class="cu-r"><small>Борода</small><div class="chips">${['Нема', 'Щетина', 'Вуса', 'Борода'].map((n, i) => `<button class="chip-b ${(L.beard || 0) === i ? 'on' : ''}" data-act="cu-beard:${i}">${n}</button>`).join('')}</div></div>
-        </div></div></div>`;
+        </div></div></div>`, !open);
   }
 
   openSettings() {
-    this.el.settings.hidden = false; this.renderSettings();
+    this.el.settings.hidden = false; this.renderSettings(true);
   }
   closeSettings() { this.el.settings.hidden = true; }
-  renderSettings() {
+  renderSettings(open) {
     const s = S.settings, row = (a, label, on) => `<button class="tg ${on ? 'on' : ''}" data-act="${a}"><span>${label}</span><i><u></u></i></button>`;
     const cb = (k, t) => `<button class="${s.control === k ? 'on' : ''}" data-act="ctl-${k}">${t}</button>`;
     const hb = (k, t) => `<button class="${s.hand === k ? 'on' : ''}" data-act="hand-${k}">${t}</button>`;
     const tdb = (k, t) => `<button class="${s.timeOfDay === k ? 'on' : ''}" data-act="tod-${k}">${t}</button>`;
     const wtb = (k, t) => `<button class="${s.weather === k ? 'on' : ''}" data-act="wth-${k}">${t}</button>`;
     const qb = (k, t) => `<button class="${s.quality === k ? 'on' : ''}" data-act="q-${k}">${t}</button>`;
-    const tab = this.setTab || 'gen';
+    const tab = this.setTab || 'gen', keep = !open && this._st === tab;   // вікно з'являється лише при відкритті, сторінка — при зміні вкладки
+    this._st = tab;
     const tabs = [['gen', 'Загальне', I.gear], ['match', 'Матч', I.ball], ['cam', 'Камера', I.full], ['ctl', 'Керування', I.up]];
     const pages = {
       gen: `${row('set-sfx', 'Звуки', s.sfx)}${row('set-music', 'Музика', s.music)}${row('set-haptics', 'Вібрація', s.haptics)}
@@ -713,18 +732,18 @@ export class UI {
         <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
         <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><button class="btn alt joy-mv" data-act="joy-move"><b>ПЕРЕМІСТИТИ</b></button><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>`,
     };
-    this.el.settings.innerHTML = `<div class="card-box wide st-box">
+    redraw(this.el.settings, `<div class="card-box wide st-box ${open ? '' : 'still'}">
       <header class="sheet-h"><h2>Налаштування</h2><button class="sq btn-red" data-act="close-settings" aria-label="Закрити">${I.close}</button></header>
       <div class="st-wrap">
         <nav class="st-tabs">${tabs.map(([k, t, ic]) => `<button class="${tab === k ? 'on' : ''}" data-act="set-tab:${k}"><i>${ic}</i><span>${t}</span></button>`).join('')}</nav>
-        <div class="set-grid st-${tab}">${pages[tab]}</div>
-      </div></div>`;
+        <div class="set-grid st-${tab} ${keep ? 'still' : ''}">${pages[tab]}</div>
+      </div></div>`, keep);
   }
 
   // ---------------------------------------------------------------- пауза, результат
   pause() {
     const g = this.game;
-    if (g.sm.name !== 'MATCH' || !g.match.isPlaying()) return;
+    if (g.sm.name !== 'MATCH' || this.joyEdit || !g.match.isPlaying()) return;
     g.match.pause(); this.el.pause.hidden = false;
     // онлайн: гра не зупиняється (час спільний), пенальті немає, а вихід — це здача матчу
     const on = !!(g.online && g.online.inMatch());
@@ -737,10 +756,11 @@ export class UI {
   }
 
   showResult(r) {
+    this.el.pause.hidden = true;
     if (r.online) return this.online.showResult(r);
     const spec = r.spec, win = r.outcome === 'win', draw = r.outcome === 'draw';
     const extras = [];
-    if (r.cup) extras.push(['gold', I.trophy, `Кубок ${spec.leagueName.toLowerCase()} завойовано`]);
+    if (r.cup) extras.push(['gold', I.trophy, `Кубок ${LEAGUE_GEN[spec.league]} завойовано`]);
     if (r.promoted != null) extras.push(['green', I.up, `Підвищення: ${LEAGUES[r.promoted].name}`]);
     if (r.newSeason) extras.push(['green', I.up, 'Новий сезон: суперники сильніші']);
     if (r.tickets) extras.push(['mint', I.ticket, `+${r.tickets} ${r.tickets === 1 ? 'квиток' : 'квитки'}`]);

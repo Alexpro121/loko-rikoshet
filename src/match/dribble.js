@@ -16,7 +16,7 @@ export function dribbleStep(st, p, ball, dx, dz, dt) {
   const ps = Math.hypot(p.mvx || p.vx || 0, p.mvz || p.vz || 0);
   // м'яч утік задалеко (зіткнення, телепорт) — повертаємо до ноги, щоб ведення не обривалось
   if (d > 3.2) { ball.x = p.x + dx * 0.8; ball.z = p.z + dz * 0.8; ball.vx = dx * ps; ball.vz = dz * ps; st.t = 0; return false; }
-  const reach = 1.15, overrun = ahead < 0.25;                          // гравець наздогнав чи обігнав м'яч — підбиває одразу
+  const reach = 0.95, overrun = ahead < 0.25;                          // гравець наздогнав чи обігнав м'яч — підбиває одразу
   if (d < reach && st.t > 0.16 && (newStep || overrun || st.t > 0.55)) {
     // дотик: м'яч іде в бажаний бік трохи швидше за гравця; що далі він уже попереду, то легше підбиває
     const v = Math.max(2.2, ps * 1.15 + 1.2 - Math.max(0, ahead - 0.5) * 2.5);

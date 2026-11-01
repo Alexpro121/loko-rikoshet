@@ -1400,3 +1400,6 @@ button.purse:active { transform: translate(calc(var(--U) * 0.4), calc(var(--U) *
 @media (max-aspect-ratio: 8/5) { .rs { grid-template-columns: 1fr; gap: calc(var(--u) * 3); align-content: start; } .rs-t { font-size: calc(var(--u) * 14); } }
 @media (max-height: 470px) { .rs-t { font-size: calc(var(--u) * 13); } .rs-fact { display: none; } .rs-score b { font-size: calc(var(--u) * 8); } .rs-r { padding: 16px 18px 14px; } }
 @media (prefers-reduced-motion: reduce) { .overlay.result *, .overlay.result { animation: none !important; } .rs-lines li, .rs-total { opacity: 1; } .rs-conf { display: none; } .rs-total.paid .rs-stamp { opacity: 0.9; transform: rotate(-12deg); } }
+
+/* повторне малювання того самого вікна: вхідні анімації не повторюються */
+.sheet.still, .card-box.still, .settings .card-box.st-box.still, .settings .set-grid.still, .sheet.still .on-code s { animation: none; }

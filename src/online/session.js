@@ -9,6 +9,7 @@ import { HostLink } from './host.js';
 import { GuestMatch } from './guest.js';
 import { OP, toWire, fromWire, matchClub, flagSvg, applyResult } from './profile.js';
 
+const BYE_MS = 400;                                          // «bye» має встигнути піти, перш ніж закриємо з'єднання
 const pickEnv = (v, list) => (v === 'random' || !list.includes(v) ? list[(Math.random() * list.length) | 0] : v);
 
 export class Online {
@@ -51,7 +52,10 @@ export class Online {
     net.on('back', () => {
       if (this.net !== net) return;
       clearTimeout(this.lostT); this.hello();
-      if (this.state === 'match') { if (this.link) this.ui.hud.warn(null); this.ui.toast('Суперник знову на зв’язку'); }
+      if (this.state === 'match') {
+        if (this.link) { this.ui.hud.warn(null); this.link.resync(); this.chkGuest = true; }
+        this.ui.toast('Суперник знову на зв’язку');
+      }
       else if (this.state !== 'result') { this.state = 'lobby'; this.ready = { me: false, opp: false }; }
       this.refresh();
     });
@@ -67,15 +71,23 @@ export class Online {
     });
     net.on('gone', () => { if (this.net === net) this.dropped(); });
   }
-  hello() { this.net.send({ t: 'hello', v: PROTO, p: toWire() }); }
+  hello() { this.net.send({ t: 'hello', v: PROTO, p: toWire(), st: this.state }); }
+  /** Свій клуб змінився (редактор, тренування, скаут): суперник має грати проти нього, а не проти старого привітання. */
+  sync() { if (this.net && this.net.open && this.state !== 'match') this.hello(); }
 
   onMsg(m) {
     switch (m.t) {
       case 'hello':
         if (m.v !== PROTO) { this.close(); this.setErr('У суперника інша версія гри — оновіть сторінку'); return; }
         { const first = !this.opp; this.opp = fromWire(m.p); if (first) this.ui.toast('Суперник: ' + this.opp.club.name); }
+        if (this.chkGuest) {                                 // гість повернувся без матчу (оновив сторінку): наздоганяє гру, що триває
+          this.chkGuest = false;
+          if (m.st !== 'match' && this.state === 'match' && this.link) { this.net.send({ t: 'start', env: this.env }); this.link.sendRef(); this.link.resync(); }
+        }
         this.refresh(); return;
-      case 'full': this.close(); this.setErr('Кімната вже зайнята'); return;
+      case 'full':
+        if (this.state === 'match') { this.dropped(); return; }   // місце вже зайняв хтось інший: повертатися нікуди
+        this.close(); this.setErr('Кімната вже зайнята'); return;
       case 'ready':
         this.ready.opp = !!m.on; this.refresh();
         if (this.role === 'host' && this.ready.me && this.ready.opp) this.startMatch();
@@ -91,6 +103,7 @@ export class Online {
 
   setReady(on) {
     if (!this.net || !this.net.open || !this.opp) return;
+    if (on) this.hello();                                    // надійний канал упорядкований: профіль дійде раніше за «готовий»
     this.ready.me = on; this.net.send({ t: 'ready', on }); audio.click();
     if (this.role === 'host' && this.ready.me && this.ready.opp) this.startMatch(); else this.refresh();
   }
@@ -111,7 +124,7 @@ export class Online {
 
   startMatch() {
     const env = { time: pickEnv(S.settings.timeOfDay, ['day', 'dusk', 'night']), weather: pickEnv(S.settings.weather, ['clear', 'clear', 'cloudy', 'rain', 'snow', 'fog']) };
-    this.net.send({ t: 'start', env });
+    this.hello(); this.net.send({ t: 'start', env }); this.env = env;
     this.ready = { me: false, opp: false };
     const spec = this.buildSpec(this.me(), this.opp, env);
     if (this.link) this.link.uninstall();
@@ -137,12 +150,13 @@ export class Online {
   finish(r) {
     if (r.applied) return r.rew;
     r.applied = true;
-    if (this.role === 'host' && !r.forfeit && !r.void) this.net.send({ t: 'end', me: r.me, opp: r.opp, scorers: r.scorers });
+    if (this.net && this.role === 'host' && !r.forfeit && !r.void) this.net.send({ t: 'end', me: r.me, opp: r.opp, scorers: r.scorers });
     this.state = 'result';
     if (this.link) { this.link.uninstall(); }
     if (r.void) return (r.rew = null);
     const mine = (r.scorers || []).filter((s) => s.mine).map((s) => s.name);
     r.rew = applyResult(r.outcome, r.me, this.oppRating ?? 1000, mine);
+    if (this.net && !r.forfeit) this.hello();                // новий рейтинг і рівень — для реваншу й картки в лобі
     return r.rew;
   }
   guestEnd(m) {
@@ -158,17 +172,24 @@ export class Online {
       this.net && this.net.send({ t: 'bye' });
       const sp = this.role === 'host' ? { club: matchClub(this.opp.club), home: matchClub(OP.club) } : this.hudSpec;
       const r = { online: true, outcome: 'loss', me: 0, opp: 3, spec: sp, scorers: [], forfeit: 'me' };
-      this.finish(r); this.close(); this.g.sm.go('MENU'); this.ui.toast('Технічна поразка 0:3');
+      this.finish(r); this.close(BYE_MS); this.g.sm.go('MENU'); this.ui.toast('Технічна поразка 0:3');
       return;
     }
-    this.net && this.net.send({ t: 'bye' }); this.close(); this.refresh();
+    this.net && this.net.send({ t: 'bye' }); this.close(BYE_MS); this.refresh();
+  }
+  /** Матч обірвано: гра за екраном результату не йде далі (ні голів, ні другого фіналу з нагородами). */
+  stopMatch() {
+    const m = this.g.match; if (!m) return;
+    m.exit(); this.ui.hud.warn(null); this.ui.hud.clearGoal();
+    if (!this.guest) { m.prevPhase = 'idle'; m.phase = 'paused'; }   // стан RESULT далі викликає update: на паузі він лише малює
+    else this.g.flipCam = true;                                      // тло за екраном результату не розвертається (меню скине)
   }
   /** Суперник вийшов сам: у матчі — наша технічна перемога. */
   oppLeft() {
     if (this.state === 'match') {
       const sp = this.role === 'host' ? { club: matchClub(this.opp.club), home: matchClub(OP.club) } : this.hudSpec;
       const r = { online: true, outcome: 'win', me: 3, opp: 0, spec: sp, scorers: [], forfeit: 'opp' };
-      this.close(); this.state = 'result';
+      this.stopMatch(); this.close(); this.state = 'result';
       this.g.sm.go('RESULT', r);
       return;
     }
@@ -180,7 +201,7 @@ export class Online {
   dropped() {
     if (this.state === 'match') {
       const sp = this.role === 'host' ? { club: matchClub(this.opp.club), home: matchClub(OP.club) } : this.hudSpec;
-      this.close(); this.state = 'result';
+      this.stopMatch(); this.close(); this.state = 'result';
       this.g.sm.go('RESULT', { online: true, outcome: 'draw', me: 0, opp: 0, spec: sp, scorers: [], void: true });
       return;
     }
@@ -192,13 +213,17 @@ export class Online {
     if (!this.net || !this.net.open || !this.opp) { this.ui.toast('Суперника вже немає в кімнаті'); return false; }
     this.state = 'lobby'; this.setReady(true); return true;
   }
-  toLobby() { if (this.net && this.net.open) this.state = 'lobby'; else this.close(); this.ready = { me: false, opp: false }; if (this.net) this.net.send({ t: 'ready', on: false }); }
+  toLobby() {
+    if (!this.net || !this.net.open) { this.close(); return; }
+    this.state = 'lobby';
+    if (this.ready.me) { this.ready.me = false; this.net.send({ t: 'ready', on: false }); }   // «готовий» суперника лишається: він не повториться
+  }
 
-  close() {
-    clearTimeout(this.lostT);
+  close(linger = 0) {
+    clearTimeout(this.lostT); this.chkGuest = false;
     if (this.link) { this.link.uninstall(); this.link = null; }
     this.g.link = null;
-    if (this.net) { this.net.close(); this.net = null; }
+    if (this.net) { this.net.close(linger); this.net = null; }
     this.guest = null; this.opp = null; this.ready = { me: false, opp: false };
     if (this.state !== 'result') this.state = 'idle';
     this.code = '';

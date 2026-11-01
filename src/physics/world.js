@@ -3,6 +3,21 @@ import { stepFree } from './ballmodel.js';
 
 const { L, W, G, CH, GOAL_D, POST_R, GOAL_H } = PITCH;
 const BAR_Y = GOAL_H - POST_R;          // вісь поперечини (верх рамки — на висоті воріт)
+const WALL_GAP = 0.1;                   // с: два дотики борту швидше за це — один рикошет (стик борту й зрізаного кута)
+const BODY_VY_MAX = 14;                 // од/с: м'яч, відбитий тілом угору, не летить вище ~9 од
+
+/**
+ * На якій частці шляху (x0, z0) → (x1, z1) м'яч торкається кола (cx, cz) радіуса rr; −1 — не торкається або вже всередині.
+ * Трохи всередині кола: звичайний відскок після цього спрацює напевно. Спільне для фізики й пунктиру прицілу.
+ */
+export function sweepCircle(x0, z0, x1, z1, cx, cz, rr) {
+  const ex = x1 - x0, ez = z1 - z0, e2 = ex * ex + ez * ez;
+  if (e2 <= 1e-8) return -1;
+  const fx = x0 - cx, fz = z0 - cz, rc = rr * 0.999, b = fx * ex + fz * ez, c = fx * fx + fz * fz - rc * rc, disc = b * b - e2 * c;
+  if (c <= 0 || disc <= 0) return -1;
+  const t = (-b - Math.sqrt(disc)) / e2;
+  return t >= 0 && t <= 1 ? t : -1;
+}
 
 /**
  * Відскок від нерухомої перешкоди з нормаллю (nx, nz): нормальна швидкість × −e, дотична втрачає частину від тертя
@@ -25,7 +40,7 @@ export class World {
     this.segs = [];       // x1,z1,x2,z2,e (плоский масив)
     this.posts = [];      // x,z,r
     this.bodies = [];
-    this.ball = { x: 0, z: 0, y: 0, vx: 0, vy: 0, vz: 0, w: 0, r: PITCH.R, gb: 0 };
+    this.ball = { x: 0, z: 0, y: 0, vx: 0, vy: 0, vz: 0, w: 0, r: PITCH.R, gb: 0, wc: 0 };
     this.buildStatic();
   }
 
@@ -48,6 +63,7 @@ export class World {
   integrate(s, h, cb, dyn) {
     const r = s.r, inNet = s.x > L + 0.2 || s.x < -L - 0.2;
     const y0 = s.y;
+    if (s.wc > 0) s.wc -= h;
     s.gb = stepFree(s, h, inNet);                                       // тяжіння, опір, Магнус, відскок від газону / котіння
     const x0 = s.x, z0 = s.z;
     s.x += s.vx * h; s.z += s.vz * h;
@@ -69,7 +85,7 @@ export class World {
           if (t >= 0 && t <= 1 && along > -r / len && along < 1 + r / len) {
             s.x = cx; s.z = cz;
             const qx = nx * sd, qz = nz * sd, vn = s.vx * qx + s.vz * qz;
-            if (vn < 0) { const e = sg[i + 4]; bounce(s, qx, qz, vn, e, e > 0.5 ? PHYS.wallMu : 0); if (-vn > 1.5) { hit = 1; if (cb && cb.wall) cb.wall(qx, qz, -vn, e); } }
+            if (vn < 0) { const e = sg[i + 4]; bounce(s, qx, qz, vn, e, e > 0.5 ? PHYS.wallMu : 0); if (-vn > 1.5) { hit = 1; if (cb && cb.wall) this.wallHit(s, cb, qx, qz, -vn, e); } }
             continue;
           }
         }
@@ -84,7 +100,7 @@ export class World {
         if (vn < 0) {
           const e = sg[i + 4];
           bounce(s, nx, nz, vn, e, e > 0.5 ? PHYS.wallMu : 0);
-          if (-vn > 1.5) { hit = 1; if (cb && cb.wall) cb.wall(nx, nz, -vn, e); }
+          if (-vn > 1.5) { hit = 1; if (cb && cb.wall) this.wallHit(s, cb, nx, nz, -vn, e); }
         }
       }
     }
@@ -139,8 +155,14 @@ export class World {
     if (!inMouth && Math.abs(s.x) > L) s.x = s.x > 0 ? L : -L;
     if (Math.abs(s.z) > W + 0.1 && Math.abs(s.x) <= L) s.z = s.z > 0 ? W - r : -W + r;
 
-    if (dyn) this.players(s, cb);
+    if (dyn) this.players(s, cb, x0, z0, y0);
     return hit;
+  }
+
+  /** Подія борту для гри: м'яч у стику двох відрізків б'ється об них майже одночасно, це один рикошет. */
+  wallHit(s, cb, nx, nz, vn, e) {
+    if (e >= 0.5) { if (s.wc > 0) return; s.wc = WALL_GAP; }
+    cb.wall(nx, nz, vn, e);
   }
 
   /**
@@ -148,8 +170,19 @@ export class World {
    * воротар — ще й 3D-капсули частин тіла за скелетом {ax, ay, az, bx, by, bz, r, vx, vy, vz}: руки ловлять і високі м'ячі.
    * Відскок — у 3D, відносно швидкості тієї частини тіла.
    */
-  players(s, cb) {
-    const r = s.r, bd = this.bodies, cy = r + s.y;
+  players(s, cb, x0, z0, y0) {
+    const r = s.r, bd = this.bodies;
+    // коло гравця — безперервно, як стовп: сильний удар за крок проходить більше за радіус, і без цього м'яч виштовхувало на
+    // далекий бік кола, без відскоку. Ставимо м'яч у першу точку дотику на шляху кроку, далі звичайний відскок
+    let tm = 2;
+    for (let i = 0; i < bd.length; i++) {
+      const o = bd[i];
+      if (!o.on || !(o.r > 0) || (o.capsOnly && o.caps && o.caps.n)) continue;
+      const t = sweepCircle(x0, z0, s.x, s.z, o.x, o.z, r + o.r);
+      if (t >= 0 && t < tm && y0 + (s.y - y0) * t < o.h) tm = t;
+    }
+    if (tm <= 1) { s.x = x0 + (s.x - x0) * tm; s.z = z0 + (s.z - z0) * tm; s.y = y0 + (s.y - y0) * tm; }
+    const cy = r + s.y;
     for (let i = 0; i < bd.length; i++) {
       const o = bd[i];
       if (!o.on) continue;
@@ -168,7 +201,7 @@ export class World {
         const vn = (s.vx - cvx) * nx + (s.vy - cvy) * ny + (s.vz - cvz) * nz;
         const speed = Math.sqrt(s.vx * s.vx + s.vy * s.vy + s.vz * s.vz);
         if (cb && cb.body && cb.body(o, vn, nx, nz, speed)) continue;
-        if (vn < 0) { const j = -(1 + o.e) * vn; s.vx += j * nx; s.vy += j * ny; s.vz += j * nz; s.w *= 0.4; }
+        if (vn < 0) { const j = -(1 + o.e) * vn; s.vx += j * nx; s.vy += j * ny; s.vz += j * nz; s.w *= 0.4; if (s.vy > BODY_VY_MAX) s.vy = BODY_VY_MAX; }
         const out = s.vx * nx + s.vz * nz;
         if (out < o.sep) { s.vx += nx * (o.sep - out); s.vz += nz * (o.sep - out); }
         if (s.y > 0 && s.vy === 0) s.vy = 0.01;                           // відбитий угору м'яч — у польоті

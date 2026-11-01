@@ -18,6 +18,7 @@ const NN = NODES.length;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const _q = [0, 0, 0, 0], _fw = new THREE.Vector3(), _qq = new THREE.Quaternion(), _cp = { x: 0, z: 0 };
 const GK_THROW = 1.25;
+const STALE_MS = 1500;                                  // звук і частинки, старші за це (вкладка була у фоні), вже не грають
 const SWAP_SND = { goal: 'concede', concede: 'goal', win: 'lose', lose: 'win' };
 const SND_OK = new Set(['kick', 'wall', 'pass', 'save', 'whistle', 'horn', 'goal', 'concede', 'bell', 'rumble', 'slide', 'clap', 'thud', 'crowd', 'win', 'lose']);
 
@@ -44,7 +45,7 @@ export class GuestMatch {
     this.solo.walk.hide(); v.particles.clear(); this.solo.world.netPush = null;
     for (const p of v.players) p.root.visible = false;               // до першого кадру нікого не видно
     this.sk = spec.oppSquad.map((e) => skillOf(e));
-    this.frames = []; this.pool = []; this.evq = []; this.off = null; this.jit = 0; this.dly = 140; this.dlyT = 140;
+    this.frames = []; this.pool = []; this.evq = []; this.off = null; this.jit = 0; this.dly = 140; this.dlyT = 140; this.gap = 50; this.prevT = 0;
     this.lastRx = performance.now(); this.lastSeq = 0; this.time = 0; this.camSeq = 0;
     this.phase = 'intro'; this.flags = 0; this.bs = 'idle'; this.aiming = false; this.slow = false; this.takerI = -1; this.danger = 0;
     this.hdr = null; this.ov = null; this.cv = null; this.beatT = 0; this.aimSent = 0; this.lagShown = false;
@@ -73,7 +74,10 @@ export class GuestMatch {
     const smp = now - h.t;
     if (this.off === null || smp < this.off) this.off = smp; else this.off += (smp - this.off) * 0.004;
     this.jit = this.jit * 0.94 + (smp - this.off) * 0.06;
-    this.dlyT = clamp(75 + 2.2 * this.jit, 80, 320);
+    // запас — півтора реальні інтервали між кадрами (20 Гц — 75 мс; слабкий господар шле рідше) плюс тремтіння мережі
+    if (this.prevT) this.gap += (clamp(h.t - this.prevT, 20, 250) - this.gap) * 0.06;
+    this.prevT = h.t;
+    this.dlyT = clamp(this.gap * 1.5 + 2.2 * this.jit, 80, 320);
     this.frames.push({ t: h.t, h, a });
     if (this.frames.length > 48) this.pool.push(this.frames.shift().a);
   }
@@ -135,7 +139,11 @@ export class GuestMatch {
     this.dly += (this.dlyT - this.dly) * Math.min(1, rawDt * 1.5);
     const rt = this.renderT();
     // події — у мить свого кадру
-    while (this.evq.length && (this.off === null || this.evq[0].ht <= rt)) this.applyEvent(this.evq.shift().e);
+    while (this.evq.length && (this.off === null || this.evq[0].ht <= rt)) {
+      const q = this.evq.shift(), e = q.e;
+      if (rt - q.ht > STALE_MS && Array.isArray(e) && (e[0] === 'fx' || e[0] === 'crowd' || (e[0] === 'snd' && e[1] !== 'crowd'))) continue;   // рівень трибун — стан, решта — миттєві ефекти
+      this.applyEvent(e);
+    }
     const fr = this.frames;
     if (fr.length) {
       while (fr.length > 2 && fr[1].t <= rt) this.pool.push(fr.shift().a);
@@ -145,7 +153,7 @@ export class GuestMatch {
       this.header(al < 0.5 ? A.h : B.h, A.h, B.h, al, rawDt);
     }
     // зв'язок підвис: господар згорнув гру чи мережа пропала
-    const lag = now - this.lastRx > 1500;
+    const lag = !this.over && now - this.lastRx > 1500;
     if (lag !== this.lagShown) { this.lagShown = lag; hud.warn(lag ? 'ЗВ’ЯЗОК ІЗ СУПЕРНИКОМ…' : null); }
     v.stands.update(rawDt, this.time); v.weather.update(rawDt); v.surround.update(rawDt); v.pitch.decals.update(rawDt);
     v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
@@ -258,6 +266,7 @@ export class GuestMatch {
   pointerMove(x, y) { if (this.bs === 'aim') { this.ptr.x = x; this.ptr.y = y; this.aimDirty = true; } }
   pointerUp() {
     if (this.bs !== 'aim') return;
+    if (this.joyMode && this.ui.joyActive) return;       // відпустили інший палець, джойстик ще тримають (свій відпуск спершу знімає joyActive)
     this.updateAim();
     this.aiming = false; this.hideAim();
     const sh = this.shot;
@@ -300,7 +309,10 @@ export class GuestMatch {
     if (this.aimDirty) {
       const P = v.players;
       for (let i = 0; i < 11; i++) { const r = P[i].root.position, c = this.circ[i]; c.x = r.x; c.z = r.z; }
-      this.path.setCircles(this.circ, null);
+      // суперник упритул до м'яча на мить не блокує удар — приціл теж його не бачить
+      const cs = (this.aimC ??= []); cs.length = 0;
+      for (let i = 0; i < 11; i++) { const c = this.circ[i]; if (Math.hypot(c.x - b.x, c.z - b.z) >= 1.9) cs.push(c); }
+      this.path.setCircles(cs, null);
       this.path.simulate(b.x, b.z, sh.vx, sh.vz, ONLINE_AIM.bounces);
       this.aimDirty = false;
       v.aim.mat.color.setHex(0xffffff);
@@ -318,6 +330,7 @@ export class GuestMatch {
 
   exit() {
     const g = this.game, v = this.view;
+    this.over = true;
     this.hideAim(); this.aiming = false; this.bs = 'idle';
     if (this.slow) { this.slow = false; this.ui.setSlow(false); audio.slowmo(false); }
     g.flipCam = false; g.renderer.toneMappingExposure = 1.1;

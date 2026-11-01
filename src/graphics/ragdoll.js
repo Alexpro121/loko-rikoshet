@@ -63,7 +63,7 @@ export class Ragdoll {
   constructor(p, vel, push, trip = true, opts = {}) {
     const s = p.root.scale.x || 0.82;
     p.root.updateMatrixWorld(true);
-    this.p = p; this.s = s; this.t = 0; this.g = opts.g ?? G; this.dive = !!opts.dive; this.active = this.dive || !!opts.active; this.local = false; this.impact = 0; this.landT = -1; this.tone = 1;
+    this.p = p; this.s = s; this.t = 0; this.g = opts.g ?? G; this.dive = !!opts.dive; this.active = this.dive || !!opts.active; this.local = false; this.impact = 0; this.landT = -1; this.tone = 1; this.acc = 0;
     this.pos = []; this.prev = []; this.r = [];
     const defs = PTS(p, p.headY ?? 0.29);
     for (let i = 0; i < defs.length; i++) {
@@ -99,7 +99,7 @@ export class Ragdoll {
    * само обертається й групується, як спортсмен у повітрі; після удару ціль — поза приземлення (згрупувався, нижня рука
    * вздовж трави, м'яч притиснутий), тож тіло лягає кероване, а не розсипається.
    */
-  setDrive(target, kOf, local = false) {
+  setDrive(target, kOf, local = false, dt = 1 / 60) {
     this.local = local;
     if (local) {
       // у системі таза: тулуб падає вільно (фізика), а кінцівки й голова тримають позу відносно нього
@@ -110,7 +110,7 @@ export class Ragdoll {
     this.com(target, _o);
     // після приземлення ціль пози змінюється лише плавно: інакше кожен ривок анімації (руки, що ще шукають м'яч) м'язи
     // передають тілу, яке лежить і тертям тримається за газон, — руки й корпус смикаються
-    const a = this.landT >= 0 ? 0.12 : 1;
+    const a = this.landT >= 0 ? 1 - Math.exp(-7.7 * dt) : 1;
     for (let i = 0; i < this.pos.length; i++) { _v.subVectors(target[i], _o); if (a < 1) this.dl[i].lerp(_v, a); else this.dl[i].copy(_v); this.dk[i] = kOf(i); }
   }
 
@@ -124,7 +124,11 @@ export class Ragdoll {
 
   /** Крок симуляції. Повертає true, коли тіло вже лягло й майже не рухається. */
   step(dt) {
-    const n = Math.max(1, Math.round(Math.min(dt, 1 / 30) / H0)), h = H0, s = this.s;   // сталий підкрок 1/240 с: швидкості точок не залежать від частоти кадрів
+    if (dt <= 0) return false;                                          // пауза, hit-stop: тіло стоїть
+    // сталий підкрок 1/240 с із накопиченням залишку: час фізики дорівнює часу гри за будь-якої частоти кадрів і в слоумо
+    this.acc += Math.min(dt, 1 / 30);
+    const n = Math.floor((this.acc + 1e-9) / H0), h = H0, s = this.s;
+    this.acc -= n * H0;
     this.t += dt;
     // після удару об газон м'язи на мить піддаються (тіло «ляскає» об траву), потім знову тримають позу, але м'якше
     // удар об газон м'язи лише трохи «пропускають» (амортизація), і за ~0.25 с знову тримають тіло — людина не розсипається

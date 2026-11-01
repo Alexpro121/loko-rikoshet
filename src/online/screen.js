@@ -138,30 +138,31 @@ export class OnlineScreen {
 
   // ------------------------------------------------------------------ дії
   input(el) {
-    if (el.matches('[data-oname]')) { const v = plain(el.value).toUpperCase().slice(0, 14); if (v) { OP.club.name = v; saveOP(); } return true; }
-    if (el.matches('[data-ocity]')) { OP.club.city = plain(el.value).slice(0, 18); saveOP(); return true; }
+    if (el.matches('[data-oname]')) { const v = plain(el.value).toUpperCase().slice(0, 14); if (v) { OP.club.name = v; saveOP(); this.s.sync(); } return true; }
+    if (el.matches('[data-ocity]')) { OP.club.city = plain(el.value).slice(0, 18); saveOP(); this.s.sync(); return true; }
     if (el.matches('[data-ocode]')) { const v = cleanCode(el.value); this.codeIn = v; if (el.value !== v) el.value = v; return true; }
     return false;
   }
   act(a, el) {
     const s = this.s, [k, x, y] = a.split(':');
     const re = () => this.ui.renderPanel();
+    const ed = () => { s.sync(); return re(); };             // свій клуб змінився — суперник теж має це бачити
     switch (k) {
       case 'on-tab': audio.click(); this.tab = x; return re();
       case 'on-sel': audio.click(); this.sel = +x; return re();
-      case 'on-train': { const c = trainHero(+x, y); if (c === false) { audio.deny(); this.ui.toast(OP.heroes[+x] && OP.heroes[+x].stats[y] >= 99 ? 'Навичка на максимумі' : 'Не вистачає монет — грай онлайн-матчі'); } else audio.buy(); return re(); }
+      case 'on-train': { const c = trainHero(+x, y); if (c === false) { audio.deny(); this.ui.toast(OP.heroes[+x] && OP.heroes[+x].stats[y] >= 99 ? 'Навичка на максимумі' : 'Не вистачає монет — грай онлайн-матчі'); } else audio.buy(); return ed(); }
       case 'on-scout': {
         const h = scoutHero(+x);
         if (!h) { audio.deny(); this.ui.toast('Скаут коштує ' + SCOUT_PRICE + ' монет'); return; }
-        audio.win(); this.ui.toast((RARITY[h.rar] || RARITY.c).name + ': ' + h.name + (TRAITS[h.trait] ? ' · ' + TRAITS[h.trait].name : '')); return re();
+        audio.win(); this.ui.toast((RARITY[h.rar] || RARITY.c).name + ': ' + h.name + (TRAITS[h.trait] ? ' · ' + TRAITS[h.trait].name : '')); return ed();
       }
-      case 'on-col': OP.club.flag.c[+x] = y; saveOP(); audio.click(); return re();
-      case 'on-pat': OP.club.flag.pat = x; saveOP(); audio.click(); return re();
-      case 'on-emb': OP.club.flag.em = x; saveOP(); audio.click(); return re();
-      case 'on-gk': OP.club.gk = x; saveOP(); audio.click(); return re();
-      case 'on-randflag': { const n = newClub().club; OP.club.flag = n.flag; OP.club.gk = n.gk; saveOP(); audio.click(); return re(); }
+      case 'on-col': OP.club.flag.c[+x] = y; saveOP(); audio.click(); return ed();
+      case 'on-pat': OP.club.flag.pat = x; saveOP(); audio.click(); return ed();
+      case 'on-emb': OP.club.flag.em = x; saveOP(); audio.click(); return ed();
+      case 'on-gk': OP.club.gk = x; saveOP(); audio.click(); return ed();
+      case 'on-randflag': { const n = newClub().club; OP.club.flag = n.flag; OP.club.gk = n.gk; saveOP(); audio.click(); return ed(); }
       case 'on-reset':
-        if (el.dataset.arm) { resetOP(); audio.horn(); this.ui.toast('Новий клуб: ' + OP.club.name); this.sel = 1; return re(); }
+        if (el.dataset.arm) { resetOP(); audio.horn(); this.ui.toast('Новий клуб: ' + OP.club.name); this.sel = 1; return ed(); }
         el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО? ГЕРОЇ Й МОНЕТИ ЗНИКНУТЬ'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'НОВИЙ ВИПАДКОВИЙ КЛУБ'; }, 3000); return;
       case 'on-create': audio.click(); audio.unlock(); return s.create();
       case 'on-join': { audio.click(); audio.unlock(); const inp = this.ui.el.panel.querySelector('[data-ocode]'); return s.join(inp ? inp.value : this.codeIn); }

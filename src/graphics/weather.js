@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
+const _qRain = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.1);
 const X = 78, Z = 52, Y = 28;
 
 /** Погода: дощ і сніг — дві пули InstancedMesh, що падають над ареною й «загортаються» вгору. */
@@ -31,7 +32,7 @@ export class Weather {
       if (this.y[i] < 0) { this.y[i] = Y; this.x[i] = (Math.random() * 2 - 1) * X; this.z[i] = (Math.random() * 2 - 1) * Z; }
       if (this.x[i] < -X) this.x[i] += 2 * X;
       _p.set(this.x[i], this.y[i], this.z[i]);
-      if (rain) { _s.set(1, 1, 1); _q.setFromAxisAngle(_p.clone().set(0, 0, 1), 0.1); } else { _s.set(1, 1, 1); _q.identity(); }
+      if (rain) { _s.set(1, 1, 1); _q.copy(_qRain); } else { _s.set(1, 1, 1); _q.identity(); }
       _m.compose(_p, _q, _s); mesh.setMatrixAt(i, _m);
     }
     mesh.instanceMatrix.needsUpdate = true;

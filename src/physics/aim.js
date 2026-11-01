@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PITCH } from '../config.js';
+import { sweepCircle } from './world.js';
 
 const MAXP = 520;
 const S = { x: 0, z: 0, y: 0, vx: 0, vy: 0, vz: 0, w: 0, r: PITCH.R, gb: 0 };
@@ -29,7 +30,16 @@ export class AimPath {
     this.x[0] = x; this.z[0] = z; this.y[0] = 0; this.cum[0] = 0; n = 1;
     let bounces = 0, px = x, pz = z;
     for (let i = 0; i < 960 && n < MAXP - 1; i++) {
+      const ax = S.x, az = S.z, ay = S.y;
       const hit = wd.integrate(S, h, null, false);
+      if (this.nc > 0 && i > 2) {                     // гравці безперервно, як у реальній фізиці: м'яч у першій точці дотику на шляху кроку
+        let tm = 2;
+        for (let k = 0; k < this.nc; k++) {
+          const t = sweepCircle(ax, az, S.x, S.z, this.circles[k * 4], this.circles[k * 4 + 1], S.r + this.circles[k * 4 + 2]);
+          if (t >= 0 && t < tm && ay + (S.y - ay) * t < 2.1) tm = t;
+        }
+        if (tm <= 1) { S.x = ax + (S.x - ax) * tm; S.z = az + (S.z - az) * tm; S.y = ay + (S.y - ay) * tm; }
+      }
       d += Math.hypot(S.x - px, S.z - pz); px = S.x; pz = S.z;
       if (S.gb && !this.land) { this.land = true; this.landX = S.x; this.landZ = S.z; }
       if (hit) {

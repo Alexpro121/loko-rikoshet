@@ -104,11 +104,13 @@ export function defaultSquad() {
 export function ensureSquad() {
   const ok = Array.isArray(S.squad) && S.squad.length === 11 && S.squad[0] && S.squad[0].stats;
   if (!ok) { const d = defaultSquad(); S.squad = d.squad; S.bench = d.bench; commit(); return; }
-  if (!S.squad.every((e) => e.real) || !Array.isArray(S.bench)) {
-    // старий збережений склад: залишаємо навички й досвід, але даємо реальні імена та номери
+  const legacy = (e) => !e.real && !String(e.id).startsWith('g');                // випускник (g…) міг лишитись без позначки, але він справжній
+  if (S.squad.some(legacy) || !Array.isArray(S.bench)) {
+    // старий збережений склад: залишаємо навички й досвід, але даємо реальні імена та номери; наявний запас не чіпаємо
     const d = defaultSquad();
-    S.squad = S.squad.map((e, i) => { const t = d.squad[i]; return { ...e, id: t.id, name: t.name, num: t.num, pos: t.pos, real: true, skin: t.skin, hair: t.hair, hairCol: t.hairCol }; });
-    S.bench = d.bench; commit();
+    S.squad = S.squad.map((e, i) => { if (!legacy(e)) return e; const t = d.squad[i]; return { ...e, id: t.id, name: t.name, num: t.num, pos: t.pos, real: true, skin: t.skin, hair: t.hair, hairCol: t.hairCol }; });
+    const ids = new Set(S.squad.map((e) => e.id));
+    S.bench = (Array.isArray(S.bench) ? S.bench : d.bench).filter((e) => !ids.has(e.id)); commit();
   }
 }
 
@@ -176,7 +178,7 @@ export function squadLook(e) {
   return { skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, num: e.num };
 }
 /** Підпис вигляду для кешу портретів. */
-export const lookSig = (e) => [e.skin, e.hair, e.hairCol, e.beard || 0, e.custom ? 'c' : '', S.kitId || 'home'].join('');
+export const lookSig = (e) => [e.skin, e.hair, e.hairCol, e.beard || 0, e.custom ? 'c' : e.role === 'GK' ? keeper().id : e.role === 'ST' ? striker().id : '', S.kitId || 'home'].join('');
 
 /** Досвід: підвищення рівня дає +1 до двох навичок, що найбільше пасують ролі. */
 export function gainXp(e, amount, events) {
@@ -208,9 +210,13 @@ export function signGraduate(gr) {
   const idx = S.squad.findIndex((e) => e.role === 'LW');
   if (idx < 0) return false;
   const base = gr.rar === 'e' ? 66 : gr.rar === 'r' ? 54 : 44, rnd = Math.random;
-  const e = { id: gr.id, role: 'LW', pos: 'LW', line: 'W', num: gr.num, name: gr.name, stats: makeStats('W', base, rnd, 4), xp: 0, lvl: 1, apps: 0, goals: 0, skin: gr.skin, hair: gr.hair, hairCol: gr.hairCol };
+  const e = { id: gr.id, role: 'LW', pos: 'LW', line: 'W', num: gr.num, name: gr.name, real: true, stats: makeStats('W', base, rnd, 4), xp: 0, lvl: 1, apps: 0, goals: 0, skin: gr.skin, hair: gr.hair, hairCol: gr.hairCol, beard: 0 };
   if (ovr(e) > ovr(S.squad[idx])) {
     const old = S.squad[idx]; old.role = old.pos || 'LW'; old.line = LINE_OF[old.role] || 'W';
+    // номер випускника випадковий: у клубі він не має повторюватись
+    const used = new Set(allPlayers().map((p) => p.num));
+    for (let i = 0; i < 99 && used.has(e.num); i++) e.num = (e.num % 99) + 1;
+    gr.num = e.num;
     S.bench.push(old); S.squad[idx] = e; return true;
   }
   return false;

@@ -27,6 +27,9 @@ function flagTexture(a, b, title, sub) {
   return t;
 }
 
+/** Нове полотно на прапор; старе звільняємо, інакше кожен матч лишає текстуру у відеопам'яті. */
+function setFlag(cloth, tex) { const m = cloth.mesh.material; if (m.map) m.map.dispose(); m.map = tex; m.needsUpdate = true; }
+
 /** Тканина: сітка вершин, висоту/відхил кожної рахує функція f(u, v) — кубічна, «пласка» тканина під стиль гри. */
 class Cloth {
   constructor(w, h, sx, sy, tex) {
@@ -94,15 +97,14 @@ export class Walkout {
   /** Новий матч: прапор гостей у кольорах суперника. */
   start(club, home = null) {
     const k = club.kit;
-    this.flags[1].cloth.mesh.material.map = flagTexture(k.main, k.second, club.name.slice(0, 6).toUpperCase(), club.city || '');
-    this.flags[1].cloth.mesh.material.needsUpdate = true;
+    setFlag(this.flags[1].cloth, flagTexture(k.main, k.second, club.name.slice(0, 6).toUpperCase(), club.city || ''));
     // онлайн: господарі — не «Локомотив», а онлайн-клуб господаря (його прапор на полі й на древку); далі — знову ЛОКО
     const hk = home ? home.kit : null, hm = home ? [hk.main, hk.second, home.name.slice(0, 6).toUpperCase()] : ['#d4202c', '#1f8f3f', 'ЛОКО'];
     const key = hm.join('|');
     if (this.homeKey !== key) {
       this.homeKey = key;
-      this.big.mesh.material.map = flagTexture(hm[0], hm[1], hm[2], home ? home.city || '' : 'КИЇВ · 1919'); this.big.mesh.material.needsUpdate = true;
-      this.flags[0].cloth.mesh.material.map = flagTexture(hm[0], hm[1], hm[2], home ? '' : '1919'); this.flags[0].cloth.mesh.material.needsUpdate = true;
+      setFlag(this.big, flagTexture(hm[0], hm[1], hm[2], home ? home.city || '' : 'КИЇВ · 1919'));
+      setFlag(this.flags[0].cloth, flagTexture(hm[0], hm[1], hm[2], home ? '' : '1919'));
     }
     this.cx = 0; this.cz = 5; this.t = 0; this.carry = false; this.group.visible = true;
     this.bearers.forEach((b, i) => { b.p.root.visible = true; b.p.setMode('idle'); b.p.gaitSys.ready = false; b.cut = true; });

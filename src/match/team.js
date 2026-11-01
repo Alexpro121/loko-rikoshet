@@ -161,9 +161,10 @@ export class Team {
     const iq = a.sk.iq, side = this.side, opps = c.opps;
     const n = iq < 0.35 ? 2 : iq < 0.65 ? 5 : 9;
     const DX = [0, 6, 12, 18, 6, 12, 0, 18, 9], DZ = [0, -9, 9, 0, 9, -9, 14, -14, 0];
+    const zs = n === 2 && Math.random() < 0.5 ? -1 : 1;                 // слабкий бачить один варіант забігу — щоразу в інший бік, а не завжди в один
     let best = null, bs = -99, bx = 0, bz = 0;
     for (let i = 0; i < n; i++) {
-      const cx = clamp(tx + side * DX[i], -L + 3, L - 3), cz = clamp(tz + DZ[i], -(W - 3), W - 3);
+      const cx = clamp(tx + side * DX[i], -L + 3, L - 3), cz = clamp(tz + zs * DZ[i], -(W - 3), W - 3);
       let open = 99;
       for (let j = 1; j < opps.length; j++) { const q = opps[j].p, d = Math.hypot(q.x - cx, q.z - cz); if (d < open) open = d; }
       const lane = this.laneClear(b.x, b.z, cx, cz, opps, 1);
@@ -177,6 +178,8 @@ export class Team {
   /** ctx: { ball, bs, owner(+1/-1/0), readyT, opps, all, shotBy, shotId, t, plan, gkHands } */
   update(dt, c) {
     const b = c.ball, side = this.side, owns = c.owner === side;
+    // м'яч у польоті після нашого паса чи удару — ми все ще в атаці: лінії не відкочуються, забіги тривають. Хто біжить на м'яч, вирішує owns
+    const att = owns || (c.owner === 0 && (side > 0 ? c.shotBy === 1 : c.shotBy < 0));
     PLAN = c.plan || null;
     const out = this.out, n = out.length;
     const bs = Math.hypot(b.vx, b.vz);
@@ -231,7 +234,7 @@ export class Team {
       a.stun = Math.max(0, a.stun - dt);
       if (a.slideCool > 0) a.slideCool -= dt;
       if (a.frozen > 0) a.frozen -= dt;
-      if (a.frozen > 0 || a.p.downed) { a.p.vx = a.p.vz = 0; continue; }           // лежить, підводиться або ловить рівновагу — сам не біжить
+      if (a.frozen > 0 || a.p.downed) { if (!(a.tkl > 0)) a.p.vx = a.p.vz = 0; continue; }   // лежить, підводиться або ловить рівновагу — сам не біжить; швидкість випаду веде updateTackles
       if (a.manual) continue;
       if (c.kickoff) {                                  // стартовий: усі чекають на перший удар
         a.tx = a.kx; a.tz = a.kz; a.avx = a.avz = 0;
@@ -240,9 +243,9 @@ export class Team {
       }
       let sb = b;
       if (!owns && bs > 6) { const lead = 0.2 + 0.5 * a.sk.iq; pb.x = clamp(b.x + b.vx * lead, -L, L); pb.z = clamp(b.z + b.vz * lead, -W, W); sb = pb; }   // розумніші передбачають рух м'яча
-      this.spot(a, sb, owns, tmp);
+      this.spot(a, sb, att, tmp);
       let tx = tmp.x, tz = tmp.z, sp = this.speed, chase = false;
-      if (!owns && this.zBias) tz += this.zBias * (a.role && a.role.line === 'D' ? 0.6 : 1);   // вивчили наш фланг — блок зсувається туди
+      if (!att && this.zBias) tz += this.zBias * (a.role && a.role.line === 'D' ? 0.6 : 1);   // вивчили наш фланг — блок зсувається туди
       // на м'яч біжить один від команди (або той, кому пасують); другий — страхує (за ним або ближче до своїх воріт)
       if (a.receiver) { chase = true; }
       else if (!owns && (!hasRecv || (this.recvWeak && i === n1))) {
@@ -290,11 +293,11 @@ export class Team {
           const gx = -side * L, vx = gx - tmp.x, vz = -tmp.z, vl = Math.hypot(vx, vz) || 1;
           tx = tmp.x + (vx / vl) * 7; tz = tmp.z + (vz / vl) * 7; if (ch) tz += (tz > ch.p.z ? 1 : -1) * 2;
         }
-        else if (owns && c.bs !== 'net' && (line === 'F' || line === 'W' || line === 'M')) {                    // забіги в простір
+        else if (att && c.bs !== 'net' && (line === 'F' || line === 'W' || line === 'M')) {                    // забіги в простір
           a.thinkT -= dt;
           if (a.thinkT <= 0) { a.thinkT = 0.5 + (1 - iq) * 1.2 + Math.random() * 0.4; this.pickRun(a, b, tx, tz, c); }
           if (a.runUntil > (c.t || 0)) { tx = a.runX; tz = a.runZ; sp *= 1.08; }
-        } else if (!owns && c.opps && line !== 'F' && line !== 'W') {
+        } else if (!att && c.opps && line !== 'F' && line !== 'W') {
           if (c.owner === -side && iq > 0.5) {                                                                  // розумні перекривають лінію паса
             let q = null, qd = 190;
             for (let j = 1; j < c.opps.length; j++) {
@@ -332,7 +335,7 @@ export class Team {
       // «пливе» за грою), переставляється лише коли відійшла помітно (≥ ~0.6–3 м: що далі від м'яча, то грубіше), і далеко
       // від гри йде кроком (~2.3 м/с), а не бігом. Біля м'яча, у забігу, на перехопленні удару — реагує одразу й швидко
       if (!chase && !a.receiver) {
-        const db = Math.hypot(a.p.x - b.x, a.p.z - b.z), run = i === lanePick || (owns && a.runUntil > (c.t || 0));
+        const db = Math.hypot(a.p.x - b.x, a.p.z - b.z), run = i === lanePick || (att && a.runUntil > (c.t || 0));
         const inv = run ? 1 : Math.max(smooth(clamp(1 - (db - 8) / 26, 0, 1)), c.bs === 'roll' && bs > 18 ? 0.6 : 0);
         if (a.stx === undefined || Math.hypot(a.stx - tx, a.stz - tz) > 25) { a.stx = tx; a.stz = tz; }
         const kk = Math.min(1, dt * (0.8 + 3.5 * inv)); a.stx += (tx - a.stx) * kk; a.stz += (tz - a.stz) * kk;
@@ -383,7 +386,7 @@ export class Team {
     const g = this.gk, p = g.p, b = c.ball, side = this.side;
     if (g.slideCool > 0) g.slideCool -= dt;
     if (g.frozen > 0) g.frozen -= dt;
-    if (g.frozen > 0 || (p.downed && !g.dive)) { p.vx = p.vz = 0; return; }
+    if (g.frozen > 0 || (p.downed && !g.dive)) { if (!(g.tkl > 0)) p.vx = p.vz = 0; return; }
     if (g.manual) return;
     const goalX = -side * L;
     const toGoal = (b.x - goalX) * side;
@@ -392,7 +395,7 @@ export class Team {
     const dist = Math.hypot(b.x - goalX, b.z);
     const out = dist > 45 ? clamp(5 + (dist - 45) * 0.12, 5, 9) : dist > 14 ? 2.6 + (dist - 14) * 0.08 : clamp(1.8 + dist * 0.05, 1.8, 2.6);
     const ux = (b.x - goalX) / (dist || 1), uz = b.z / (dist || 1);
-    let tx = goalX + side * Math.max(1.0, Math.abs(ux) * out), tz = clamp(uz * out, -(G + 1.5), G + 1.5);
+    let tx = goalX + side * Math.max(1.4, Math.abs(ux) * out), tz = clamp(uz * out, -(G + 1.5), G + 1.5);
     const toward = -b.vx * side;
     let speed = this.gkSpeed, shot = false, lob = false;
     // удар у бік воріт: де м'яч перетне площину, у якій воротар СТОЇТЬ (а не лінію воріт позаду нього), — з прогнозу польоту
