@@ -127,13 +127,33 @@ export function swapTargets(benchEntry) {
 /** Міняє гравця з основи на запасного: новачок займає роль слота, замінений повертається на лаву зі своєю природною позицією. */
 export function swapPlayers(slot, benchIdx) {
   const out = S.squad[slot], inn = S.bench[benchIdx];
-  if (!out || !inn || groupOf(out) !== groupOf(inn)) return false;
+  if (!out || !inn || (out.line === 'G') !== (inn.line === 'G')) return false;   // польовий будь-куди (рейтинг сам покаже чужу лінію), воротар лише на воротаря
   const slotRole = out.role, slotLine = out.line;
   inn.role = slotRole; inn.line = slotLine;
   out.role = out.pos || out.role; out.line = LINE_OF[out.role] || out.line;
   S.squad[slot] = inn; S.bench[benchIdx] = out;
   commit();
   return true;
+}
+
+/** Схеми клубу в кар'єрі. */
+export const CAREER_FORMS = ['433', '442', '4231', '4141', '352', '343', '532'];
+/** Нова схема: гравці лишаються на номерах слотів і грають ролі нової схеми; природна позиція pos не міняється. */
+function relabelSquad() {
+  const roles = FORMATIONS[S.tactic] || FORMATIONS['433'];
+  S.squad.forEach((e, i) => { if (i) { e.role = roles[i - 1].name; e.line = roles[i - 1].line; } });
+}
+export function setTactic(f) { if (!CAREER_FORMS.includes(f)) return false; S.tactic = f; relabelSquad(); commit(); return true; }
+/** Два гравці основи міняються місцями. Воротар лишається в рамці: у нього інші навички. */
+export function swapStarters(a, b) {
+  if (a === b || !a || !b || !S.squad[a] || !S.squad[b]) return false;
+  const t = S.squad[a]; S.squad[a] = S.squad[b]; S.squad[b] = t; relabelSquad(); commit(); return true;
+}
+/** Найкраща лінія для польового гравця: рейтинг рахується за вагами лінії, тож форвард у захисті слабшає. */
+export function bestLine(e) {
+  let best = e.line, top = -1;
+  for (const line of ['D', 'M', 'W', 'F']) { const o = ovr({ ...e, line }); if (o > top) { top = o; best = line; } }
+  return { line: best, ovr: top };
 }
 
 /** Склад суперника: сила росте з прогресом, ролі мають свої сильні сторони. */
@@ -172,14 +192,16 @@ export function skillOf(e, gkBonus = 0) {
 export const gkBonus = () => keeperTier() * 0.05;
 
 /** Вигляд гравця: збережене обличчя; нападник-трансфер замінює зовнішність центрального нападника. */
+/** Куплений нападник один, а у схемі їх буває двоє: його обличчя лише в першого. */
+const isLeadST = (e) => e.role === 'ST' && S.squad.find((x) => x.role === 'ST') === e;
 export function squadLook(e) {
   if (e.custom) return { skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, num: e.num };
   if (e.role === 'GK') { const k = keeper(); return { skin: k.skin, hair: k.hair, hairCol: k.hairCol, beard: e.beard || 0, num: e.num }; }
-  if (e.role === 'ST') { const s = striker(); return { skin: s.skin, hair: s.hair, hairCol: s.hairCol, beard: e.beard || 0, num: e.num }; }
+  if (isLeadST(e)) { const s = striker(); return { skin: s.skin, hair: s.hair, hairCol: s.hairCol, beard: e.beard || 0, num: e.num }; }
   return { skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, num: e.num };
 }
 /** Підпис вигляду для кешу портретів. */
-export const lookSig = (e) => [e.skin, e.hair, e.hairCol, e.beard || 0, e.custom ? 'c' : e.role === 'GK' ? keeper().id : e.role === 'ST' ? striker().id : '', S.kitId || 'home'].join('');
+export const lookSig = (e) => [e.skin, e.hair, e.hairCol, e.beard || 0, e.custom ? 'c' : e.role === 'GK' ? keeper().id : isLeadST(e) ? striker().id : '', S.kitId || 'home'].join('');
 
 /** Досвід: підвищення рівня дає +1 до двох навичок, що найбільше пасують ролі. */
 export function gainXp(e, amount, events) {
@@ -208,10 +230,12 @@ export function trainStat(idx, key) {
 
 /** Випускник академії займає місце лівого флангу, якщо він сильніший. */
 export function signGraduate(gr) {
-  const idx = S.squad.findIndex((e) => e.role === 'LW');
+  let idx = S.squad.findIndex((e) => e.role === 'LW');
+  if (idx < 0) S.squad.forEach((e, i) => { if (i && (idx < 0 || ovr(e) < ovr(S.squad[idx]))) idx = i; });   // у схемі без флангу — на місце найслабшого
   if (idx < 0) return false;
   const base = gr.rar === 'e' ? 66 : gr.rar === 'r' ? 54 : 44, rnd = Math.random;
   const e = { id: gr.id, role: 'LW', pos: 'LW', line: 'W', num: gr.num, name: gr.name, real: true, stats: makeStats('W', base, rnd, 4), xp: 0, lvl: 1, apps: 0, goals: 0, skin: gr.skin, hair: gr.hair, hairCol: gr.hairCol, beard: 0 };
+  e.role = S.squad[idx].role; e.line = S.squad[idx].line;
   if (ovr(e) > ovr(S.squad[idx])) {
     const old = S.squad[idx]; old.role = old.pos || 'LW'; old.line = LINE_OF[old.role] || 'W';
     // номер випускника випадковий: у клубі він не має повторюватись

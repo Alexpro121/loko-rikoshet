@@ -3,9 +3,10 @@
 import { audio } from '../core/audio.js';
 import { I } from '../ui/icons.js';
 import { portrait } from '../ui/portrait.js';
-import { STAT_NAMES, STAT_HINT, ROLE_UA, keysFor, ovr, xpNeed } from '../state/squad.js';
+import { Tactics, formName } from '../ui/tactics.js';
+import { STAT_NAMES, STAT_HINT, ROLE_UA, keysFor, ovr, xpNeed, bestLine } from '../state/squad.js';
 import { fmt } from '../state/economy.js';
-import { OP, saveOP, resetOP, esc, plain, flagSvg, kitOf, gkKitOf, teamRating, trainPrice, trainHero, scoutHero, SCOUT_PRICE, clubXpNeed, TRAITS, RARITY } from './profile.js';
+import { OP, saveOP, resetOP, esc, plain, flagSvg, kitOf, gkKitOf, teamRating, trainPrice, trainHero, scoutHero, SCOUT_PRICE, clubXpNeed, TRAITS, RARITY, ONLINE_FORMS, setForm, swapHeroes } from './profile.js';
 import { FLAG_COLS, FLAG_PATS, FLAG_EMB, FLAG_PLATES, FLAG_OVS, FLAG_EDGES, FLAG_STYLES, flagUri, emblemSvg, rollFlag } from './flag.js';
 import { Online } from './session.js';
 import { cleanCode } from './net.js';
@@ -16,6 +17,7 @@ const SLOTS_UA = ['Футболка', 'Шорти', 'Третій', 'Знак', 
 const EDGE_UA = { none: 'Без рамки', thin: 'Тонка', white: 'Біла', gold: 'Золота', double: 'Подвійна', wide: 'Широка' };
 const PLATE_UA = { none: 'Без плашки', disc: 'Коло', shield: 'Щит', dia: 'Ромб', hex: 'Шестикутник', oct: 'Восьмикутник', sq: 'Квадрат', star: 'Зірка' };
 const WF_SLICES = 14, WF_PERIOD = 2.6;
+const LINE_UA = { D: 'захист', M: 'півзахист', W: 'фланг', F: 'напад' };
 
 /** Полотно, що майорить: смужки одного SVG хитаються зі зсувом. Фаза від годинника, тож перемальовування панелі не смикає хвилю. */
 const waveFlag = (flag, cls = '') => {
@@ -26,9 +28,17 @@ const tile = (label, val, cls = '') => `<div class="on-tile ${cls}"><small>${lab
 
 export class OnlineScreen {
   constructor(ui, game) {
-    this.ui = ui; this.g = game; this.tab = 'play'; this.sel = 1; this.codeIn = '';
+    this.ui = ui; this.g = game; this.tab = 'play'; this.codeIn = '';
     this.fe = 'gen'; this.feStyle = 'any'; this.slot = 0; this.cands = null; this.hist = []; this.histT = 0;
-    this.seenSel = -1; this.popKey = null; this.bump = false; this.rdy = { me: false, opp: false };
+    this.popKey = null; this.bump = false; this.rdy = { me: false, opp: false };
+    const sig = () => { const k = kitOf(OP.club); return k.main + k.second + OP.club.gk; };
+    this.tac = new Tactics({
+      forms: ONLINE_FORMS, deny: 'Воротар завжди в рамці. Обери польового гравця, щоб поміняти місцями.',
+      list: () => OP.heroes, form: () => OP.club.form, setForm, swap: swapHeroes, canSwap: (i) => i !== 0, ovr,
+      col: (e) => (RARITY[e.rar] || RARITY.c).col, portrait: (e) => portrait(game.renderer, this.look(e), 'on-' + e.id + e.num + sig()),
+      view: (e) => ({ look: this.look(e), key: 'on-' + e.id + e.num + sig() }), role: (e) => ROLE_UA[e.role] || e.role, detail: (e, i) => this.heroDetail(e, i),
+      defaultSel: () => 1, render: () => ui.renderPanel(), changed: () => this.s.sync(), toast: (t) => ui.toast(t), host: () => ui.el.panel,
+    });
     ui.root.addEventListener('change', (e) => { if (e.target.matches('[data-ocol]')) this.patchFe(); });   // свій колір: панель перемальовуємо лише після вибору, інакше палітра закриється
     this.s = new Online(game, ui);
     // запрошення за посиланням ?room=КОД: відкриваємо вкладку й одразу заходимо в кімнату
@@ -73,7 +83,7 @@ export class OnlineScreen {
     const c = p.club, rating = p.rating, power = teamRating(p.heroes), lvl = p.lvl, x = o.vs;
     const cmp = (a, b) => (x ? (a > b ? 'up' : a < b ? 'down' : '') : '');
     return `<div class="on-stage ${o.opp ? 'opp' : ''}">${waveFlag(c.flag, o.opp ? 'mirror' : '')}${o.stamp || ''}</div>
-      <div class="on-cc-n"><b>${esc(c.name)}</b><em>${esc(c.city || '')}</em></div>
+      <div class="on-cc-n"><b>${esc(c.name)}</b><em>${esc(c.city || '')}${c.form ? ' · ' + formName(c.form) : ''}</em></div>
       <div class="on-tiles">${tile('Рейтинг', rating, cmp(rating, x && x.rating))}${tile('Сила', power, cmp(power, x && teamRating(x.heroes)))}${tile('Рівень', lvl, cmp(lvl, x && x.lvl))}</div>`;
   }
   /** Форма клубу на справжніх гравцях: рендер кешується за кольорами, тож кожен новий колір малюється один раз. */
@@ -172,28 +182,20 @@ export class OnlineScreen {
 
   // ------------------------------------------------------------------ герої
   look(e) { const gk = e.line === 'G'; return { kit: gk ? gkKitOf(OP.club) : kitOf(OP.club), num: e.num, skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, gk, scale: 0.9 }; }
-  heroesHtml() {
-    const g = this.g, H = OP.heroes, kk = kitOf(OP.club), kSig = kk.main + kk.second + OP.club.gk;
-    if (!H[this.sel]) this.sel = 1;
-    const fresh = this.seenSel !== this.sel; this.seenSel = this.sel;
+  afterRender() { if (this.tab === 'heroes') this.tac.afterRender(); }
+  heroDetail(e, sel) {
     const pop = this.popKey; this.popKey = null;
-    const cards = H.map((e, i) => {
-      const o = ovr(e), R = RARITY[e.rar] || RARITY.c;
-      const img = portrait(g.renderer, this.look(e), 'on-' + e.id + e.num + kSig);
-      return `<button class="sq-card on-hero r-${e.rar || 'c'} on-a ${i === this.sel ? 'on' : ''}" style="--rc:${R.col};--d:${i * 0.5}" data-act="on-sel:${i}"><i class="on-ovr">${o}</i><img src="${img}" alt=""/><b>${esc(e.name.split(' ').slice(-1)[0])}</b><em>№${e.num} · ${e.role}</em></button>`;
-    }).join('');
-    const e = H[this.sel], o = ovr(e), R = RARITY[e.rar] || RARITY.c, T = TRAITS[e.trait], need = xpNeed(e.lvl);
+    const o = ovr(e), R = RARITY[e.rar] || RARITY.c, T = TRAITS[e.trait], need = xpNeed(e.lvl), B = e.line === 'G' ? null : bestLine(e);
     const tiles = keysFor(e.line).map((k) => {
       const v = e.stats[k], c = trainPrice(v), can = OP.coins >= c && v < 99, tr = T && T.stat === k;
-      return `<div class="st ${tr ? 'tr' : ''} ${pop === k ? 'pop' : ''}"><div class="st-t"><span>${STAT_NAMES[k]}${tr ? ' ★' : ''}</span><b>${v}</b></div><i><u style="width:${v}%"></u></i><button class="btn buy ${can ? 'can' : ''}" data-act="on-train:${this.sel}:${k}" ${v >= 99 ? 'disabled' : ''}><b>+1 · ${fmt(c)}</b>${I.coin}</button><small>${STAT_HINT[k]}</small>${pop === k ? '<u class="on-plus">+1</u>' : ''}</div>`;
+      return `<div class="st ${tr ? 'tr' : ''} ${pop === k ? 'pop' : ''}"><div class="st-t"><span>${STAT_NAMES[k]}${tr ? ' ★' : ''}</span><b>${v}</b></div><i><u style="width:${v}%"></u></i><button class="btn buy ${can ? 'can' : ''}" data-act="on-train:${sel}:${k}" ${v >= 99 ? 'disabled' : ''}><b>+1 · ${fmt(c)}</b>${I.coin}</button><small>${STAT_HINT[k]}</small>${pop === k ? '<u class="on-plus">+1</u>' : ''}</div>`;
     }).join('');
-    const hero = portrait(g.renderer, this.look(e), 'on-' + e.id + e.num + kSig);
-    const detail = `<div class="sq-d ${fresh ? 'on-flip' : ''}" style="--rc:${R.col}"><div class="on-hd r-${e.rar || 'c'}"><div class="on-hd-p"><i class="on-rays"></i><img src="${hero}" alt=""/><i class="on-ovr big">${o}</i></div><div class="on-hd-t"><h3>${esc(e.name)}</h3>
-      <p><span class="on-rar">${R.name}</span> №${e.num} · ${ROLE_UA[e.role] || e.role}</p>${T ? `<p class="on-trait">★ ${T.name}: ${T.tip}</p>` : ''}
+    const fit = B && B.ovr - o >= 2 ? `<p class="on-fit">Не на своїй лінії: у ${LINE_UA[B.line]}і рейтинг був би ${B.ovr}</p>` : '';
+    return `<div class="on-hd"><div class="on-hd-t"><p><span class="on-rar">${R.name}</span> №${e.num} · ${ROLE_UA[e.role] || e.role} · рейтинг <b>${o}</b></p>${T ? `<p class="on-trait">★ ${T.name}: ${T.tip}</p>` : ''}${fit}
       <i class="on-bar"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></i><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small>
-      <button class="btn alt on-scout ${OP.coins >= SCOUT_PRICE ? '' : 'dim'}" data-act="on-scout:${this.sel}"><b>СКАУТ: ІНШИЙ ГЕРОЙ · ${SCOUT_PRICE}</b>${I.coin}</button></div></div><div class="st-grid">${tiles}</div></div>`;
-    return `<div class="sq-wrap on-heroes"><div class="sq-list scroller">${cards}</div>${detail}</div>`;
+      <button class="btn alt on-scout ${OP.coins >= SCOUT_PRICE ? '' : 'dim'}" data-act="on-scout:${sel}"><b>СКАУТ: ІНШИЙ ГЕРОЙ · ${SCOUT_PRICE}</b>${I.coin}</button></div></div><div class="st-grid">${tiles}</div>`;
   }
+  heroesHtml() { return this.tac.html(); }
   /** Новий герой від скаута: картка відкривається з променями кольору рідкості; закриття веде назад у панель. */
   revealHero(h) {
     const R = RARITY[h.rar] || RARITY.c, T = TRAITS[h.trait], k = kitOf(OP.club);
@@ -269,14 +271,13 @@ export class OnlineScreen {
     const re = () => this.ui.renderPanel();
     const ed = () => { s.sync(); return re(); };             // свій клуб змінився — суперник теж має це бачити
     switch (k) {
-      case 'on-tab': audio.click(); this.tab = x; return re();
-      case 'on-sel': audio.click(); this.sel = +x; return re();
+      case 'on-tab': audio.click(); this.tab = x; this.tac.swapFrom = null; return re();
       case 'on-train': { const c = trainHero(+x, y); if (c === false) { audio.deny(); this.ui.toast(OP.heroes[+x] && OP.heroes[+x].stats[y] >= 99 ? 'Навичка на максимумі' : 'Не вистачає монет — грай онлайн-матчі'); } else { audio.buy(); this.popKey = y; this.bump = true; } return ed(); }
       case 'on-scout': {
         const h = scoutHero(+x);
         if (!h) { audio.deny(); this.ui.toast('Скаут коштує ' + SCOUT_PRICE + ' монет'); return; }
         if (h.rar === 'l') audio.horn(); else audio.win();
-        this.seenSel = -1; this.bump = true; s.sync(); this.revealHero(h); return;
+        this.tac.seen = -1; this.bump = true; s.sync(); this.revealHero(h); return;
       }
       case 'on-fe': audio.click(); this.fe = x; return re();
       case 'on-fstyle': audio.click(); this.feStyle = x; this.rollCands(); return this.patchFe();
@@ -294,7 +295,7 @@ export class OnlineScreen {
       case 'on-slot': audio.click(); this.slot = +x; return this.patchFe();
       case 'on-col': this.remember(); this.histT = 0; this.setColor(x); audio.click(); return this.flagDone();
       case 'on-reset':
-        if (el.dataset.arm) { resetOP(); audio.horn(); this.ui.toast('Новий клуб: ' + OP.club.name); this.sel = 1; this.hist = []; this.cands = null; return ed(); }
+        if (el.dataset.arm) { resetOP(); audio.horn(); this.ui.toast('Новий клуб: ' + OP.club.name); this.tac.sel = 1; this.hist = []; this.cands = null; return ed(); }
         el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО? ГЕРОЇ Й МОНЕТИ ЗНИКНУТЬ'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'НОВИЙ ВИПАДКОВИЙ КЛУБ'; }, 3000); return;
       case 'on-create': audio.click(); audio.unlock(); return s.create();
       case 'on-join': { audio.click(); audio.unlock(); const inp = this.ui.el.panel.querySelector('[data-ocode]'); return s.join(inp ? inp.value : this.codeIn); }

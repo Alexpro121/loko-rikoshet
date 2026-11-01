@@ -41,7 +41,10 @@ export const RARITY = {
 };
 const rollRar = (rnd = Math.random) => { const r = rnd(); return r < 0.05 ? 'l' : r < 0.2 ? 'e' : r < 0.5 ? 'r' : 'c'; };
 
-const SLOTS = [{ name: 'GK', line: 'G', num: 1 }, ...FORMATIONS['433']];
+/** Схеми онлайн-клубу. Слоти: 0 — воротар, далі порядок ролей схеми; героя на слоті вважаємо гравцем цієї ролі. */
+export const ONLINE_FORMS = ['433', '442', '4231', '4141', '352', '343', '532'];
+export const slotsOf = (form) => [{ name: 'GK', line: 'G', num: 1 }, ...(FORMATIONS[form] || FORMATIONS['433'])];
+const relabel = (heroes, form) => { const sl = slotsOf(form); heroes.forEach((e, i) => { e.role = e.pos = sl[i].name; e.line = sl[i].line; }); };
 /** Однакові для обох суперників параметри прицілу й воротаря (у кар'єрі їх дають трансфери). */
 export const ONLINE_AIM = { bounces: 2, jitter: 2.4 };
 export const ONLINE_GK = { concede: 0.8 };
@@ -67,14 +70,15 @@ export function newClub() {
   const used = new Set();
   const flag = rollFlag();
   const star = 1 + ((Math.random() * 10) | 0);
-  const heroes = SLOTS.map((s, i) => newHero(s, used, i === star ? (Math.random() < 0.35 ? 'l' : 'e') : rollRar()));
-  return { v: 1, club: { name: pick(NAMES), city: pick(CITIES), flag, gk: pick(GK_COLS) }, heroes, nm: 1, lvl: 1, xp: 0, coins: 300, rating: 1000, rec: { w: 0, d: 0, l: 0 }, goals: 0, games: 0 };
+  const form = pick(['433', '442', '4231']);
+  const heroes = slotsOf(form).map((s, i) => newHero(s, used, i === star ? (Math.random() < 0.35 ? 'l' : 'e') : rollRar()));
+  return { v: 1, club: { name: pick(NAMES), city: pick(CITIES), flag, gk: pick(GK_COLS), form }, heroes, nm: 1, lvl: 1, xp: 0, coins: 300, rating: 1000, rec: { w: 0, d: 0, l: 0 }, goals: 0, games: 0 };
 }
 
 /** Старе збереження: прапор із новими шарами й герої з іменами нового генератора. Лише раз: результат одразу записуємо, інакше випадковість мінялася б з кожним запуском. */
 function migrate(o) {
-  if (o.club && o.club.flag && o.club.flag.ov !== undefined && o.nm) return;
-  if (o.club) o.club.flag = upgradeFlag(o.club.flag);
+  if (o.club && o.club.flag && o.club.flag.ov !== undefined && o.nm && o.club.form) return;
+  if (o.club) { o.club.flag = upgradeFlag(o.club.flag); if (!o.club.form) o.club.form = '433'; }
   if (!o.nm) { const used = new Set(); for (const e of o.heroes) e.name = newName(used, e.rar); o.nm = 1; }   // рівні, навички й голи лишаються
   try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (_) { /* ignore */ }
 }
@@ -113,11 +117,22 @@ export function trainHero(i, k) {
   if (v >= 99 || OP.coins < c) return false;
   OP.coins -= c; e.stats[k] = v + 1; saveOP(); return c;
 }
+/** Нова схема: герої лишаються на своїх номерах слотів і отримують ролі нової схеми. */
+export function setForm(form) {
+  if (!ONLINE_FORMS.includes(form)) return false;
+  OP.club.form = form; relabel(OP.heroes, form); saveOP(); return true;
+}
+/** Поміняти двох польових героїв місцями. Воротар лишається в рамці: у нього інші навички. */
+export function swapHeroes(a, b) {
+  const H = OP.heroes;
+  if (a === b || !a || !b || !H[a] || !H[b]) return false;
+  const t = H[a]; H[a] = H[b]; H[b] = t; relabel(H, OP.club.form); saveOP(); return true;
+}
 /** Скаут: на слот приходить новий випадковий герой (рідкість — за шансом, легенда — 5%). */
 export function scoutHero(i) {
   if (OP.coins < SCOUT_PRICE) return null;
   const used = new Set(OP.heroes.flatMap((e, j) => (j === i ? [] : [surname(e.name), 'f:' + e.name.split(' ')[0]])));
-  const slot = SLOTS[i]; OP.coins -= SCOUT_PRICE;
+  const slot = slotsOf(OP.club.form)[i]; OP.coins -= SCOUT_PRICE;
   const h = newHero(slot, used); h.num = OP.heroes[i].num; OP.heroes[i] = h; saveOP(); return h;
 }
 
@@ -126,7 +141,7 @@ export function scoutHero(i) {
 export function toWire() {
   const c = OP.club;
   return {
-    name: c.name, city: c.city, flag: c.flag, gk: c.gk, lvl: OP.lvl, rating: OP.rating, rec: OP.rec,
+    name: c.name, city: c.city, flag: c.flag, gk: c.gk, form: c.form, lvl: OP.lvl, rating: OP.rating, rec: OP.rec,
     heroes: OP.heroes.map((e) => ({ name: e.name, num: e.num, role: e.role, line: e.line, stats: e.stats, skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, rar: e.rar, trait: e.trait })),
   };
 }
@@ -143,10 +158,10 @@ export function fromWire(w) {
   const club = {
     name: str(w.name, 'ГОСТІ', 14).toUpperCase(), city: str(w.city, '', 18),
     flag: normFlag(w.flag),
-    gk: col(w.gk, '#9fbf3a'),
+    gk: col(w.gk, '#9fbf3a'), form: ONLINE_FORMS.includes(w.form) ? w.form : '433',
   };
   const hs = Array.isArray(w.heroes) ? w.heroes : [];
-  const heroes = SLOTS.map((s, i) => {
+  const heroes = slotsOf(club.form).map((s, i) => {
     const h = hs[i] && typeof hs[i] === 'object' ? hs[i] : {}, line = lineOf(s), st = {};
     for (const k of keysFor(line)) st[k] = num(h.stats && h.stats[k], 8, 99, 45);
     return {

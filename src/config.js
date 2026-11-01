@@ -70,6 +70,10 @@ const role = (line, v, num, name) => ({ line, v, num, name, uDef: LINE[line][0],
 export const FORMATIONS = {
   '442': [role('D', -0.78, 3, 'LB'), role('D', -0.27, 4, 'CB'), role('D', 0.27, 5, 'CB'), role('D', 0.78, 2, 'RB'), role('M', -0.8, 11, 'LM'), role('M', -0.26, 8, 'CM'), role('M', 0.26, 6, 'CM'), role('M', 0.8, 7, 'RM'), role('F', -0.28, 9, 'ST'), role('F', 0.28, 10, 'ST')],
   '433': [role('D', -0.78, 3, 'LB'), role('D', -0.27, 4, 'CB'), role('D', 0.27, 5, 'CB'), role('D', 0.78, 2, 'RB'), role('M', -0.5, 8, 'CM'), role('M', 0, 6, 'DM'), role('M', 0.5, 10, 'CM'), role('W', -0.78, 11, 'LW'), role('F', 0, 9, 'ST'), role('W', 0.78, 7, 'RW')],
+  '352': [role('D', -0.55, 4, 'CB'), role('D', 0, 5, 'CB'), role('D', 0.55, 3, 'CB'), role('M', -0.85, 11, 'LM'), role('M', -0.36, 8, 'CM'), role('M', 0, 6, 'DM'), role('M', 0.36, 10, 'CM'), role('M', 0.85, 7, 'RM'), role('F', -0.28, 9, 'ST'), role('F', 0.28, 2, 'ST')],
+  '343': [role('D', -0.55, 4, 'CB'), role('D', 0, 5, 'CB'), role('D', 0.55, 3, 'CB'), role('M', -0.8, 2, 'LM'), role('M', -0.26, 8, 'CM'), role('M', 0.26, 6, 'CM'), role('M', 0.8, 10, 'RM'), role('W', -0.78, 11, 'LW'), role('F', 0, 9, 'ST'), role('W', 0.78, 7, 'RW')],
+  '532': [role('D', -0.86, 3, 'LB'), role('D', -0.42, 4, 'CB'), role('D', 0, 5, 'CB'), role('D', 0.42, 6, 'CB'), role('D', 0.86, 2, 'RB'), role('M', -0.5, 8, 'CM'), role('M', 0, 7, 'DM'), role('M', 0.5, 10, 'CM'), role('F', -0.28, 9, 'ST'), role('F', 0.28, 11, 'ST')],
+  '4141': [role('D', -0.78, 3, 'LB'), role('D', -0.27, 4, 'CB'), role('D', 0.27, 5, 'CB'), role('D', 0.78, 2, 'RB'), role('M', 0, 6, 'DM'), role('W', -0.8, 11, 'LW'), role('M', -0.3, 8, 'CM'), role('M', 0.3, 10, 'CM'), role('W', 0.8, 7, 'RW'), role('F', 0, 9, 'ST')],
   '4231': [role('D', -0.78, 3, 'LB'), role('D', -0.27, 4, 'CB'), role('D', 0.27, 5, 'CB'), role('D', 0.78, 2, 'RB'), role('M', -0.3, 6, 'DM'), role('M', 0.3, 8, 'DM'), role('W', -0.8, 11, 'LW'), role('M', 0, 10, 'AM'), role('W', 0.8, 7, 'RW'), role('F', 0, 9, 'ST')],
 };
 

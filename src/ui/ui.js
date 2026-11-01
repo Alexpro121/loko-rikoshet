@@ -9,11 +9,12 @@ import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact }
 import { Hud } from './hud.js';
 import { playIntro } from './intro.js';
 import { portrait } from './portrait.js';
-import { ensureSquad, oppSquad, allPlayers, swapTargets, swapPlayers, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook, myKit, lookSig } from '../state/squad.js';
+import { ensureSquad, oppSquad, allPlayers, swapPlayers, swapStarters, setTactic, bestLine, CAREER_FORMS, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook, myKit, lookSig } from '../state/squad.js';
 
 /** Тестові інструменти (+10 000 монет) лише з ?test в адресі або в dev-збірці. */
 const TEST_MODE = !!(import.meta.env && import.meta.env.DEV) || /[?&]test/.test(location.search);
 import { esc } from '../online/profile.js';
+import { Tactics } from './tactics.js';
 import { rivalOf, scoutNote } from '../state/rivals.js';
 
 const rarCol = (id) => ACADEMY.rarities.find((r) => r.id === id) || ACADEMY.rarities[0];
@@ -39,7 +40,7 @@ const sheet = (title, body, cls = '') => `
   <div class="sheet-b">${body}</div>
 </div>`;
 
-const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .sym, .on-play, .on-id, .on-fe-b, .set-grid, .cu-wrap, .cu-opts';
+const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .on-bench, .sym, .on-play, .on-id, .on-fe-b, .set-grid, .cu-wrap, .cu-opts';
 /** Замінює вміст вікна; keep — те саме вікно малюється заново, тож прокрутка лишається на місці. */
 function redraw(host, html, keep) {
   const sc = keep ? [...host.querySelectorAll(SCROLLS)].map((n) => [n.scrollLeft, n.scrollTop]) : [];
@@ -306,8 +307,8 @@ export class UI {
       case 'q-auto': case 'q-high': case 'q-low': S.settings.quality = a.slice(2); g.res = 1; g.applyPixelRatio(true); commit(); audio.click(); return this.renderSettings();
       case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
       default:
+        if (a.startsWith('tk-')) { const t = this.panel === 'online' ? this.online && this.online.tac : this.tac; return t && t.act(a); }
         if (a.startsWith('on-')) return this.online && this.online.act(a, el);
-        if (a.startsWith('sel:')) { this.sel = +a.slice(4); audio.click(); this.renderPanel(); const d = this.el.panel.querySelector('.sq-d'); if (d) d.scrollTop = 0; return; }   // інший гравець: картка з початку
         if (a.startsWith('cam-')) { if (CAM_PRESETS[a.slice(4)]) { S.settings.camMode = a.slice(4); commit(); g.computeMatchBase(); audio.click(); return this.renderSettings(); } }
         if (a.startsWith('set-tab:')) { this.setTab = a.slice(8); audio.click(); return this.renderSettings(); }
         if (a.startsWith('tod-')) { S.settings.timeOfDay = a.slice(4); commit(); audio.click(); return this.renderSettings(); }
@@ -315,7 +316,6 @@ export class UI {
         if (a.startsWith('cust:')) return this.openCustom(+a.slice(5));
         if (a.startsWith('cu-')) return this.customAct(a, el);
         if (a.startsWith('train:')) return this.train(a);
-        if (a.startsWith('swap:')) { const [, bi, slot] = a.split(':'); if (swapPlayers(+slot, +bi - 11)) { this.sel = +slot; audio.buy(); this.toast('Заміна проведена'); } else audio.deny(); return this.renderPanel(); }
         if (a.startsWith('buy:')) return this.buy(a.slice(4));
         if (a.startsWith('equip:')) return this.equip(a.slice(6));
     }
@@ -411,7 +411,7 @@ export class UI {
     if (force || this._leagueKey !== S.fixture + ':' + S.season) { this._leagueKey = S.fixture + ':' + S.season; this.leagueStrip(); }
     this.menuCards(force);
     this.tickCash();
-    if (this.panel) this.renderPanel();
+    if (this.panel && !this.holdPanel) this.renderPanel();
   }
 
   /** Інформаційні картки меню: клуб, наступний суперник, зірка складу та стрічка фактів. */
@@ -512,40 +512,64 @@ export class UI {
     const box = this.el.panel.querySelector('.sheet');
     if (box && again) box.classList.add('still');
     if (box && again && this._ps === sub) box.classList.add('same');   // та сама вкладка перемальовується: вхідні анімації вмісту не повторюємо
+    if (p === 'online') this.online.afterRender();
+    if (p === 'transfers' && this.tab === 'squad' && this.tac) this.tac.afterRender();
     this._pv = p; this._ps = sub;
   }
 
   statBar(label, v) { return `<div class="stat"><span>${label}</span><i><u style="width:${Math.round(v * 100)}%"></u></i></div>`; }
 
-  teamTabs() {
-    const t = this.tab;
-    return `<div class="tabs"><button class="${t === 'squad' ? 'on' : ''}" data-act="tab-squad">СКЛАД</button><button class="${t === 'strikers' ? 'on' : ''}" data-act="tab-strikers">НАПАДНИКИ</button><button class="${t === 'keepers' ? 'on' : ''}" data-act="tab-keepers">ВОРОТАРІ</button></div>`;
+  /** Панель «Команда»: та сама ліврея, що в онлайн-клубу. */
+  teamSheet(body) {
+    const t = this.tab, tb = (k, n) => `<button class="${t === k ? 'on' : ''}" data-act="tab-${k}"><span>${n}</span></button>`;
+    return `<div class="sheet wide on-sheet" style="--ka:#d4202c;--kb:#1f8f3f">
+      <header class="on-h">
+        <div class="on-h-fl cr">${lokoCrest()}</div>
+        <div class="on-h-t"><small>Команда · рейтинг ${squadRating()}</small><h2>${esc(CLUB.name)}</h2></div>
+        <nav class="on-tabs">${tb('squad', 'Склад')}${tb('strikers', 'Нападники')}${tb('keepers', 'Воротарі')}</nav>
+        <span class="on-purse"><b>${fmt(S.coins)}</b>${I.coin}</span>
+        <button class="sq on-x" data-act="close-panel" aria-label="Закрити">${I.close}</button>
+      </header>
+      <div class="sheet-b on-b">${body}</div></div>`;
   }
-
-  /** Склад: картки гравців з рейтингом і праворуч детальна картка з тренуванням навичок. */
-  squadHtml() {
-    const g = this.game; ensureSquad();
-    if (this.sel == null || !allPlayers()[this.sel]) this.sel = Math.max(1, S.squad.findIndex((e) => e.role === 'ST'));
-    const all = allPlayers();
-    const cards = all.map((e, i) => {
-      const L = squadLook(e), gk = e.line === 'G', o = ovr(e);
-      const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : myKit(), num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, beard: L.beard, gk, scale: 0.9 }, 'sq-' + e.id + e.num + lookSig(e));
-      return `<button class="sq-card ${i === this.sel ? 'on' : ''} ${i >= 11 ? 'sub' : ''}" data-act="sel:${i}"><i class="ovr ${tierOf(o)}">${o}</i><img src="${img}" alt=""/><b>${esc(e.name.trim().split(' ').slice(-1)[0])}</b><em>№${e.num} · ${i >= 11 ? 'запас' : e.role}</em></button>`;
-    }).join('');
-    const e = all[this.sel], o = ovr(e), need = xpNeed(e.lvl), isSub = this.sel >= 11;
-    const swaps = isSub ? `<div class="swaps"><small>Замінити в основі:</small>${swapTargets(e).map((si) => `<button class="btn sw" data-act="swap:${this.sel}:${si}"><b>№${S.squad[si].num} ${esc(S.squad[si].name.trim().split(' ')[0])}</b><em>${S.squad[si].role} · ${ovr(S.squad[si])}</em></button>`).join('')}</div>` : '';
+  careerLook(e) { const L = squadLook(e), gk = e.line === 'G'; return { kit: gk ? KIT_GK_LOKO : myKit(), num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, beard: L.beard, gk, scale: 0.9 }; }
+  careerDetail(e, i) {
+    const o = ovr(e), need = xpNeed(e.lvl), isSub = i >= 11, pop = this.tacPop; this.tacPop = null;
     const tiles = keysFor(e.line).map((k) => {
       const v = e.stats[k], c = trainCost(v), can = S.coins >= c && v < 99;
-      return `<div class="st"><div class="st-t"><span>${STAT_NAMES[k]}</span><b>${v}</b></div><i><u style="width:${v}%"></u></i><button class="btn buy ${can ? 'can' : ''}" data-act="train:${this.sel}:${k}" ${v >= 99 ? 'disabled' : ''}><b>+1 · ${fmt(c)}</b>${I.coin}</button><small>${STAT_HINT[k]}</small></div>`;
+      return `<div class="st ${pop === k ? 'pop' : ''}"><div class="st-t"><span>${STAT_NAMES[k]}</span><b>${v}</b></div><i><u style="width:${v}%"></u></i><button class="btn buy ${can ? 'can' : ''}" data-act="train:${i}:${k}" ${v >= 99 ? 'disabled' : ''}><b>+1 · ${fmt(c)}</b>${I.coin}</button><small>${STAT_HINT[k]}</small>${pop === k ? '<u class="on-plus">+1</u>' : ''}</div>`;
     }).join('');
-    const detail = `<div class="sq-d"><div class="sq-h"><i class="ovr big ${tierOf(o)}">${o}</i><div><h3>${esc(e.name)}</h3><button class="btn alt cust" data-act="cust:${this.sel}"><b>ВИГЛЯД</b></button><p>№${e.num} · ${ROLE_UA[isSub ? (e.pos || e.role) : e.role]}${isSub ? ' · запасний' : ''}</p><div class="xp"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></div><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small></div></div>${swaps}<div class="st-grid">${tiles}</div></div>`;
-    return sheet('Команда · рейтинг ' + squadRating(), this.teamTabs() + `<div class="sq-wrap"><div class="sq-list scroller">${cards}</div>${detail}</div>`, 'wide');
+    const B = e.line === 'G' || isSub ? null : bestLine(e), LINE = { D: 'захист', M: 'півзахист', W: 'фланг', F: 'напад' };
+    const fit = B && B.ovr - o >= 2 ? `<p class="on-fit">Не на своїй лінії: у ${LINE[B.line]}і рейтинг був би ${B.ovr}</p>` : '';
+    return `<div class="on-hd"><div class="on-hd-t"><p>№${e.num} · ${ROLE_UA[isSub ? (e.pos || e.role) : e.role]}${isSub ? ' · запасний' : ''} · рейтинг <b>${o}</b></p>${fit}
+      <i class="on-bar"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></i><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small>
+      <button class="btn alt on-scout" data-act="cust:${i}"><b>ВИГЛЯД</b></button></div></div><div class="st-grid">${tiles}</div>`;
+  }
+  /** Склад: спільний тактичний екран, дані й правила кар'єри. */
+  squadHtml() {
+    ensureSquad();
+    if (!this.tac) {
+      const TIER = { gold: '#e3b33a', silver: '#b4bcc4', bronze: '#b0793f' };
+      const quiet = (fn) => (...x) => { this.holdPanel = true; try { return fn(...x); } finally { this.holdPanel = false; } };   // commit не перемальовує панель: фішки мають доїхати
+      this.tac = new Tactics({
+        forms: CAREER_FORMS, deny: 'Воротаря можна поміняти лише на воротаря із запасу.',
+        list: allPlayers, form: () => S.tactic, setForm: quiet(setTactic), ovr,
+        swap: (i, j) => (i < 11 && j < 11 ? quiet(swapStarters)(i, j) : i < 11 ? swapPlayers(i, j - 11) : j < 11 ? swapPlayers(j, i - 11) : false),
+        canSwap: () => true, col: (e) => TIER[tierOf(ovr(e))],
+        portrait: (e) => portrait(this.game.renderer, this.careerLook(e), 'sq-' + e.id + e.num + lookSig(e)),
+        view: (e) => ({ look: this.careerLook(e), key: 'sq-' + e.id + e.num + lookSig(e) }),
+        role: (e, i) => ROLE_UA[i >= 11 ? (e.pos || e.role) : e.role] || e.role, detail: (e, i) => this.careerDetail(e, i),
+        defaultSel: () => Math.max(1, S.squad.findIndex((e) => e.role === 'ST')), render: () => this.renderPanel(), changed: () => {}, toast: (t) => this.toast(t), host: () => this.el.panel,
+      });
+    }
+    return this.teamSheet(this.tac.html());
   }
 
   train(a) {
     const [, i, k] = a.split(':');
+    this.tacPop = k;
     const c = trainStat(+i, k);
-    if (c === false) { audio.deny(); const e = allPlayers()[+i]; this.toast(e && e.stats[k] >= 99 ? 'Навичка на максимумі' : 'Не вистачає монет'); return; }
+    if (c === false) { this.tacPop = null; audio.deny(); const e = allPlayers()[+i]; this.toast(e && e.stats[k] >= 99 ? 'Навичка на максимумі' : 'Не вистачає монет'); return; }
     audio.buy();
   }
 
@@ -563,7 +587,7 @@ export class UI {
       const btn = eq ? `<button class="btn on" disabled>${I.check}<b>У ГРІ</b></button>` : has ? `<button class="btn go" data-act="equip:${c.id}"><b>ОБРАТИ</b></button>` : `<button class="btn buy ${S.coins >= c.price ? 'can' : ''}" data-act="buy:${c.id}"><b>${fmt(c.price)}</b>${I.coin}</button>`;
       return `<article class="tcard ${eq ? 'eq' : ''} ${has ? 'own' : ''}"><img class="pic" alt="${c.name}" src="${img}"/><h3>${c.name}</h3><p>${c.tip}</p>${stats}${btn}</article>`;
     }).join('');
-    return sheet('Команда · трансфери', this.teamTabs() + `<div class="scroller">${cards}</div>`, 'wide');
+    return this.teamSheet(`<div class="scroller">${cards}</div>`);
   }
 
   academyHtml() {

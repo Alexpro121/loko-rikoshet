@@ -115,7 +115,7 @@ export class Online {
     home.crest = flagSvg(hostP.club.flag, 'oflag crest'); away.crest = flagSvg(guestP.club.flag, 'oflag crest');
     return {
       leagueName: 'Онлайн-матч', no: 1, of: 1, final: false, club: away, home, mySquad: hostP.heroes, oppSquad: guestP.heroes, env,
-      formation: '433', note: '', scale: 1, time: 270, runSpeed: 9.2, press: 0.55, line: 0.06, gkErr: 2.2, counterSpeed: 48, tackle: 0.62, slowFactor: 0.16,
+      myForm: hostP.club.form, formation: guestP.club.form, note: '', scale: 1, time: 270, runSpeed: 9.2, press: 0.55, line: 0.06, gkErr: 2.2, counterSpeed: 48, tackle: 0.62, slowFactor: 0.16,
       scout: { corner: 0, flank: 0 }, fixtureIdx: 0, season: 0, league: 0, globalNo: 1,
     };
   }

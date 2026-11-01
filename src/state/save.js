@@ -20,6 +20,7 @@ const defaults = () => ({
   tutorial: false,
   squad: null,
   bench: null,
+  tactic: '433',                                  // схема в кар'єрі (S.form — це форма команди: останні результати)
   kitId: 'home',
   form: [],
   rivals: {},                                     // історія зустрічей із кожним клубом (rivals.js)

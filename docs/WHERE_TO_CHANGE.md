@@ -14,7 +14,7 @@
 | Шанс відбору | `tackleChance`, `resolveTackle` |
 | Вплив навичок на удар | `shotSkill` у `src/config.js`, `shotMul`, `kickErr` |
 | Ліги, клуби, форма суперників | `LEAGUES` у `src/config.js`; при зміні кількості клубів також `* 13` в `oppSquad` |
-| Схеми команд | `FORMATIONS` у `src/config.js`; наша схема: `MY_FORMATION` |
+| Схеми команд | `FORMATIONS` у `src/config.js`; наша схема в кар'єрі: `S.tactic`, запасна `MY_FORMATION` |
 | Нападники й воротарі в трансферах | `STRIKERS`, `KEEPERS` у `src/config.js` |
 | Ціна й дохід стадіону | `src/state/economy.js` |
 | Яруси стадіону | `STADIUM_TIERS`, `STADIUM_TIER_NAMES` у `src/config.js`, `Island.buildStadium` |
@@ -116,6 +116,10 @@
 | Заборонені назви клубу, перевірка вводу | `OnlineScreen.input` |
 | Герої, риси, рідкість | `TRAITS`, `RARITY`, `newHero` у `src/online/profile.js` |
 | Імена героїв: списки, частки зразків за рідкістю | `FIRST_NAMES`, `ENKO`, `COSSACK`, `EPIC`, `MIX`, `newName` у `src/online/names.js` |
+| Схеми онлайн-клубу, обмін героїв | `ONLINE_FORMS`, `setForm`, `swapHeroes` у `src/online/profile.js`; нова схема також у `FORMATIONS` у `src/config.js` |
+| Тактичне поле, запас, обмін | клас `Tactics` і `DEPTH` у `src/ui/tactics.js`; адаптери: `squadHtml` у `src/ui/ui.js`, конструктор `OnlineScreen` |
+| Гравець на весь зріст | `mountTurntable` у `src/ui/portrait.js` |
+| Схема в кар'єрі | `S.tactic`, `CAREER_FORMS`, `setTactic`, `swapStarters` у `src/state/squad.js` |
 | Прапор: візерунки, знаки, оздоба, стилі генератора, палітра | `PATS`, `EMB`, `PLATE`, `OV`, `STYLE`, `FLAG_COLS`, `rollFlag`, `normFlag` у `src/online/flag.js` |
 | Редактор прапора | `feHtml`, `patchFlag`, `flagDone` у `src/online/screen.js` |
 | Ціни, рейтинг, нагороди | `trainPrice`, `SCOUT_PRICE`, `applyResult` у `src/online/profile.js` |

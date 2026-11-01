@@ -96,7 +96,7 @@ export class Match {
     this.link = on ? on.link : null; this.netCmd = null; this.netAim = null; this.netWaitT = 0; this.netAuto = false;
     const v = this.view;
     this.mySquad = on ? spec.mySquad : S.squad; this.oppSq = on ? spec.oppSquad : oppSquad(spec);
-    v.setup(spec, MY_FORMATION, this.mySquad, this.oppSq);
+    v.setup(spec, spec.myForm || S.tactic || MY_FORMATION, this.mySquad, this.oppSq);
     if (this.link) this.link.install(this);            // з цієї миті табло, звуки й ефекти віддзеркалюються гостю
     const gb = on ? 0 : gkBonus();
     this.mine.forEach((a, i) => { a.info = this.mySquad[i]; a.sk = skillOf(a.info, i === 0 ? gb : 0); });
@@ -105,7 +105,7 @@ export class Match {
     for (const g of this.keepers) { g.p.reactT = 0.26 - 0.13 * g.sk.react; g.p.handV = 5.5 + 3.5 * g.sk.hands; }
     this.xp = new Array(11).fill(0); this.levelUps = [];
     this.kk = on ? ONLINE_GK : keeper(); this.st = on ? ONLINE_AIM : striker();
-    this.myTeam.setFormation(MY_FORMATION); this.oppTeam.setFormation(spec.formation);
+    this.myTeam.setFormation(spec.myForm || S.tactic || MY_FORMATION); this.oppTeam.setFormation(spec.formation);
     const mg = this.mine[0].sk, og = this.opp[0].sk;
     for (const g of this.keepers) g.kReach = 0;
     if (!on) this.mine[0].kReach = this.kk.reach - KEEPERS[0].reach;   // «Досяжність» куплена воротаря: довші руки й ширший стрибок
