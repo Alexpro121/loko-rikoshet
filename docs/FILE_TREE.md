@@ -64,8 +64,10 @@ GAME-LOKO/
 │   │   └── walkout.js               Walkout: прапори, килим і салют на виході команд
 │   ├── online/                      онлайн-режим, клуб і мережа
 │   │   ├── codec.js                 бінарний кадр поз: encode/decode, NODES, прапори F
+│   │   ├── flag.js                  прапор клубу: шари, SVG і canvas, генератор rollFlag, очищення normFlag
 │   │   ├── guest.js                 GuestMatch: гість показує гру господаря й шле удари
 │   │   ├── host.js                  HostLink: господар шле кадри й події, виконує команди гостя
+│   │   ├── names.js                 імена героїв: newName, пули прізвищ за зразками й рідкістю
 │   │   ├── net.js                   Net: кімната за кодом, PeerJS/WebRTC, канали ctl і st, пінг, реконект
 │   │   ├── profile.js               онлайн-клуб: герої, прапор, рейтинг, збереження OP, esc і plain
 │   │   ├── screen.js                OnlineScreen: вкладка «Онлайн» (розмітка й кнопки)

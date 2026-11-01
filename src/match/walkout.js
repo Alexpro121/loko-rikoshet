@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { PITCH, ACADEMY } from '../config.js';
 import { Player } from '../graphics/player.js';
 import { shadowTexture } from '../graphics/textures.js';
+import { drawFlag } from '../online/flag.js';
 
 const { W } = PITCH;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -24,6 +25,14 @@ function flagTexture(a, b, title, sub) {
   g.font = '800 44px Rubik, Arial Black, sans-serif'; g.fillText(title, 256, 150, 168);
   g.font = '800 22px Rubik, Arial Black, sans-serif'; g.fillText(sub, 256, 196, 160);
   g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 8; g.strokeRect(4, 4, 504, 312);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+
+/** Полотно зі справжнім прапором онлайн-клубу. */
+function clubFlagTexture(flag) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 320;
+  drawFlag(c.getContext('2d'), flag, 512, 320);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   return t;
 }
@@ -98,14 +107,14 @@ export class Walkout {
   /** Новий матч: прапор гостей у кольорах суперника. */
   start(club, home = null) {
     const k = club.kit;
-    setFlag(this.flags[1].cloth, flagTexture(k.main, k.second, club.name.slice(0, 6).toUpperCase(), club.city || ''));
+    setFlag(this.flags[1].cloth, club.flag ? clubFlagTexture(club.flag) : flagTexture(k.main, k.second, club.name.slice(0, 6).toUpperCase(), club.city || ''));
     // онлайн: господарі — не «Локомотив», а онлайн-клуб господаря (його прапор на полі й на древку); далі — знову ЛОКО
     const hk = home ? home.kit : null, hm = home ? [hk.main, hk.second, home.name.slice(0, 6).toUpperCase()] : ['#d4202c', '#1f8f3f', 'ЛОКО'];
-    const key = hm.join('|');
+    const key = hm.join('|') + (home && home.flag ? JSON.stringify(home.flag) : '');
     if (this.homeKey !== key) {
       this.homeKey = key;
-      setFlag(this.big, flagTexture(hm[0], hm[1], hm[2], home ? home.city || '' : 'КИЇВ · 1919'));
-      setFlag(this.flags[0].cloth, flagTexture(hm[0], hm[1], hm[2], home ? '' : '1919'));
+      setFlag(this.big, home && home.flag ? clubFlagTexture(home.flag) : flagTexture(hm[0], hm[1], hm[2], home ? home.city || '' : 'КИЇВ · 1919'));
+      setFlag(this.flags[0].cloth, home && home.flag ? clubFlagTexture(home.flag) : flagTexture(hm[0], hm[1], hm[2], home ? '' : '1919'));
     }
     this.cx = 0; this.cz = 5; this.t = 0; this.carry = false; this.group.visible = true;
     this.bearers.forEach((b, i) => { b.p.root.visible = true; b.p.setMode('idle'); b.p.gaitSys.ready = false; b.cut = true; });

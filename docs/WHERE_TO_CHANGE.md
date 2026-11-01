@@ -114,7 +114,10 @@
 |---|---|
 | Вкладка «Онлайн» | `src/online/screen.js` |
 | Заборонені назви клубу, перевірка вводу | `OnlineScreen.input` |
-| Герої, риси, рідкість, прапор | `TRAITS`, `RARITY`, `newHero`, `flagSvg` у `src/online/profile.js` |
+| Герої, риси, рідкість | `TRAITS`, `RARITY`, `newHero` у `src/online/profile.js` |
+| Імена героїв: списки, частки зразків за рідкістю | `FIRST_NAMES`, `ENKO`, `COSSACK`, `EPIC`, `MIX`, `newName` у `src/online/names.js` |
+| Прапор: візерунки, знаки, оздоба, стилі генератора, палітра | `PATS`, `EMB`, `PLATE`, `OV`, `STYLE`, `FLAG_COLS`, `rollFlag`, `normFlag` у `src/online/flag.js` |
+| Редактор прапора | `feHtml`, `patchFlag`, `flagDone` у `src/online/screen.js` |
 | Ціни, рейтинг, нагороди | `trainPrice`, `SCOUT_PRICE`, `applyResult` у `src/online/profile.js` |
 | Сценарій лобі й обривів | `src/online/session.js` |
 | Сервери STUN/TURN, таймаути | `src/online/net.js` |

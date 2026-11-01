@@ -39,7 +39,7 @@ const sheet = (title, body, cls = '') => `
   <div class="sheet-b">${body}</div>
 </div>`;
 
-const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .sym, .on-play, .on-club section, .set-grid, .cu-wrap, .cu-opts';
+const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .sym, .on-play, .on-id, .on-fe-b, .set-grid, .cu-wrap, .cu-opts';
 /** Замінює вміст вікна; keep — те саме вікно малюється заново, тож прокрутка лишається на місці. */
 function redraw(host, html, keep) {
   const sc = keep ? [...host.querySelectorAll(SCROLLS)].map((n) => [n.scrollLeft, n.scrollTop]) : [];
@@ -505,11 +505,13 @@ export class UI {
     if (!this.panel) return;
     const p = this.panel;
     const html = p === 'transfers' ? this.transfersHtml() : p === 'academy' ? this.academyHtml() : p === 'online' ? this.online.html() : this.stadiumHtml();
-    const sub = p === 'transfers' ? this.tab : p === 'stadium' ? this.stTab : p === 'online' ? this.online.tab : '';
+    const sub = p === 'transfers' ? this.tab : p === 'stadium' ? this.stTab : p === 'online' ? this.online.subKey() : '';
     // вхідна анімація лише при відкритті панелі; у межах тієї самої вкладки прокрутка не скидається
     const again = this._pv === p;
     redraw(this.el.panel, html, again && this._ps === sub);
-    const box = this.el.panel.querySelector('.sheet'); if (box && again) box.classList.add('still');
+    const box = this.el.panel.querySelector('.sheet');
+    if (box && again) box.classList.add('still');
+    if (box && again && this._ps === sub) box.classList.add('same');   // та сама вкладка перемальовується: вхідні анімації вмісту не повторюємо
     this._pv = p; this._ps = sub;
   }
 

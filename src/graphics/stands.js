@@ -4,6 +4,7 @@ import { ANISO } from './textures.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { PITCH } from '../config.js';
 import { VoxelBuilder, rng } from './voxel.js';
+import { drawFlag } from '../online/flag.js';
 
 const TEXTS = ['ЛОКО, ВПЕРЕД!', 'ЗАЛІЗНИЧНИКИ', 'ЛОКОМОТИВ КИЇВ', 'СТОП ✕ ВПЕРЕД', 'ЛОКО · 1919', 'ДАВАЙ, ЛОКО!', 'ЗА КИЇВ!', 'ВІРИМО В ПЕРЕМОГУ', 'РИКОШЕТ!', 'ЛОКО В ЛІГУ ЧЕМПІОНІВ', 'МИ — ЗАЛІЗНИЧНИКИ', 'СЛАВА УКРАЇНІ'];
 const SCHEMES = [['#a8182b', '#f1efe8'], ['#157a46', '#f1efe8'], ['#f1efe8', '#a8182b'], ['#1c2328', '#e8b923'], ['#a8182b', '#e8b923'], ['#157a46', '#e8b923']];
@@ -221,7 +222,7 @@ export class Stands {
       g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillText(t, x + 194, y + 69); g.fillStyle = fg; g.fillText(t, x + 192, y + 66);
     });
     this.awayTex.needsUpdate = true;
-    if (this.flagAwayCanvas) { const f = this.flagAwayCanvas.getContext('2d'); f.fillStyle = a; f.fillRect(0, 0, 128, 80); f.fillStyle = b; f.beginPath(); f.moveTo(64, 0); f.lineTo(128, 0); f.lineTo(128, 80); f.lineTo(40, 80); f.closePath(); f.fill(); f.strokeStyle = 'rgba(255,255,255,.7)'; f.lineWidth = 4; f.strokeRect(2, 2, 124, 76); this.flagAwayTex.needsUpdate = true; }
+    if (this.flagAwayCanvas && club.flag) { drawFlag(this.flagAwayCanvas.getContext('2d'), club.flag, 128, 80); this.flagAwayTex.needsUpdate = true; } else if (this.flagAwayCanvas) { const f = this.flagAwayCanvas.getContext('2d'); f.fillStyle = a; f.fillRect(0, 0, 128, 80); f.fillStyle = b; f.beginPath(); f.moveTo(64, 0); f.lineTo(128, 0); f.lineTo(128, 80); f.lineTo(40, 80); f.closePath(); f.fill(); f.strokeStyle = 'rgba(255,255,255,.7)'; f.lineWidth = 4; f.strokeRect(2, 2, 124, 76); this.flagAwayTex.needsUpdate = true; }
   }
 
 

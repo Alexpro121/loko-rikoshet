@@ -13,7 +13,7 @@ online/session.js → online/net.js, host.js, guest.js, profile.js
 state/* → config.js, club.js лише дані
 ```
 
-Шари не строго ізольовані: `state/squad.js` бере `rng` з `graphics/voxel.js`, а `ui/hud.js`, `ui/ui.js` і `match/penalty.js` беруть `esc` з `online/profile.js`.
+Шари не строго ізольовані: `state/squad.js` бере `rng` з `graphics/voxel.js`, а `ui/hud.js`, `ui/ui.js` і `match/penalty.js` беруть `esc` з `online/profile.js`, `match/walkout.js` і `graphics/stands.js` беруть `drawFlag` з `online/flag.js`.
 
 Одиночні об'єкти:
 
@@ -197,6 +197,7 @@ state/* → config.js, club.js лише дані
 | `src/online/guest.js` | буфер кадрів, інтерполяція, зведення годинників, дзеркальна камера, власний приціл |
 | `src/online/codec.js` | упакування поз: `NODES`, кватерніони в int16, позиції лише зміщених суглобів |
 | `src/online/profile.js` | клуб, герої, `toWire`/`fromWire` (дані від суперника чистяться), рейтинг |
+| `src/online/flag.js` | прапор: одні шляхи для SVG (меню, табло) і canvas (`drawFlag`: `match/walkout.js`, `graphics/stands.js`); без залежностей |
 
 Повідомлення `ctl`, які розбирає `Online.onMsg`: `hello`, `full`, `ready`, `start`, `ev`, `ref`, `cmd`, `aim`, `tap`, `end`, `bye`.
 
