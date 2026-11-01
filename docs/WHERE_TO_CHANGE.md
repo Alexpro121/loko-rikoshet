@@ -38,7 +38,12 @@
 | Ведення м'яча | `carry`, `dribbleKick`, `dribbleStep` у `src/match/dribble.js` |
 | Сповільнення часу | `updateSlow`, `clearSlow`, `slowFactor` у `spec` |
 | Рішення суперника з м'ячем | `takerThink`, `updateTaker`, `choosePass` |
-| Позиції, пресинг, забігання | `Team.update`, `Team.spot`, `Team.pickRun` у `src/match/team.js` |
+| Хто біжить на м'яч, хто тисне й страхує | `Team.update` у `src/match/team.js` |
+| Лінії блоку, зона пресингу, реакція на рахунок і час | `TeamBrain.setLines`, `defSpot`, `read` у `src/match/brain.js` |
+| Хто кого тримає | `TeamBrain.assignMarks`, гілка опіки в `place` |
+| Забіги, підтримка, ширина, штрафний, страховка | `TeamBrain.pickJob`, `assignRest`, вага робіт `JOB_W`, темп `JOB_SP` |
+| Рука вгору, коли відкритий | `TeamBrain.updateCalls`, `hand` |
+| Рішення носія суперника: удар, пас, ведення | `takerThink`, `choosePass` у `src/match/match.js`; оцінки `shotQuality`, `passRisk`, `pickCarry`, `zoneValue` у `src/match/brain.js` |
 | Відбір і підкат | `checkTackles`, `startTackle`, `startSlide`, `onSlideContact` |
 | Зіткнення гравців | `resolvePlayers`, `bump` |
 | Контакт м'яча з гравцем | `onBody`, `World.players` у `src/physics/world.js` |

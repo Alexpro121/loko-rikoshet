@@ -1,6 +1,7 @@
-// Actor (гравець у логіці) і Team (ШІ лінії: розстановка, пресинг, забігання, воротар).
+// Actor (гравець у логіці) і Team (рух ШІ: хто на м'яч, виконання рішень TeamBrain, воротар).
 import { PITCH, FORMATIONS, PHYS } from '../config.js';
 import { makeBody } from '../physics/world.js';
+import { TeamBrain, JOB } from './brain.js';
 
 const { L, W, G } = PITCH;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -56,8 +57,10 @@ export class Actor {
     this.cool = 0;
     this.tx = 0; this.tz = 0; this.avx = 0; this.avz = 0;
     this.receiver = false; this.stun = 0; this.noTrap = 0; this.kx = 0; this.kz = 0;
-    this.sk = DEF_SK; this.info = null; this.thinkT = Math.random() * 0.8; this.runUntil = 0; this.runX = 0; this.runZ = 0;
+    this.sk = DEF_SK; this.info = null; this.thinkT = Math.random() * 0.8;
     this.frozen = 0; this.sliding = false; this.slide = null; this.dive = null; this.slideCool = 0; this.decided = -1; this.baseR = r;
+    // без м'яча (brain.js): робота й точка, кого тримає, рука вгору; trait — характер: один охочіше йде вперед, інший обережний
+    this.job = JOB.SHAPE; this.jx = 0; this.jz = 0; this.jUntil = 0; this.mark = null; this.mkOld = null; this.callT = 0; this.callCool = 0; this.callArm = 1; this.passT = -9; this.trait = Math.random() - 0.5;
   }
   place(x, z) { this.p.x = x; this.p.z = z; this.p.vx = this.p.vz = 0; this.sync(); }
   sync() { const b = this.body, p = this.p; b.x = p.x; b.z = p.z; b.vx = p.vx; b.vz = p.vz; }
@@ -108,22 +111,25 @@ export class Team {
     this.out = actors.slice(1);
     this.speed = 7.4;
     this.press = 0.6; this.line = 0; this.gkSpeed = 7; this.gkTrack = 0.7; this.gkErr = 1;
+    this.brain = new TeamBrain(this); this.pressI = -1; this.coverI = -1; this.lastPress = -1;
     this.setFormation('433');
   }
 
   setFormation(key) {
     this.roles = FORMATIONS[key] || FORMATIONS['433'];
-    this.out.forEach((a, i) => { a.role = this.roles[i % this.roles.length]; });
+    this.out.forEach((a, i) => { a.role = this.roles[i % this.roles.length]; a.job = JOB.SHAPE; a.jUntil = 0; a.mark = null; a.callT = 0; a.passT = -9; });
+    this.brain.reset(); this.pressI = this.coverI = this.lastPress = -1;
   }
 
   /** Позиція ролі залежно від м'яча: лінії зсуваються, ширина стискається в обороні. */
   spot(a, b, owns, out) {
+    if (!owns) { this.brain.defSpot(a, b, out); return; }                // в обороні лінії спільні: блок тримається разом
     const r = a.role, side = this.side;
     const prog = smooth(clamp((b.x * side + L) / (2 * L), 0, 1));
-    const u = clamp(r.uDef + (r.uAtk - r.uDef) * prog + (owns ? 0.05 : -0.015) + (side < 0 ? this.line : 0.02), 0.06, 0.93);
-    const wid = (W - 3.6) * (owns ? 0.98 : 0.8 + 0.2 * prog);
+    const u = clamp(r.uDef + (r.uAtk - r.uDef) * prog + 0.05 + (side < 0 ? this.line : 0.02), 0.06, 0.93);
+    const wid = (W - 3.6) * 0.98;
     out.x = -side * L + side * u * 2 * L;
-    out.z = clamp(r.v * wid + b.z * (owns ? 0.28 : 0.38), -(W - 2.2), W - 2.2);
+    out.z = clamp(r.v * wid + b.z * 0.28, -(W - 2.2), W - 2.2);
   }
 
   /** Вектор обходу інших гравців (щоб не штовхатись і не тупцювати на місці). */
@@ -154,33 +160,21 @@ export class Team {
     return m;
   }
 
-  /**
-   * Забіг у простір: гравець оцінює кілька точок попереду; що вищий інтелект, то більше варіантів
-   * він бачить, то рідше «спить» і то точніше обирає вільну зону з відкритою лінією паса від носія м'яча.
-   */
-  pickRun(a, b, tx, tz, c) {
-    const iq = a.sk.iq, side = this.side, opps = c.opps;
-    const n = iq < 0.35 ? 2 : iq < 0.65 ? 5 : 9;
-    const DX = [0, 6, 12, 18, 6, 12, 0, 18, 9], DZ = [0, -9, 9, 0, 9, -9, 14, -14, 0];
-    const zs = n === 2 && Math.random() < 0.5 ? -1 : 1;                 // слабкий бачить один варіант забігу — щоразу в інший бік, а не завжди в один
-    let best = null, bs = -99, bx = 0, bz = 0;
-    for (let i = 0; i < n; i++) {
-      const cx = clamp(tx + side * DX[i], -L + 3, L - 3), cz = clamp(tz + zs * DZ[i], -(W - 3), W - 3);
-      let open = 99;
-      for (let j = 1; j < opps.length; j++) { const q = opps[j].p, d = Math.hypot(q.x - cx, q.z - cz); if (d < open) open = d; }
-      const lane = this.laneClear(b.x, b.z, cx, cz, opps, 1);
-      const fwd = ((cx - tx) * side) / 18;
-      const score = Math.min(open, 9) * 0.9 + Math.min(lane, 5) * 0.7 + fwd * 1.1 + (Math.random() - 0.5) * (1 - iq) * 4;
-      if (score > bs) { bs = score; bx = cx; bz = cz; best = true; }
+  /** Чи є хтось зі своїх позаду, щоб підстрахувати: без цього останній захисник не кидається у випад, а стримує. */
+  hasCover(a, b) {
+    const side = this.side, ax = b.x * side;
+    for (let i = 0; i < this.out.length; i++) {
+      const q = this.out[i]; if (q === a || q.frozen > 0 || q.stun > 0) continue;
+      if (q.p.x * side < ax - 1 && Math.hypot(q.p.x - b.x, q.p.z - b.z) < 16) return true;
     }
-    if (best) { a.runX = bx; a.runZ = bz; a.runUntil = (c.t || 0) + 0.9 + iq * 1.0; }
+    return false;
   }
 
-  /** ctx: { ball, bs, owner(+1/-1/0), readyT, opps, all, shotBy, shotId, t, plan, gkHands } */
+  /** ctx: { ball, bs, owner(+1/-1/0), carrier, readyT, opps, all, shotBy, shotId, t, plan, gkHands, diff, tf } */
   update(dt, c) {
     const b = c.ball, side = this.side, owns = c.owner === side;
     // м'яч у польоті після нашого паса чи удару — ми все ще в атаці: лінії не відкочуються, забіги тривають. Хто біжить на м'яч, вирішує owns
-    const att = owns || (c.owner === 0 && (side > 0 ? c.shotBy === 1 : c.shotBy < 0));
+    const brain = this.brain, att = owns || (c.owner === 0 && (side > 0 ? c.shotBy === 1 : c.shotBy < 0)) || brain.expect;
     PLAN = c.plan || null;
     const out = this.out, n = out.length;
     const bs = Math.hypot(b.vx, b.vz);
@@ -211,11 +205,16 @@ export class Team {
       // пас «не дійде» (приймач запізнюється на ~0.5 с) — на м'яч біжить і найближчий; м'яч між двома своїми майже порівну —
       // біжать обидва (хто перший)
       this.recvWeak = hasRecv && tr > t1 + 0.5;
-      this.both = n2 >= 0 && t2 < t1 + 0.25 && t2 < 1.4;
+      // удвох — лише коли за м'яч справді боротьба: суперник поруч. Вільний м'яч один і підбере, другий лишається на місці
+      let foeD = 1e9;
+      for (let j = 1; j < c.opps.length; j++) { const q = c.opps[j].p, d = (q.x - b.x) * (q.x - b.x) + (q.z - b.z) * (q.z - b.z); if (d < foeD) foeD = d; }
+      this.both = n2 >= 0 && t2 < t1 + 0.25 && t2 < 1.4 && foeD < 110;
+      brain.best1 = t1;
       if (n1 >= 0) { const p = out[n1].p; d1 = (p.x - b.x) ** 2 + (p.z - b.z) ** 2; }
       if (n2 >= 0) { const p = out[n2].p; d2 = (p.x - b.x) ** 2 + (p.z - b.z) ** 2; }
     }
-    const tmp = this._t || (this._t = { x: 0, z: 0, y: 0 }), pb = this._pb || (this._pb = { x: 0, z: 0 });
+    if (c.bs !== 'roll') brain.best1 = 1e9;
+    const tmp = this._t || (this._t = { x: 0, z: 0, y: 0 }), pb = this._pb || (this._pb = { x: 0, z: 0 }), po = this._po || (this._po = { x: 0, z: 0, sp: 1, hot: false });
     // прогноз удару суперника: найрозумніший з тих, хто ближче до траєкторії, зсувається на неї
     let lanePick = -1, lx = 0, lz = 0;
     if (c.bs === 'roll' && bs > 18 && c.shotBy !== 0 && (c.shotBy > 0) !== (side > 0)) {
@@ -229,7 +228,30 @@ export class Team {
     const loose = c.bs === 'roll' && bs < 24;
     // м'яч у руках воротаря суперника — його не відбирають: ніхто не біжить на нього, усі відходять (нижче)
     const gkH = c.gkHands && c.gkHands.side === -side ? c.gkHands.p : null;
-    const contest = !gkH && c.owner === -side && (c.bs === 'ready' || c.bs === 'aim' || c.bs === 'wind' || c.bs === 'held');
+    const hasB = !gkH && c.owner === -side && (c.bs === 'ready' || c.bs === 'aim' || c.bs === 'wind' || c.bs === 'held');
+    this.pressI = this.coverI = -1;
+    if (hasB) {
+      // хто тисне й хто страхує: не просто двоє найближчих. Захисник не вибігає зі своєї лінії, якщо м'яч далеко попереду неї;
+      // той, хто вже тисне, не передає цю роль через дрібницю; страхує той, хто встигає стати між м'ячем і воротами
+      const ax = b.x * side, lineD = ax > brain.lineU + 14; let c1 = 1e9, c2 = 1e9; n1 = n2 = -1;
+      for (let i = 0; i < n; i++) {
+        const a = out[i]; if (a.manual || a.stun > 0 || a.frozen > 0) continue;
+        const d = Math.hypot(a.p.x - b.x, a.p.z - b.z), s = d + (lineD && a.role.line === 'D' ? 9 : 0) + (a.p.x * side > ax + 1 ? 2 : 0) - (i === this.lastPress ? 3.5 : 0);
+        if (s < c1) { c1 = s; n1 = i; }
+      }
+      const gx = -side * L, gl = Math.hypot(gx - b.x, b.z) || 1, cx = b.x + ((gx - b.x) / gl) * 9, cz = b.z - (b.z / gl) * 9;
+      for (let i = 0; i < n; i++) {
+        const a = out[i]; if (i === n1 || a.manual || a.stun > 0 || a.frozen > 0) continue;
+        const s = Math.hypot(a.p.x - cx, a.p.z - cz) + (a.role.line === 'F' ? 5 : 0);
+        if (s < c2) { c2 = s; n2 = i; }
+      }
+      this.lastPress = n1;
+      if (n1 >= 0) { const p = out[n1].p; d1 = (p.x - b.x) ** 2 + (p.z - b.z) ** 2; }
+      if (n2 >= 0) { const p = out[n2].p; d2 = (p.x - b.x) ** 2 + (p.z - b.z) ** 2; }
+      if (brain.pressOn) { this.pressI = n1; this.coverI = n2; }
+    }
+    brain.read(dt, c, att, n1);
+    const contest = hasB && brain.pressOn;                                 // низький блок чекає м'яч у своїй зоні, а не біжить через пів поля
     for (let i = 0; i < n; i++) {
       const a = out[i];
       a.stun = Math.max(0, a.stun - dt);
@@ -238,14 +260,14 @@ export class Team {
       if (a.frozen > 0 || a.p.downed) { if (!(a.tkl > 0)) a.p.vx = a.p.vz = 0; continue; }   // лежить, підводиться або ловить рівновагу — сам не біжить; швидкість випаду веде updateTackles
       if (a.manual) continue;
       if (c.kickoff) {                                  // стартовий: усі чекають на перший удар
-        a.tx = a.kx; a.tz = a.kz; a.avx = a.avz = 0;
+        a.callT = 0; a.tx = a.kx; a.tz = a.kz; a.avx = a.avz = 0;
         a.move(a.kx, a.kz, this.speed * 0.8, dt);
         continue;
       }
       let sb = b;
       if (!owns && bs > 6) { const lead = 0.2 + 0.5 * a.sk.iq; pb.x = clamp(b.x + b.vx * lead, -L, L); pb.z = clamp(b.z + b.vz * lead, -W, W); sb = pb; }   // розумніші передбачають рух м'яча
       this.spot(a, sb, att, tmp);
-      let tx = tmp.x, tz = tmp.z, sp = this.speed, chase = false;
+      let tx = tmp.x, tz = tmp.z, sp = this.speed, chase = false, hot = false;
       if (!att && this.zBias) tz += this.zBias * (a.role && a.role.line === 'D' ? 0.6 : 1);   // вивчили наш фланг — блок зсувається туди
       // на м'яч біжить один від команди (або той, кому пасують); другий — страхує (за ним або ближче до своїх воріт)
       if (a.receiver) { chase = true; }
@@ -287,42 +309,19 @@ export class Team {
         }
         tx = clamp(tx, -L + 1.5, L - 1.5); tz = clamp(tz, -W + 1.5, W - 1.5);
       } else {
-        const iq = a.sk.iq, line = a.role.line;
         if (i === lanePick) { tx = lx; tz = lz; sp *= 1.1; }                                                    // закриває лінію удару
-        else if (i === n2 && !owns && c.owner === 0 && c.bs === 'roll' && !hasRecv) {                           // страхує того, хто біжить на м'яч
+        else if (i === n2 && !owns && c.owner === 0 && c.bs === 'roll' && !hasRecv && !brain.expect) {          // страхує того, хто біжить на м'яч
           const ch = out[n1]; ballAt(b, 1, 0.3 + 0.7 * a.sk.iq, tmp);
           const gx = -side * L, vx = gx - tmp.x, vz = -tmp.z, vl = Math.hypot(vx, vz) || 1;
           tx = tmp.x + (vx / vl) * 7; tz = tmp.z + (vz / vl) * 7; if (ch) tz += (tz > ch.p.z ? 1 : -1) * 2;
         }
-        else if (att && c.bs !== 'net' && (line === 'F' || line === 'W' || line === 'M')) {                    // забіги в простір
-          a.thinkT -= dt;
-          if (a.thinkT <= 0) { a.thinkT = 0.5 + (1 - iq) * 1.2 + Math.random() * 0.4; this.pickRun(a, b, tx, tz, c); }
-          if (a.runUntil > (c.t || 0)) { tx = a.runX; tz = a.runZ; sp *= 1.08; }
-        } else if (!att && c.opps && line !== 'F' && line !== 'W') {
-          if (c.owner === -side && iq > 0.5) {                                                                  // розумні перекривають лінію паса
-            let q = null, qd = 190;
-            for (let j = 1; j < c.opps.length; j++) {
-              const o = c.opps[j].p, dB = Math.hypot(o.x - b.x, o.z - b.z); if (dB < 2.5) continue;
-              const dd = (o.x - tmp.x) * (o.x - tmp.x) + (o.z - tmp.z) * (o.z - tmp.z);
-              if (dd < qd) { qd = dd; q = o; }
-            }
-            if (q) { const t = 0.35 + 0.15 * iq; tx = tx * 0.35 + (q.x + (b.x - q.x) * t) * 0.65; tz = tz * 0.35 + (q.z + (b.z - q.z) * t) * 0.65; }
-          } else if ((b.x * side + L) < 1.15 * L) {                                                              // опіка за напрямком до воріт
-            let best = null, bd = 150;
-            for (let j = 1; j < c.opps.length; j++) {
-              const q = c.opps[j].p, dd = (q.x - tmp.x) * (q.x - tmp.x) + (q.z - tmp.z) * (q.z - tmp.z);
-              if (dd < bd) { bd = dd; best = q; }
-            }
-            if (best) { const k = 0.25 + 0.3 * iq; tx = tx * (1 - k) + (best.x - side * 2.6) * k; tz = tz * (1 - k) + best.z * k; }
-          }
+        else if (c.bs !== 'net') {                                                                              // решту веде план команди
+          tmp.x = tx; tmp.z = tz; brain.place(a, c, tmp, att, dt, po);
+          tx = po.x; tz = po.z; sp *= po.sp; hot = po.hot;
         }
-        if (!owns && c.owner === -side) {
-          const dx = b.x - tx, dz = b.z - tz;
-          if (dx * dx + dz * dz < 150) { tx += dx * 0.18; tz += dz * 0.18; }
-        }
-        {   // біля м'яча — лише той, хто відбирає; решта не лізе в купу ближче ~4.5 м
+        {   // біля м'яча — лише той, хто відбирає; решта не лізе в купу ближче ~6 м
           const dx = tx - b.x, dz = tz - b.z, d = Math.hypot(dx, dz);
-          if (c.owner !== 0 && d < 4.5) { const k = 4.5 / (d || 1); tx = b.x + (d > 0.01 ? dx : -side) * k; tz = b.z + dz * k; }
+          if (c.owner !== 0 && d < 6) { const k = 6 / (d || 1); tx = b.x + (d > 0.01 ? dx : -side) * k; tz = b.z + dz * k; }
         }
         tx = clamp(tx, -L + 1.5, L - 1.5); tz = clamp(tz, -W + 1.5, W - 1.5);
       }
@@ -336,7 +335,7 @@ export class Team {
       // «пливе» за грою), переставляється лише коли відійшла помітно (≥ ~0.6–3 м: що далі від м'яча, то грубіше), і далеко
       // від гри йде кроком (~2.3 м/с), а не бігом. Біля м'яча, у забігу, на перехопленні удару — реагує одразу й швидко
       if (!chase && !a.receiver) {
-        const db = Math.hypot(a.p.x - b.x, a.p.z - b.z), run = i === lanePick || (att && a.runUntil > (c.t || 0));
+        const db = Math.hypot(a.p.x - b.x, a.p.z - b.z), run = i === lanePick || hot;
         const inv = run ? 1 : Math.max(smooth(clamp(1 - (db - 8) / 26, 0, 1)), c.bs === 'roll' && bs > 18 ? 0.6 : 0);
         if (a.stx === undefined || Math.hypot(a.stx - tx, a.stz - tz) > 25) { a.stx = tx; a.stz = tz; }
         const kk = Math.min(1, dt * (0.8 + 3.5 * inv)); a.stx += (tx - a.stx) * kk; a.stz += (tz - a.stz) * kk;
@@ -346,7 +345,7 @@ export class Team {
         sp = Math.min(sp, lerp(2.3, sp, Math.max(inv, smooth(clamp((off - 3) / 7, 0, 1)))));
       } else a.calmMove = true;
       sp *= 0.84 + 0.34 * a.sk.pace;
-      a.tx = tx; a.tz = tz; a.spT = sp;
+      a.tx = tx; a.tz = tz; a.spT = sp; brain.hand(a, dt);
       if (chase && Math.hypot(a.p.x - b.x, a.p.z - b.z) < 6) { a.avx = 0; a.avz = 0; } else this.avoid(a, c.all);   // біля м'яча не відштовхуємось
       a.move(tx, tz, sp, dt);
     }

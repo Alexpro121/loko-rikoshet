@@ -183,6 +183,15 @@ Weather: дощ і сніг на InstancedMesh.
 
 - Внутрішні функції: boot:12
 
+## src/match/brain.js (405 рядків)
+
+TeamBrain: командне мислення ШІ. Читання гри, лінії блоку, опіка без дублів, ролі без м'яча, сигнал рукою; оцінки удару, паса й ведення.
+
+- Експорти: JOB:8, laneDist:29, zoneValue:48, shotQuality:58, passRisk:78, pickCarry:95
+- Внутрішні функції: add:26, nearest:41
+- **TeamBrain** :115
+  constructor:116, reset:118, read:125, setLines:153, defSpot:171, gaps:178, assignRest:194, countJobs:209, assignMarks:216, updateCalls:245, hand:276, afterPass:290, pickJob:295, place:357
+
 ## src/match/cinema.js (187 рядків)
 
 Кат-сценні інструменти: Replay (запис і повтор поз), Slaps («дай п'ять»), рукостискання.
@@ -197,12 +206,12 @@ Weather: дощ і сніг на InstancedMesh.
 
 - Експорти: dribbleStep:10
 
-## src/match/match.js (2932 рядків)
+## src/match/match.js (2948 рядків)
 
 Match: уся логіка матчу: фази, ввід удару, м'яч, відбори, воротарі, голи, кат-сцени, нагороди. Огляд: docs/ARCHITECTURE.md.
 
-- **Match** :48
-  constructor:49, start:91, formation:151, kickFor:192, timeText:195, periodBound:201, gameMin:202, overMin:204, extraText:205, minuteLabel:211, stoppage:217, ballFlying:222, calmBall:224, whistlePeriod:232, setClockHud:233, halfText:239, gkWaitBlock:247, pointerDown:249, joyStart:264, joyMove:272, pointerMove:274, pointerUp:276, hideAim:290, cancelAim:291, kickErr:297, shotMul:298, updateAim:300, cutAimAtMates:368, onWall:384, onPost:394, onBody:403, saveReact:466, controlScore:483, claimBall:504, tackleChance:524, addXp:526, showCard:529, bump:539, startTackle:551, updateTackles:566, resolveTackle:586, looseBall:619, placeBallAt:634, trapMine:642, makeReady:656, trapOpp:671, clearReceivers:689, laneClear:692, choosePass:707, longTarget:732, passTo:749, kickYaw:762, carries:768, carry:775, kickApproach:800, kickReady:818, dribbleKick:828, kickFollow:842, doPass:855, launchFor:870, startShot:879, takerThink:895, updateTaker:926, matesTackle:1018, releaseCounter:1029, remoteCtl:1043, gkHoldNow:1045, remoteWaiting:1046, remoteAimPose:1049, remoteHold:1056, remoteKick:1071, remoteRelease:1081, pickOppReceiver:1098, ricochetGoal:1120, pickMyReceiver:1126, launchShot:1147, onGoal:1169, updateGoal:1215, afterGoal:1228, update:1236, nextPeriod:1282, timeOver:1293, procLead:1309, procAt:1321, driveIntro:1336, laneStep:1425, postStep:1457, skipIntroPart:1491, crowdBox:1507, detour:1519, steerAround:1542, introSeparate:1562, setGaze:1580, endIntro:1581, introCam:1595, clearCine:1635, startPens:1646, camInfo:1654, camOverride:1665, markMoment:1679, storeClip:1685, takeMoments:1693, startHighlights:1697, playClips:1703, nextClip:1708, updateClip:1719, endClips:1732, replayCam:1738, skipCine:1749, startBreak:1758, updateBreak:1770, endBreak:1790, breakCam:1795, assignEndRoles:1810, endShake:1853, endCam:1887, clearSlow:1910, updateSlow:1913, checkTackles:1937, tackleReady:1949, updateDanger:1957, tick:1969, resolvePlayers:2076, updateSlides:2127, startSlide:2168, onSlideContact:2178, keeperCollect:2202, facesBall:2222, inGloves:2236, gkReceive:2255, gkRush:2268, startSmother:2283, resolveSmother:2294, updateKeepers:2307, goalImportance:2447, setupCelebration:2468, celebView:2486, fanBurst:2502, updateCelebration:2508, fallbackPick:2624, updateHolder:2641, keeperBodies:2674, updateSolidity:2694, animatePlayers:2705, syncView:2718, netBulge:2777, floatAt:2793, pause:2796, resume:2797, isPlaying:2798, endCelebrate:2801, endTalk:2838, end:2861, exit:2922
+- **Match** :49
+  constructor:50, start:92, formation:152, kickFor:193, timeText:196, periodBound:202, gameMin:203, overMin:205, extraText:206, minuteLabel:212, stoppage:218, ballFlying:223, calmBall:225, whistlePeriod:233, setClockHud:234, halfText:240, gkWaitBlock:248, pointerDown:250, joyStart:265, joyMove:273, pointerMove:275, pointerUp:277, hideAim:291, cancelAim:292, kickErr:298, shotMul:299, updateAim:301, cutAimAtMates:369, onWall:385, onPost:395, onBody:404, saveReact:467, controlScore:484, claimBall:505, tackleChance:525, addXp:527, showCard:530, bump:540, startTackle:552, updateTackles:568, resolveTackle:588, looseBall:621, placeBallAt:636, trapMine:644, makeReady:658, trapOpp:673, clearReceivers:691, laneClear:694, choosePass:710, longTarget:740, passTo:757, kickYaw:770, carries:776, carry:783, kickApproach:808, kickReady:826, dribbleKick:836, kickFollow:850, doPass:863, launchFor:881, startShot:890, takerThink:909, updateTaker:935, matesTackle:1031, releaseCounter:1043, remoteCtl:1057, gkHoldNow:1059, remoteWaiting:1060, remoteAimPose:1063, remoteHold:1070, remoteKick:1085, remoteRelease:1095, pickOppReceiver:1112, ricochetGoal:1134, pickMyReceiver:1140, launchShot:1161, onGoal:1183, updateGoal:1229, afterGoal:1242, update:1250, nextPeriod:1296, timeOver:1307, procLead:1323, procAt:1335, driveIntro:1350, laneStep:1439, postStep:1471, skipIntroPart:1505, crowdBox:1521, detour:1533, steerAround:1556, introSeparate:1576, setGaze:1594, endIntro:1595, introCam:1609, clearCine:1649, startPens:1660, camInfo:1668, camOverride:1679, markMoment:1693, storeClip:1699, takeMoments:1707, startHighlights:1711, playClips:1717, nextClip:1722, updateClip:1733, endClips:1746, replayCam:1752, skipCine:1763, startBreak:1772, updateBreak:1784, endBreak:1804, breakCam:1809, assignEndRoles:1824, endShake:1867, endCam:1901, clearSlow:1924, updateSlow:1927, checkTackles:1951, tackleReady:1964, updateDanger:1972, tick:1984, resolvePlayers:2092, updateSlides:2143, startSlide:2184, onSlideContact:2194, keeperCollect:2218, facesBall:2238, inGloves:2252, gkReceive:2271, gkRush:2284, startSmother:2299, resolveSmother:2310, updateKeepers:2323, goalImportance:2463, setupCelebration:2484, celebView:2502, fanBurst:2518, updateCelebration:2524, fallbackPick:2640, updateHolder:2657, keeperBodies:2690, updateSolidity:2710, animatePlayers:2721, syncView:2734, netBulge:2793, floatAt:2809, pause:2812, resume:2813, isPlaying:2814, endCelebrate:2817, endTalk:2854, end:2877, exit:2938
 
 ## src/match/penalty.js (449 рядків)
 
@@ -211,15 +220,15 @@ Penalties: серія пенальті: своя панель, приціл, с�
 - **Penalties** :21
   constructor:22, start:24, build:38, dots:76, keeperMove:86, camOverride:99, setMark:107, placeMark:116, begin:125, decide:150, fire:168, announce:185, verdict:197, update:212, liveStep:221, ballStep:312, judge:409, endKick:422, dispose:434, unbindKeys:435, post:438, finish:440
 
-## src/match/team.js (487 рядків)
+## src/match/team.js (486 рядків)
 
-Actor (гравець у логіці) і Team (ШІ лінії: розстановка, пресинг, забігання, воротар).
+Actor (гравець у логіці) і Team (рух ШІ: хто на м'яч, виконання рішень TeamBrain, воротар).
 
-- Внутрішні функції: ballAt:17, intercept:39
-- **Actor** :51
-  constructor:52, place:62, sync:63, move:65
-- **Team** :104
-  constructor:105, setFormation:114, spot:120, avoid:130, laneClear:146, pickRun:161, update:180, updateGK:386
+- Внутрішні функції: ballAt:18, intercept:40
+- **Actor** :52
+  constructor:53, place:65, sync:66, move:68
+- **Team** :107
+  constructor:108, setFormation:118, spot:125, avoid:136, laneClear:152, hasCover:164, update:174, updateGK:385
 
 ## src/match/view.js (142 рядків)
 
