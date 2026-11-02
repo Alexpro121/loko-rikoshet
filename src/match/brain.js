@@ -3,6 +3,7 @@ import { PITCH } from '../config.js';
 
 const { L, W, G } = PITCH;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const LANE_BACK = 0.4;                                // суперник ближче за це вздовж лінії (чи позаду її початку) лінію не закриває
 
 /** Що зараз робить гравець без м'яча. */
 export const JOB = { SHAPE: 0, SUPPORT: 1, RUN: 2, WIDTH: 3, BOX: 4, REST: 5, GO: 6, MARK: 7, BLOCK: 8 };
@@ -25,13 +26,17 @@ const _bestCall = [null, null], CALL_POLE = [1, -0.1, 0.1];
 let _n = 0;
 function add(side, u, z, k) { CX[_n] = clamp(u, -L + 3, L - 3) * side; CZ[_n] = clamp(z, -(W - 3), W - 3); CT[_n++] = k; }
 
-/** Найменша відстань від відрізка до гравців списку (з індексу from). */
+/**
+ * Наскільки вільна лінія з (x1, z1) у (x2, z2): найменша відстань від неї до гравців списку (з індексу from). Хто стоїть позаду
+ * її початку, лінію не закриває: раніше суперник упритул до м'яча «закривав» усі напрямки одразу, і під тиском не лишалось жодного.
+ */
 export function laneDist(x1, z1, x2, z2, list, from) {
   let m = 99;
-  const dx = x2 - x1, dz = z2 - z1, l2 = dx * dx + dz * dz || 1;
+  const dx = x2 - x1, dz = z2 - z1, l2 = dx * dx + dz * dz || 1, skip = LANE_BACK / Math.sqrt(l2);
   for (let i = from; i < list.length; i++) {
-    const p = list[i].p, t = clamp(((p.x - x1) * dx + (p.z - z1) * dz) / l2, 0, 1);
-    const ex = x1 + dx * t - p.x, ez = z1 + dz * t - p.z, d = ex * ex + ez * ez;
+    const p = list[i].p, tr = ((p.x - x1) * dx + (p.z - z1) * dz) / l2;
+    if (tr < skip) continue;
+    const t = tr > 1 ? 1 : tr, ex = x1 + dx * t - p.x, ez = z1 + dz * t - p.z, d = ex * ex + ez * ez;
     if (d < m * m) m = Math.sqrt(d);
   }
   return m;
@@ -61,7 +66,7 @@ export function shotQuality(x, z, side, foes) {
   let bs = -99, bz = 0, bc = 0;
   for (let i = 0; i < 5; i++) {
     const zs = (i - 2) * 0.48 * (G - 0.2), c = laneDist(x, z, gx, zs, foes, 1), off = Math.abs(gk.z - zs);
-    const sc = Math.min(c, 3) + Math.min(off, 4) * 0.7;
+    const sc = Math.min(c, 3) + Math.min(off, 4) * 0.7 - (c < 1 ? 3 : c < 2 ? 0.8 : 0);   // закрита лінія — майже певний блок: туди б'ють, лише коли інших нема
     if (sc > bs) { bs = sc; bz = zs; bc = c; }
   }
   const out = Math.abs(gk.x - gx), open = Math.abs(gk.z - bz);
@@ -105,6 +110,7 @@ export function pickCarry(a, side, foes, pm, cdx, cdz) {
     let s = Math.min(c, 6) * 0.8 + (zoneValue(ex, ez, side) - z0) * 12 + (dx * cdx + dz * cdz) * 0.7 - Math.abs(an) * 0.25;
     if (Math.abs(ez) > W - 3) s -= 3.5;
     if (Math.abs(ex) > L - 3) s -= 3.5;                                  // у кут гірше, ніж просто до лінії: звідти лише назад
+    if (ex * side > L - 12 && Math.abs(ez) > W - 12) s -= 2.5;           // кут біля чужих воріт: звідти ні кута для удару, ні виходу, м'яч там і втрачають
     if (pm < 6) s -= (dx * ax + dz * az) * (6 - pm) * 0.55;
     s += (Math.random() - 0.5) * (1 - iq) * 1.8;
     if (s > bs) { bs = s; bx = dx; bz = dz; }
@@ -125,6 +131,7 @@ export class TeamBrain {
   /** Читання гри раз на ~0.25 с: чий м'яч, де лінії, чи тиснути, хто кого тримає, хто просить м'яч. */
   read(dt, c, att, n1) {
     const T = this.team, side = T.side, b = c.ball, t = c.t || 0, ax = b.x * side, opps = c.opps, out = T.out;
+    if (c.owner !== 0) this.expect = false;                                // м'яч уже в когось: не чекаємо чергового читання, інакше команда ще ~0.25 с «атакує» після втрати
     if (att !== this.att) {
       this.att = att; if (att) this.wonT = t; else this.lostT = t;
       this.readT = 0;
@@ -163,9 +170,12 @@ export class TeamBrain {
     const k = att ? 1 : 2.4;                                               // лінія не стрибає за м'ячем, а переступає
     this.lineU += clamp(line - this.lineU, -6 * k * 0.25, 6 * k * 0.25);
     const gap = 19 - 4 * pr;
-    this.midU = this.lineU + gap; this.foreU = this.midU + gap + (this.ment < -0.3 ? -3 : 2);
-    // тиснути далеко не завжди: низький блок чекає, поки м'яч зайде в зону пресингу або носій затримається
-    this.pressOn = this.cp || ax < this.midU + 16 + 26 * pr || (c.readyT || 0) > 1.6;
+    // м'яч глибоко в нас: півзахист не лишається попереду м'яча, а стискає блок перед захистом; вістря спускається слідом
+    this.midU = Math.min(this.lineU + gap, Math.max(ax + 3, this.lineU + 8));
+    this.foreU = Math.min(this.midU + gap + (this.ment < -0.3 ? -3 : 2), Math.max(ax + 18, this.midU + 10));
+    // тиснути далеко не завжди: низький блок чекає, поки м'яч зайде в зону пресингу або носій затримається. Зона рахується від
+    // лінії схеми (cap), а не від lineU: один чужий нападник у глибині відтягує лінію, але не має вимикати пресинг на м'ячі
+    this.pressOn = this.cp || ax < Math.max(cap, -L + 9) + gap + 16 + 26 * pr || (c.readyT || 0) > 1.6;
   }
 
   /** Місце в обороні: своя лінія, вузько й зі зсувом на бік м'яча. */
@@ -220,7 +230,8 @@ export class TeamBrain {
     for (let j = 1; j < opps.length; j++) {
       const q = opps[j]; if (q === carrier) continue;
       const qx = q.p.x, qz = q.p.z, dG = Math.hypot(qx - gx, qz), dB = Math.hypot(qx - b.x, qz - b.z);
-      if (dB > 24 && qx * side > -L * 0.4) continue;                       // далеко від м'яча й далеко від воріт: його тримає зона, а не окрема людина
+      const qu = qx * side;
+      if ((dB > 24 || qu > b.x * side + 10) && qu > -L * 0.4) continue;    // далеко від м'яча чи позаду нього й далеко від воріт: його тримає зона, а не окрема людина (півзахист не тягнеться за ним угору)
       const v = (1 - dG / 116) * 3 + Math.max(0, 28 - dB) / 28 * 1.2;
       let k = n++; while (k > 0 && _thr[k - 1] < v) { _thr[k] = _thr[k - 1]; _idx[k] = _idx[k - 1]; k--; } _thr[k] = v; _idx[k] = j;
     }
@@ -231,12 +242,24 @@ export class TeamBrain {
       for (let i = 0; i < out.length; i++) {
         const a = out[i]; if (a.mark || a.manual || a.receiver || a.stun > 0 || a.frozen > 0 || i === T.pressI || i === T.coverI) continue;
         this.defSpot(a, b, sp);
-        const d = Math.hypot(sp.x - q.p.x, sp.z - q.p.z); if (d > LEASH[a.role.line]) continue;
-        const cost = d - (a.mkOld === q ? 6 : 0);                           // свого не кидає через дрібну різницю відстаней
+        // біля своїх воріт важить, хто вже поруч, навіть якщо його місце за схемою далі: після втрати гравець ще не в зоні, а хто опинився далі від воріт за суперника, той уже позаду. Деінде гравець тримається своєї зони й не тягне лінію вгору
+        const d = Math.hypot(sp.x - q.p.x, sp.z - q.p.z), dp = Math.hypot(a.p.x - q.p.x, a.p.z - q.p.z), hotQ = q.p.x * side < -L * 0.4, w = hotQ ? 0.55 : 0.2;
+        if (d > LEASH[a.role.line] && !(hotQ && dp < 8)) continue;
+        const cost = d * (1 - w) + dp * w + ((a.p.x - q.p.x) * side > 2 ? 6 : 0) - (a.mkOld === q ? 6 : 0);   // свого не кидає через дрібну різницю відстаней
         if (cost < bc) { bc = cost; best = a; }
       }
       if (best) best.mark = q;
     }
+  }
+
+  /** Темп в обороні (o із place): опікун не відстає від свого, а обіграний біжить назад так само, як після втрати м'яча; захисник над лінією не йде кроком, коли за спиною вже є суперник. */
+  defPace(a, o) {
+    const T = this.team, side = T.side, p = a.p, q = a.mark, u = p.x * side;
+    if (q) {
+      if ((q.p.x * side) < u - 1 && Math.hypot(q.p.x - p.x, q.p.z - p.z) > 2.5) { o.sp = Math.max(o.sp, 1.1); o.hot = true; }
+      else o.sp = Math.max(o.sp, Math.min(1.1, Math.hypot(q.p.vx, q.p.vz) / T.speed));
+    } else if (a.role.line === 'D') { if (u > this.lineU + 2.5 && this.oppDeep < u + 1) { o.sp = Math.max(o.sp, 1); o.hot = true; } }
+    else if (a.role.line === 'M' && u > this.midU + 7) { o.sp = Math.max(o.sp, 0.96); o.hot = true; }   // захист уже відійшов за чужим нападником: півзахист іде слідом, а не лишає між лініями дірку
   }
 
   /**
