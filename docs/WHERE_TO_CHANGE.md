@@ -71,7 +71,8 @@
 | Поворот корпусу на бігу | `Player.hipTurn` |
 | Падіння | `Player.knock`, `src/graphics/ragdoll.js` |
 | Руки й ноги дістають ціль | `solveReach`, `handsIK`, `plantFeet`, `solveArms` |
-| Стрибок воротаря | `gkDive`, `planDive`, `diveKin` |
+| Стрибок воротаря | `gkDive`, `planDive`, `diveKin`; накриття грудьми вперед: `gkSmother`, `diveFwd`, `FWD_K`; ривки рук: `capQ` у `handsIK`, `armGuard` |
+| Стрибок воротаря вгору за часом прильоту | `gkJump(T)`, виклики в `src/match/match.js` і `src/match/penalty.js` |
 | Обличчя, зачіски, номери | конструктор `Player`, `setLook`, `playerAtlas` у `src/graphics/textures.js` |
 | Вибір вигляду в редакторі | `allHairs`, `allSkins` в `ACADEMY`; `renderCustom` в `src/ui/ui.js` |
 
@@ -79,6 +80,14 @@
 | Поза удару в мить контакту, швидкість замаху | `KICK_*` і блок `this.kicking > 0` в `animate`, `src/graphics/player.js` |
 | Суміш поз без перельоту кінцівки | `arcBlend` у `src/graphics/ragdoll.js` |
 | Коли опорна стопа прикріплюється до газону | `plantFeet` у `src/graphics/player.js` |
+| Удар, пас щічкою, воле | `kick(power, side, ball)`, `volley`, блок `this.kicking > 0` в `animate` |
+| Стопа приходить до м'яча в мить контакту | `kickIK`, `reachFoot`; у відборі `tackleIK` |
+| Удар головою за висотою м'яча | `header(by)` |
+| Фінта на веденні | `Player.feint`, блок ходи в `animate` перед `loc.on` |
+| Стопа до м'яча на веденні | `Player.ballHint`, блок `st.bw` у `Gait.step` |
+| Обіграний захисник | `Player.beaten`, виклик у `resolveTackle` |
+| Реакція на штангу чи удар повз ворота | `missReact` у `src/match/cinema.js`, накладка `Player.emote` |
+| Відпустити позу рук стоячи перед дією | `Player.dropPose` |
 
 ## Сцена й ефекти
 

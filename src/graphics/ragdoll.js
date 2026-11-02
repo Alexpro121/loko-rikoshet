@@ -34,6 +34,7 @@ const SHOULDER = (i) => i === 11 || i === 12 || i === 0 || i === 1;
 const _hu = new THREE.Vector3(), _hf = new THREE.Vector3(), _hy = new THREE.Vector3(), _hz = new THREE.Vector3(), _hx = new THREE.Vector3(), _hh = new THREE.Vector3();
 const XA = new THREE.Vector3(1, 0, 0), FWD = new THREE.Vector3(0, 0, 1);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const smoothS = (t) => t * t * (3 - 2 * t);
 
 /** Світові положення точок ragdoll за поточною позою скелета (у тому ж порядку, що й точки тіла). */
 export function ragPoints(p, out = []) {
@@ -393,13 +394,21 @@ function hingeQ(P, upper, lower, parentQ, a, b, c, bend, knee, w, out) {
   const Y = _hy.copy(u).negate();
   // площина згину: куди відхилився нижній сегмент; майже пряма кінцівка — плавно до «коліном/ліктем уперед»
   const Z = _hz.copy(f).addScaledVector(u, -f.dot(u)).multiplyScalar(bend);
-  _hh.copy(FWD).addScaledVector(Y, -Y.dot(FWD)); if (_hh.lengthSq() < 1e-6) _hh.set(0, 1, 0).addScaledVector(Y, -Y.y); _hh.normalize();
+  _hh.copy(FWD).addScaledVector(Y, -Y.dot(FWD));
+  if (knee) {
+    // стегно майже вздовж курсу (сидить, нога вперед чи назад): «вперед» для коліна визначається лише шумом, і коліно
+    // перекидалось із зігнутого в пряме за кадр. Там опорний напрям плавно переходить на «вгору» (стегно вперед) чи «вниз» (назад)
+    const lf = _hh.length(), w = lf < 0.55 ? 1 - lf / 0.55 : 0;
+    if (w > 0) { _hx.copy(UP).addScaledVector(Y, -Y.y); const lu = _hx.length(); if (lu > 1e-6) _hh.addScaledVector(_hx, (Y.z <= 0 ? w : -w) / lu); }
+  }
+  if (_hh.lengthSq() < 1e-6) _hh.set(0, 1, 0).addScaledVector(Y, -Y.y); _hh.normalize();
   Z.addScaledVector(_hh, 0.06);
   let e = Math.acos(clamp(u.dot(f), -1, 1));
   if (knee) {
     // коліно дивиться вперед (± ~70° обертання стегна); прогин назад — це пряма нога, а не перекручене стегно
     Z.normalize(); const d = Z.dot(_hh);
-    if (d < 0.35) { Z.addScaledVector(_hh, 0.35 - d).normalize(); if (d < -0.2) e = 0; }
+    // прогин назад (d < −0.2) гасить згин плавно, а не обнуляє за кадр: на межі коліно «блимало» між зігнутим і прямим
+    if (d < 0.35) { Z.addScaledVector(_hh, 0.35 - d).normalize(); if (d < -0.2) e *= 1 - smoothS(clamp((-0.2 - d) / 0.5, 0, 1)); }
   }
   Z.normalize();
   const X = _hx.crossVectors(Y, Z).normalize(); Z.crossVectors(X, Y);

@@ -185,3 +185,29 @@ export class Slaps {
     p.engage(stay ? (p.bodyYaw ?? 0) : Math.atan2(o.x - p.x, o.z - p.z), stay ? lean * 0.5 : lean, w);
   }
 }
+
+const pickOf = (a) => a[(Math.random() * a.length) | 0];
+/**
+ * Реакція гравців на удар, що не став ні голом, ні сейвом: штанга (post) або м'яч у борт повз ворота. Раз на удар (m.missId).
+ * Автор удару хапається за голову чи розводить руками, партнери поблизу (не всі) теж, захисники біля воріт з полегшенням
+ * витирають лоб. Лише накладка Player.emote на верх тіла: mode гравця, рух, удар і ШІ не змінюються.
+ */
+export function missReact(m, post, impact = 0) {
+  if (m.missId === m.shotId || m.saveReactId === m.shotId || m.shotBy === 0 || m.phase !== 'play' || (m.game && m.game.sm && m.game.sm.name === 'GOAL')) return;   // лише жива гра: не після гола, не в паузі, не в серії пенальті
+  m.missId = m.shotId;
+  const mine = m.shotBy === 1, sh = mine ? m.shooter : m.lastOppTaker;
+  if (!sh || sh.isGK) return;
+  if (!post && (mine ? m.shot.power < 0.45 : m.shotBy !== -1 && impact < 18)) return;   // у борт повз ворота — лише справжній удар, не пас (shotBy −2 — пас чи удар повз: лише дуже сильний м'яч)
+  const gx = mine ? PITCH.L : -PITCH.L, sd = mine ? m.mine : m.opp, df = mine ? m.opp : m.mine;
+  if (Math.random() < (post ? 0.95 : 0.8)) sh.p.emote(pickOf([0, 0, 1]), 1.7);
+  for (let i = 0; i < sd.length; i++) {
+    const a = sd[i];
+    if (a === sh || a.isGK || a.p.downed || Math.hypot(a.p.x - sh.p.x, a.p.z - sh.p.z) > 16 || Math.random() > (post ? 0.5 : 0.35)) continue;
+    a.p.emote(pickOf([0, 1, 1]), 1.3 + Math.random() * 0.5);
+  }
+  for (let i = 0; i < df.length; i++) {
+    const a = df[i];
+    if (a.p.downed || Math.hypot(a.p.x - gx, a.p.z - sh.p.z) > 14 || Math.random() > (post ? 0.55 : 0.35)) continue;
+    a.p.emote(2, 1.3 + Math.random() * 0.5);
+  }
+}

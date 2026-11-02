@@ -283,7 +283,7 @@ export class Penalties {
       if (Math.abs(dz) < 0.9) {
         // точка майже на ньому: без стрибка — ловить стоячи (низький м'яч підбирає) або вистрибує вгору; руки йдуть до м'яча
         this.gStand = true;
-        if (this.dive.y > 1.9) gk.p.gkJump(); else gk.p.catchBall(this.dive.y < 0.7);
+        if (this.dive.y > 1.9) gk.p.gkJump(tArr); else gk.p.catchBall(this.dive.y < 0.7);
       } else {
         // висота стрибка за точкою: верхня половина воріт — у кут, середина — у політ, нижче ~0.6 м — низом по газону
         const kind = this.dive.y > H * 0.5 ? 0 : this.dive.y > 0.5 ? 1 : 2, sgn = Math.sign(dz);

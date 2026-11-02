@@ -40,6 +40,7 @@ export function dribbleStep(st, p, ball, dx, dz, dt) {
   const k = Math.exp(-dt * 1.4);                                       // трава гальмує м'яч між дотиками
   ball.vx *= k; ball.vz *= k; ball.x += ball.vx * dt; ball.z += ball.vz * dt;
   st.t = (st.t || 0) + dt;
+  if (p.ballHint) p.ballHint(ball.x, ball.z, ball.vx, ball.vz);           // хода ставить стопу до м'яча (лише вигляд)
   const steps = p.gaitSys ? p.gaitSys.steps : 0, newStep = steps !== st.steps; st.steps = steps;
   const rx = ball.x - p.x, rz = ball.z - p.z, d = Math.hypot(rx, rz), ahead = rx * dx + rz * dz;
   const ps = Math.hypot(p.mvx || p.vx || 0, p.mvz || p.vz || 0);
@@ -50,6 +51,7 @@ export function dribbleStep(st, p, ball, dx, dz, dt) {
     // дотик: м'яч іде в бажаний бік трохи швидше за гравця; що далі він уже попереду, то легше підбиває
     const v = Math.max(2.2, ps * 1.15 + 1.2 - Math.max(0, ahead - 0.5) * 2.5);
     ball.vx = dx * v; ball.vz = dz * v; st.t = 0;
+    if (p.ballHint) p.ballHint(ball.x, ball.z, ball.vx, ball.vz);
     // дотик робить та нога, що справді ближче до м'яча, а не просто з його боку
     const F = p.gaitSys ? p.gaitSys.feet : null;
     if (p.tapBall) p.tapBall(F ? (Math.hypot(F[1].x - ball.x, F[1].z - ball.z) < Math.hypot(F[0].x - ball.x, F[0].z - ball.z) ? 1 : 0) : rx * Math.cos(p.bodyYaw) - rz * Math.sin(p.bodyYaw) > 0 ? 1 : 0);

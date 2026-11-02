@@ -31,7 +31,7 @@ const KIT_LIST = [
 ];
 const kitOf = (id) => KIT_LIST.find((k) => k[0] === id) || KIT_LIST[0];
 const T0 = 3.0;   // «рух по лінії»: час перебіжки від штанги до штанги, с
-const GK_ANIMS = ['gkwait', 'gkshuffle', 'catch', 'scoop', 'gkdive', 'pdive', 'gkjump', 'parry', 'gkpunch', 'gktip', 'gkfoot', 'gkstar', 'gkknee', 'gkfall', 'throw'];
+const GK_ANIMS = ['gkwait', 'gkshuffle', 'catch', 'scoop', 'gkdive', 'pdive', 'gkjump', 'parry', 'gkpunch', 'gktip', 'gkfoot', 'gkstar', 'gkknee', 'gkfall', 'throw', 'gksmother'];
 const GK_STRIKES = { gkpunch: 'gkPunch', gktip: 'gkTip', gkfoot: 'gkFoot', gkstar: 'gkStar', gkknee: 'gkKnee', gkfall: 'gkFall' };
 /** Куди дивиться гравець відносно руху (для перевірки бігу боком, спиною, навскіс): зсув погляду від напрямку руху. */
 const FACES = [['move', 'Туди, куди біжить'], ['side', 'Біжить боком (праворуч)'], ['sideL', 'Біжить боком (ліворуч)'], ['back', 'Біжить спиною'],
@@ -45,6 +45,8 @@ const ANIMS = [
   ['kneel', 'Ковзання на колінах'], ['knock', 'Поштовх (падіння тіла)'], ['cheer', 'Радість'], ['sad', 'Розчарування'], ['gkwait', 'Воротар: стійка'], ['catch', 'Воротар: ловить'], ['scoop', 'Воротар: підбирає'],
   ['gkdive', 'Воротар: стрибок'], ['pdive', 'Пенальті: стрибок'], ['gkjump', 'Воротар: вгору'], ['parry', 'Воротар: відбиває'], ['gkpunch', 'Воротар: кулаками'], ['gktip', 'Воротар: через поперечину'], ['gkfoot', 'Воротар: ногою'], ['gkstar', 'Воротар: «зірочка»'], ['gkknee', 'Воротар: на коліно'], ['gkfall', 'Воротар: падає на бік'], ['throw', 'Воротар: кидок'],
   ['gkshuffle', 'Воротар: рух по лінії'], ['stagger', 'Втримав рівновагу'], ['fend', 'Тримає суперника рукою'],
+  ['volley', 'Воле: удар у повітрі'],
+  ['beaten', 'Обіграний захисник'],
 ];
 const CHEERS = ['Стрибки з руками', 'Махає рукою', 'Літак з нахилом', 'Кулаки вгору', 'Танець', 'Сальто', '«Локомотив»', 'Оберт 360°', '«Тихо!»', 'Колиска', 'Літак', 'Віддає честь', 'Деб'];
 
@@ -148,6 +150,7 @@ function start(fresh) {
     else if (a === 'slide') p.slideTackle();
     else if (a === 'gkwait') { p.setMode('gkwait', 0); p.splitT = 0.18; }
     else if (a === 'catch' || a === 'scoop') { if (p === players[0]) { gkShot(p); p.ballAt(gb.x, gb.y, gb.z, GB_R); } p.catchBall(); }
+    else if (a === 'gksmother') { divePrep(p); gb.on = false; p.yaw = 0; p.gkSmother({ x: p.x, y: 0.14, z: p.z + 1.4 }, 0.3, 6.5); }   // м'яч на газоні за 1.4 м уперед, як Match.startSmother
     else if (a === 'throw') p.throwBall();
     else if (a === 'gkjump') p.gkJump();
     else if (GK_STRIKES[a]) { if (p === players[0]) gkShot(p); p[GK_STRIKES[a]]({ x: gb.cx, y: gb.yc, z: gb.cz }, gb.tc); }
@@ -158,7 +161,7 @@ function start(fresh) {
     else if (a === 'knock') { const ang = Math.random() * Math.PI * 2; p.knock(Math.sin(ang), Math.cos(ang), 3 + Math.random() * 2, Math.random() < 0.6); }
     else if (typeof p[a] === 'function') p[a]();
   }
-  if (players[0] && GK_ANIMS.includes(S.anim) && S.anim !== 'throw' && !S.squad) { if (!['catch', 'scoop', 'pdive', 'gkdive', ...Object.keys(GK_STRIKES)].includes(S.anim)) gkShot(players[0]); } else gb.on = false;
+  if (players[0] && GK_ANIMS.includes(S.anim) && S.anim !== 'throw' && !S.squad) { if (!['catch', 'scoop', 'pdive', 'gkdive', 'gksmother', ...Object.keys(GK_STRIKES)].includes(S.anim)) gkShot(players[0]); } else gb.on = false;
   lastAnim = S.anim;
 }
 /** Стрибок у лабораторії йде вбік, як у грі: щоразу з того самого місця, на ~3 м у бік стрибка. */
@@ -410,6 +413,7 @@ function renderPanel() {
     panel.append(row('Швидкість', range('speed', 0, 9.5, 0.1, () => {}, (v) => v.toFixed(1) + ' м/с')));
     panel.append(h('div', { className: 'checks' }, check('dribble', 'Ведення м’яча', () => {})));
     panel.append(h('div', { className: 'chips', style: 'margin-top:8px' }, btn('Старт із місця', () => { cmd.v = 0; }), btn('Різко гальмувати', () => { cmd.brakeT = 1.4; })));
+    panel.append(h('div', { className: 'chips', style: 'margin-top:8px' }, ...['Фінта: степовер', 'Фінта: drag-back', 'Фінта: обманний замах'].map((n, k) => btn(n, () => { for (const p of players) p.feint(k); }))));
   }
   if (['run', 'idle'].includes(S.anim)) {
     panel.append(row('Маршрут', select('route', ROUTES, () => { cmd.timer = 0; })));

@@ -15,7 +15,7 @@ import { incomeMult, striker, keeper } from '../state/economy.js';
 import { oppSquad, skillOf, gkBonus, gainXp, ovr, tierOf, keysFor, ROLE_UA, STAT_NAMES } from '../state/squad.js';
 
 import { Penalties } from './penalty.js';
-import { Replay, Slaps, shakeHands, patShoulder } from './cinema.js';
+import { Replay, Slaps, shakeHands, patShoulder, missReact } from './cinema.js';
 import { Walkout } from './walkout.js';
 import { diveKin, GK_STRIKE, angDiff } from '../graphics/player.js';
 import { evolveSpec, recordMatch } from '../state/rivals.js';
@@ -392,6 +392,7 @@ export class Match {
     v.particles.burst(b.x - nx * R, 0.5, b.z - nz * R, Math.min(6, 2 + (impact / 8) | 0), 3 + impact * 0.1, 0.3, 0.2, ['#e9efe6', '#b9c9b5'], 10, 0.5);
     if (impact > 28) this.game.addTrauma(Math.min(0.12, (impact - 28) / 220));   // камера здригається лише від справді сильного удару в борт
     if (this.bs === 'roll' && this.shotBy > 0 && this.shotBounces >= 2) this.ui.hud.combo(this.shotBounces);
+    if (this.bs === 'roll' && impact > 12 && Math.abs(b.x) > L - 1.6) missReact(this, false, impact);   // сильний удар у задній борт: промах — реакція гравців (cinema.js)
   }
   onPost(nx, nz, impact) {
     this.deflectId = this.shotId;                                       // м'яч відскочив: це вже не удар, партнери знову тверді (updateSolidity)
@@ -401,6 +402,7 @@ export class Match {
     this.view.particles.burst(this.ball.x, 0.6, this.ball.z, 8, 6, 0.5, 0.22, ['#ffffff', '#d9dcd8'], 10, 0.6);
     this.game.addTrauma(0.18);
     this.floatAt(this.ball.x, this.ball.z, 'ШТАНГА!', 'warn');
+    if (impact > 8) missReact(this, true);                              // штанга: реакція гравців (cinema.js)
   }
 
   onBody(b, vn, nx, nz, speed) {
@@ -622,7 +624,7 @@ export class Match {
     } else {
       // промах: захисник «провалився» у випаді — відновлюється, носій лишається з м'ячем
       a.stun = 1.0; a.noTrap = 0.9;
-      if (Math.random() < 0.25) this.bump(a, h, 0.1); else a.p.hit();
+      if (Math.random() < 0.25) this.bump(a, h, 0.1); else a.p.beaten(h.p.x - a.p.x, h.p.z - a.p.z);   // обіграний: розгойдався на випаді, озирається за нападником
       if (vsMine) { this.floatAt(h.p.x, h.p.z, 'ЗАХИСТИВ М’ЯЧ!', 'good'); audio.pass(); this.addXp(h, 12); }
       else this.floatAt(a.p.x, a.p.z, 'НЕ ДОТЯГНУВСЯ', 'warn');
     }
@@ -776,7 +778,7 @@ export class Match {
     a.p.dribble = false;
     // адресат збоку чи позаду — гравець не б'є м'яч, що лежить у нього збоку, і не крутиться в ударі на 180°: обходить м'яч,
     // стає за ним на лінії паса, і лише тоді замах (kickApproach). Рукою воротар кидає одразу
-    const swing = () => { if (hands) a.p.throwBall(); else a.p.kick(long ? 0.9 : 0.35); };
+    const swing = () => { if (hands) a.p.throwBall(); else a.p.kick(long ? 0.9 : 0.35, undefined, this.ball); };
     this.pendKick = { dx: tx / tl, dz: tz / tl, hands, run: false, w: 0, t: hands ? 0.18 : -1, pw: long ? 0.9 : 0.35, swing, fn: () => this.doPass(a, best, long) };
     if (hands) { a.p.yaw = Math.atan2(tx, tz); swing(); }
   }
@@ -1022,7 +1024,7 @@ export class Match {
       if (!this.shotWound) {
         const ready = this.dribbleKick(a, ux, uz, dt, 0.75);
         if ((this.shootT <= 0.13 && ready) || this.shootT <= -1.0) {
-          this.shotWound = true; this.shotWT = 0.13; a.p.yaw = Math.atan2(ux, uz); a.p.dribble = false; a.p.kick(0.9); a.kickV = null;
+          this.shotWound = true; this.shotWT = 0.13; a.p.yaw = Math.atan2(ux, uz); a.p.dribble = false; a.p.kick(0.9, undefined, this.ball); a.kickV = null;
         }
       } else this.kickFollow(a, ux, uz, dt, this.shotWT);
     } else if (!a.isGK && rc) {
@@ -1129,7 +1131,7 @@ export class Match {
     const speed = hands ? (9 + 17 * pw) * GK_THROW : Math.min(PHYS.maxSpeed, PHYS.baseShot * (0.28 + 0.72 * pw) * (pw >= 0.45 ? shotSkill(a.sk.shoot) : 1));
     this.kickoff = false; this.netAim = null; this.netWaitT = 0;
     a.p.dribble = false; if (a.p.mode === 'aim') a.p.setMode('idle');
-    const swing = () => { if (hands) a.p.throwBall(); else a.p.kick(pw); };
+    const swing = () => { if (hands) a.p.throwBall(); else a.p.kick(pw, undefined, this.ball); };
     this.pendKick = { dx, dz, hands, run: false, w: 0, t: hands ? 0.18 : -1, pw: Math.max(0.35, pw), swing, fn: () => this.remoteRelease(a, dx * speed, dz * speed, pw) };
     if (hands) { a.p.yaw = Math.atan2(dx, dz); swing(); }
   }
@@ -2094,7 +2096,7 @@ export class Match {
         const want = Math.atan2(sh.dirx, sh.dirz), okA = sh.power < 0.45 ? 1.55 : 0.6;
         const hd = this.carry(a, dt, want, 5.5, (3.6 + 1.6 * sh.power) * (0.84 + 0.34 * a.sk.pace));
         if (Math.abs(angDiff(hd, want)) < okA || w.t > 1.0) {
-          w.kicked = true; this.windT = 0.13; h.yaw = this.kickYaw(h, sh.dirx, sh.dirz); h.kick(sh.power);
+          w.kicked = true; this.windT = 0.13; h.yaw = this.kickYaw(h, sh.dirx, sh.dirz); h.kick(sh.power, undefined, this.ball);
         }
       } else if (!w.kicked) {
         // пас — внутрішньою стороною стопи й під кутом до ~70° (без обходу м'яча), удар — з розбігу під кутом до ~37°
@@ -2105,7 +2107,7 @@ export class Match {
         const blocked = Math.abs(b.x - sh.dirx * 0.45) > L - 1.3 || Math.abs(b.z - sh.dirz * 0.45) > W - 1.3 || Math.abs(b.x - sh.dirx * 0.45) + Math.abs(b.z - sh.dirz * 0.45) > L + W - PITCH.CH - 1.3 * Math.SQRT2;
         if (this.kickReady(a, st, sh.dirx, sh.dirz, okA) || w.t > (blocked ? 0.5 : 1.3)) {
           w.kicked = true; this.windT = 0.13; h.yaw = Math.atan2(sh.dirx, sh.dirz);
-          h.kick(sh.power, Math.hypot(h.vx, h.vz) < 1.2 ? 1 : undefined);   // з місця — правою, як у стійці прицілу
+          h.kick(sh.power, Math.hypot(h.vx, h.vz) < 1.2 ? 1 : undefined, this.ball);   // з місця — правою, як у стійці прицілу
         }
       } else {
         if (w.carry) this.carry(a, dt, null, 0, Math.max(2.5, Math.hypot(h.vx, h.vz)));          // замах на бігу: м'яч біля ноги до контакту
@@ -2460,7 +2462,7 @@ export class Match {
           // (низом — «кошиком», на рівні тіла — «віконцем»), руки назустріч точно до прильоту
           if (predY > 1.75 && bar < 0.5) strike(() => g.p.gkTip(at, eta));
           else if (predY > 1.35 && bsp > 22 && Math.random() < 0.3 + 0.4 * (1 - g.sk.hands)) strike(() => g.p.gkPunch(at, eta));
-          else { g.decided = this.shotId; g.decType = 'hands'; if (predY > 1.4) g.p.gkJump(); else g.p.catchBall(lowBall && predY < 0.6, eta); }
+          else { g.decided = this.shotId; g.decType = 'hands'; if (predY > 1.4) g.p.gkJump(eta); else g.p.catchBall(lowBall && predY < 0.6, eta); }
           continue;
         }
         // поруч, але не в руки — швидка реакція без польоту (як справжній воротар на близький м'яч): чекає до ~0.3 с і тоді
