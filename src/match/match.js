@@ -8,7 +8,7 @@ import { ground, BallPlan } from '../physics/ballmodel.js';
 import { dribbleStep, keepBallIn } from './dribble.js';
 import { MatchView } from './view.js';
 import { Actor, Team } from './team.js';
-import { JOB, zoneValue, shotQuality, passRisk, pickCarry } from './brain.js';
+import { JOB, zoneValue, shotQuality, passRisk, pickCarry, laneDist } from './brain.js';
 import { audio, vibrate } from '../core/audio.js';
 import { S, commit } from '../state/save.js';
 import { incomeMult, striker, keeper } from '../state/economy.js';
@@ -34,7 +34,7 @@ const END_T = 9.4;                  // після фінального свис�
 const LZ = -14;                     // лінія шикування: ближче до тунелю (команди доходять до неї без монтажних «стрибків»)
 const LANE_Z = LZ + 1.45;           // доріжка гостей — перед шеренгою господарів (між ними й трибуною), на відстані витягнутої руки
 const _fr = new THREE.Frustum(), _pv = new THREE.Matrix4(), _sp = new THREE.Sphere(new THREE.Vector3(), 2.5);
-const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3(), _cp = { x: 0, z: 0 };
+const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3(), _cp = { x: 0, z: 0 }, _pa = { x: 0, z: 0 };
 const H = 1 / PHYS.hz;
 const MAX_STEPS = Math.ceil(0.1 * PHYS.hz) + 1;   // кадр не довший за 0.1 с (game.js): усі кроки фізики вміщаються, м'яч не відстає від гравців на низькому FPS
 const AIM_UNIT = 3;                 // скаутинг: одиниця «довго цілиться» — ~3 с реального часу (пороги — у rivals.js)
@@ -180,9 +180,9 @@ export class Match {
       for (const a of [t.gk, ...t.out]) a.p.yaw = side > 0 ? Math.PI / 2 : -Math.PI / 2;
     }
     hold.place(-1.8 * kick, 0); hold.kx = -1.8 * kick; hold.kz = 0;
-    this.kickoff = true; this.kickT = 0; this.hitStop = 0;
+    this.kickoff = true; this.kickT = 0; this.hitStop = 0; this.koQ = null; this.koRun = false;
     if (kick > 0) this.makeReady(hold, true);
-    else { this.trapOpp(hold, 0); this.ui.hud.warn(null); hold.p.yaw = -Math.PI / 2; }
+    else { this.trapOpp(hold, 0); this.ui.hud.warn(null); hold.p.setMode('idle'); hold.p.yaw = -Math.PI / 2; }   // м'яч поставили, а не прийняли: без пози прийому
     b.x = 0; b.z = 0; b.vx = b.vz = 0; ground(b); this.glideT = 0;   // і висота: м'яч, що був у повітрі, інакше висів би над центром усю кат-сцену (tick у ній не йде)
     this.bpx = undefined;                                    // м'яч поставили: малювати без змішування зі старим кроком фізики
     this.hideAim();
@@ -414,8 +414,9 @@ export class Match {
     // м'яч на рівні голови: не прийом, а удар головою — до воріт суперника (відбиває й захисник: подалі від своїх воріт)
     const hy = this.ball.y;
     if (!a.isGK && hy > 1.4) {
-      if (a.headId === this.shotId) return true;
-      a.headId = this.shotId;
+      // удар головою — один дотик: двоє біля м'яча інакше перебивали його один в одного десятки разів за кадр (кожен удар міняв shotId, і headId нікого не стримував)
+      if (a.headId === this.shotId || this.time - (this.headT ?? -9) < 0.3) return true;
+      a.headId = this.shotId; this.headT = this.time;
       const B = this.ball, gx = a.side > 0 ? L + 1 : -L - 1, tx = gx - a.p.x, tz = rand(-G, G) * 0.8 - a.p.z, tl = Math.hypot(tx, tz) || 1;
       const err = (1 - (a.sk.shoot + a.sk.iq) / 2) * 0.9, ang = Math.atan2(tz / tl, tx / tl) + rand(-err, err);
       const sp = clamp(7 + speed * 0.4, 9, 24);
@@ -459,7 +460,7 @@ export class Match {
       if (shotAt) this.floatAt(a.p.x, a.p.z, a.side > 0 ? 'ВРЯТУВАВ!' : 'ВОРОТАР!', a.side > 0 ? 'good' : 'warn');
     } else {
       audio.wall(0, 8);
-      if (speed > 24) { const q = Math.random(); if (q < 0.4) a.p.header(); else if (q < 0.7) a.p.block(); else a.p.hit(); }
+      if (speed > 24) { if (hy < 0.6) a.p.block(); else a.p.hit(); }   // голова лише вище ~1.4 (гілка вгорі): низький м'яч блокує ногою, на рівні тіла приймає корпусом
       else if (speed > 6 && a.p.mode === 'idle' && !a.p.kicking) a.p.receive(this.ball.y, speed);   // зачепив, але не втримав — рух ногою/тілом видно
     }
     v.ball.squash(nx, nz, 0.22); this.planT = 0; this.deflectId = this.shotId;   // м'яч змінив курс — прогноз перерахувати одразу; партнери того, хто бив, знову тверді
@@ -525,7 +526,7 @@ export class Match {
     if (bm && bo) {
       const pm = clamp(0.5 + (sm - so) * 1.6 + 0.25 * (bm.sk.drib - bo.sk.tack), 0.08, 0.92);
       win = Math.random() < pm ? bm : bo;
-      const lose = win === bm ? bo : bm; lose.noTrap = Math.max(lose.noTrap, 0.4);
+      const lose = win === bm ? bo : bm; lose.noTrap = Math.max(lose.noTrap, 0.4); lose.p.hit();
       this.floatAt(win.p.x, win.p.z, 'ВИГРАВ М’ЯЧ', win.side > 0 ? 'good' : 'warn');
     }
     const sp = Math.hypot(this.ball.vx, this.ball.vz);
@@ -533,7 +534,7 @@ export class Match {
   }
 
   /** Шанс відбору: навичка «Відбір» супротивника проти «Веденню» виконавця; сила ліги задає базу. */
-  tackleChance(a) { const h = this.holder ? this.holder.sk.drib : 0.4; return clamp(this.spec.tackle * (0.75 + 0.5 * a.sk.tack) - (h - 0.4) * 0.35, 0.3, 0.97); }
+  tackleChance(a, h) { return clamp(this.spec.tackle * (0.75 + 0.5 * a.sk.tack) - (h.sk.drib - 0.4) * 0.35, 0.3, 0.97); }
 
   addXp(actor, n) { const i = this.mine.indexOf(actor); if (i >= 0) this.xp[i] += n; }
 
@@ -588,6 +589,7 @@ export class Match {
       const dx = a.tklX - a.p.x, dz = a.tklZ - a.p.z, d = Math.hypot(dx, dz) || 1;
       // стопа має дістати м'яч, тіло зупиняється ~0.85 м від нього. Швидкість — не більше ~6 м/с (м'яч утік — під кінець
       // випаду тіло не «вистрілює» вперед) і набирається з поточної за ~0.08 с, без стрибка
+      if (d > 0.3) a.p.yaw += angDiff(a.p.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 14);   // нога й корпус ідуть туди, куди летить тіло: дотяг у resolveTackle рахується від напрямку корпуса
       const lunge = Math.min(7.5, Math.min(1.6, Math.max(0, d - 0.85)) / Math.max(0.05, a.tkl)), kv = Math.min(1, dt * 12);
       a.p.vx += ((dx / d) * lunge - a.p.vx) * kv; a.p.vz += ((dz / d) * lunge - a.p.vz) * kv; a.p.x += a.p.vx * dt; a.p.z += a.p.vz * dt;
       a.tkl -= dt;
@@ -603,7 +605,7 @@ export class Match {
     const vsOpp = a.side > 0 && this.bs === 'held' && this.taker && !(this.taker.isGK && !this.taker.footBall);
     if (!vsMine && !vsOpp) { a.stun = Math.max(a.stun, 0.4); return; }   // м'яч уже пішов — нога в порожнечу
     const h = vsMine ? this.holder : this.taker;
-    const chance = vsMine ? this.tackleChance(a) : clamp(0.5 + (a.sk.tack - h.sk.drib) * 0.6, 0.2, 0.92);
+    const chance = vsMine || this.spec.online ? this.tackleChance(a, h) : clamp(0.5 + (a.sk.tack - h.sk.drib) * 0.6, 0.2, 0.92);   // онлайн: обидві сторони за однією формулою
     if (near && Math.random() < chance) {
       if (a.side > 0) this.addXp(a, 25);
       h.stun = Math.max(h.stun, 0.9); h.noTrap = 0.7;
@@ -612,7 +614,7 @@ export class Match {
       if (Math.random() < 0.3 + 0.4 * a.sk.tack) {                 // чисто: м'яч лишається в ногах захисника
         this.floatAt(a.p.x, a.p.z, vsMine ? 'ВІДІБРАВ!' : 'ПЕРЕХОПИЛИ!', vsMine ? 'warn' : 'good'); audio.pass();
         if (vsMine) { this.cancelAim(); h.p.setThreat(0, 0); h.manual = false; this.trapOpp(a, 0); }
-        else { h.manual = false; this.taker = null; h.p.dribble = false; this.placeBallAt(a, true); a.noTrap = 0; a.p.receive(0, 4); this.makeReady(a); }
+        else { h.manual = false; this.taker = null; h.p.dribble = false; this.placeBallAt(a, true); a.noTrap = 0; this.makeReady(a); a.p.receive(0, 4); }   // receive після makeReady: він скидає режим на idle
       } else {                                                     // вибив: м'яч відскакує вперед-убік — боротьба за нього
         const ang = fy + rand(-0.9, 0.9), sp = rand(5, 9);
         this.looseBall(Math.sin(ang) * sp, Math.cos(ang) * sp);
@@ -621,7 +623,7 @@ export class Match {
       }
     } else {
       // промах: захисник «провалився» у випаді — відновлюється, носій лишається з м'ячем
-      a.stun = 1.0; a.noTrap = 0.9;
+      a.stun = 1.0; a.noTrap = 0.9; (a.side > 0 ? this.myTeam : this.oppTeam).missT = this.time;   // партнер не кидається слідом тієї ж миті (lungePause)
       if (Math.random() < 0.25) this.bump(a, h, 0.1); else a.p.hit();
       if (vsMine) { this.floatAt(h.p.x, h.p.z, 'ЗАХИСТИВ М’ЯЧ!', 'good'); audio.pass(); this.addXp(h, 12); }
       else this.floatAt(a.p.x, a.p.z, 'НЕ ДОТЯГНУВСЯ', 'warn');
@@ -661,13 +663,14 @@ export class Match {
     if (this.shotBy === 1 && this.shooter && a !== this.shooter && this.bs === 'roll') { this.addXp(this.shooter, 10); this.addXp(a, 6); this.floatAt(a.p.x, a.p.z, 'ПАС!', 'good'); }
     const saved = a.isGK && this.bs === 'roll' && this.shotBy === -1;   // спіймав удар суперника; свій пас назад — це не сейв
     if (saved) this.creditSave(a);
+    const y0 = this.ball.y;                                             // висота до placeBallAt: ground її обнуляє, а від неї залежить прийом (стопа, стегно, груди)
     this.placeBallAt(a, true); audio.pass();
     a.p.setExpr('happy', 0.5);
-    if (a.isGK) { this.gkReceive(a, speed); if (saved && !a.footBall) this.floatAt(a.p.x, a.p.z, 'ВРЯТУВАВ!', 'good'); }
-    else a.p.receive(this.ball.y, speed);
-    this.view.ball.hop = 0.3;
+    if (a.isGK) { this.ball.y = y0; this.gkReceive(a, speed); ground(this.ball); if (saved && !a.footBall) this.floatAt(a.p.x, a.p.z, 'ВРЯТУВАВ!', 'good'); }   // воротар вибирає прийом за справжньою висотою: раніше завжди «кошик»
+    this.view.ball.hop = clamp(y0, 0.3, 0.6);
     this.clearReceivers();
     this.makeReady(a);
+    if (!a.isGK) a.p.receive(y0, speed);                                // після makeReady: він скидає режим на idle, тож раніше прийом наших гравців не показувався
   }
 
   makeReady(a, kickoff) {
@@ -689,32 +692,35 @@ export class Match {
     if (a.cool > 0) return;
     if (a.isGK) this.saveReact(a, true);
     this.pendKick = null; this.shotWound = false;
+    const y0 = this.ball.y;                                             // висота до placeBallAt: ground її обнуляє
     this.placeBallAt(a, true);
+    if (y0 > 0.3) this.view.ball.hop = Math.min(y0, 0.6);
     if (this.holder) this.holder.manual = false;
     this.bs = 'held'; this.owner = -1; this.taker = a; a.manual = true;
     this.showCard(a);
     this.dribbleT = 0; this.tackleT = 0; this.telegraph = false; this.thinkT = 0.15; this.dribDx = -1; this.dribDz = 0; this.clearReceivers();
-    a.p.receive(this.ball.y, speed);
+    if (!a.isGK) a.p.receive(y0, speed);                                // воротар приймає нижче (gkReceive): поза ногою скидала вже розпочату ловлю руками
     a.p.dribble = !a.isGK;
     this.netCmd = null; this.netAim = null; this.netWaitT = 0; this.netAuto = !!this.link && this.link.newPoss();
     this.ui.hud.warn(this.link ? 'М’ЯЧ У СУПЕРНИКА' : 'КОНТРАТАКА!');
     a.p.setExpr('angry', 1);
-    if (a.isGK) { this.gkReceive(a, speed); if (!a.footBall) audio.save(); this.gkHoldT = a.footBall ? 0.3 : 0.7 + Math.random() * 0.4; }   // коротко: прийняв, притиснув — і грає далі
+    if (a.isGK) { this.ball.y = y0; this.gkReceive(a, speed); ground(this.ball); if (!a.footBall) audio.save(); this.gkHoldT = a.footBall ? 0.3 : 0.7 + Math.random() * 0.4; }   // коротко: прийняв, притиснув — і грає далі
     this.aiming = false; this.hideAim();
   }
 
   clearReceivers() { for (const a of this.actors) a.receiver = false; this.passTarget = null; this.receiverT = 0; }
 
-  /** Найменша відстань від відрізка (x1,z1)-(x2,z2) до гравців списку, починаючи з індексу from. */
+  /** Вільна лінія (x1,z1)-(x2,z2), як laneDist у brain.js: хто позаду її початку, не закриває. Нульовий відрізок дає відстань до найближчого (хто тримає адресата). */
   laneClear(x1, z1, x2, z2, list, from) {
-    let m = 99;
-    const dx = x2 - x1, dz = z2 - z1, l2 = dx * dx + dz * dz || 1;
-    for (let i = from; i < list.length; i++) {
-      const p = list[i].p, t = clamp(((p.x - x1) * dx + (p.z - z1) * dz) / l2, 0, 1);
-      const ex = x1 + dx * t - p.x, ez = z1 + dz * t - p.z, d = Math.sqrt(ex * ex + ez * ez);
-      if (d < m) m = d;
-    }
-    return m;
+    if (x1 === x2 && z1 === z2) { let m = 99; for (let i = from; i < list.length; i++) { const p = list[i].p, d = Math.hypot(p.x - x1, p.z - z1); if (d < m) m = d; } return m; }
+    return laneDist(x1, z1, x2, z2, list, from);
+  }
+
+  /** Куди летить пас цьому адресатові: тому, хто забігає, на хід; решті майже в ноги. Вибір адресата й сам пас беруть ту саму точку. */
+  passAim(q, len, hands, out) {
+    const lead = !hands && (q.job === JOB.RUN || q.job === JOB.GO) ? clamp(len / 26, 0.4, 1.1) : 0.35;
+    out.x = clamp(q.p.x + q.p.vx * lead, -L + 3, L - 3); out.z = clamp(q.p.z + q.p.vz * lead, -W + 3, W - 3);
+    return out;
   }
 
   /**
@@ -723,31 +729,34 @@ export class Match {
    * Партнера за спиною слабкий гравець часто просто не бачить.
    */
   choosePass(a, pm) {
-    let best = null, bs = -99;
-    const gkTaker = a.isGK, p = a.p, iq = a.sk.iq, br = this.oppTeam.brain, z0 = zoneValue(p.x, p.z, -1);
+    let best = null, bs = -99, bc = 0;
+    const gkTaker = a.isGK, p = a.p, iq = a.sk.iq, br = this.oppTeam.brain, z0 = zoneValue(p.x, p.z, -1), inRange = !gkTaker && p.x + L < 45;
     const yaw = p.bodyYaw ?? p.yaw, fx = Math.sin(yaw), fz = Math.cos(yaw);
     const riskW = (3.1 - br.ment * 1.1) * (p.x > L * 0.35 ? 1.5 : 1);
     for (let i = 1; i < this.opp.length; i++) {
       const q = this.opp[i];
-      if (q === a || q.stun > 0 || q.frozen > 0 || q.sliding) continue;
+      if (q === a || q.stun > 0 || q.frozen > 0 || q.sliding || q.p.downed) continue;
       const dx = q.p.x - p.x, dz = q.p.z - p.z, len = Math.hypot(dx, dz);
       if (len < 5 || len > 46) continue;
       if (!gkTaker && (dx * fx + dz * fz) / len < -0.2 && pm > 3 && Math.random() > 0.3 + 0.8 * iq) continue;
-      const lane = this.laneClear(p.x, p.z, q.p.x, q.p.z, this.mine, 0);
+      // лінія, простір і ризик там, куди полетить м'яч (doPass), а не там, де адресат зараз: забіг за спину захисника видно лише в цій точці
+      const run = q.job === JOB.RUN || q.job === JOB.GO, aim = this.passAim(q, len, gkTaker && !a.footBall, _pa), lx = aim.x, lz = aim.z;
+      const lane = this.laneClear(p.x, p.z, lx, lz, this.mine, 0);
       if (lane < (gkTaker ? 2.6 : 1.3)) continue;
-      const free = this.laneClear(q.p.x, q.p.z, q.p.x, q.p.z, this.mine, 1), open = clamp(free / 6, 0, 1.3);
+      const free = this.laneClear(lx, lz, lx, lz, this.mine, 1), open = clamp(free / 6, 0, 1.3);
       // воротар кидає рукою (повільніше за пас ногою): лише тому, хто відкритий (суперник не ближче ~4 м) і недалеко
       if (gkTaker && (free < 4 || len > 32)) continue;
-      const run = q.job === JOB.RUN || q.job === JOB.GO, lead = run ? 0.75 : 0.3, lx = q.p.x + q.p.vx * lead, lz = q.p.z + q.p.vz * lead;
       const risk = passRisk(p.x, p.z, lx, lz, this.mine, clamp(16 + len * 0.9, 22, 46));
       // випередив останню лінію: пас за спину захисту — головне, заради чого біжать у забіг
       const through = run && -lx > br.oppLast - 1 && free > 2.2 ? 1.3 : 0;
       const back = q === this.passFrom && this.time - this.passFromT < 2.5 && pm > 3.5 ? 1.5 : 0;    // не перекидає той самий м'яч туди-сюди, хіба під тиском
-      const score = (zoneValue(lx, lz, -1) - z0) * 13 + open * 1.2 - risk * riskW + through + (q.callT > 0 ? 0.45 : 0) - len * 0.012 - back + (Math.random() - 0.5) * (1 - iq) * 2.6;
-      if (score > bs) { bs = score; best = q; }
+      // біля чужих воріт важить не лише зона, а й чи зможе адресат звідти бити: лінія, кут, де стоїть воротар. Так видно відкат на вільного
+      const chance = inRange ? shotQuality(lx, lz, -1, this.mine).q * (1 - risk) * 0.85 : 0;
+      const score = (zoneValue(lx, lz, -1) - z0) * 13 + open * 1.2 - risk * riskW + through + chance * 2.5 + (q.callT > 0 ? 0.45 : 0) - len * 0.012 - back + (Math.random() - 0.5) * (1 - iq) * 2.6;
+      if (score > bs) { bs = score; best = q; bc = chance; }
     }
     if (!best) return null;
-    this.passScore = bs;
+    this.passScore = bs; this.passChance = bc;
     return best;
   }
 
@@ -777,8 +786,26 @@ export class Match {
     // адресат збоку чи позаду — гравець не б'є м'яч, що лежить у нього збоку, і не крутиться в ударі на 180°: обходить м'яч,
     // стає за ним на лінії паса, і лише тоді замах (kickApproach). Рукою воротар кидає одразу
     const swing = () => { if (hands) a.p.throwBall(); else a.p.kick(long ? 0.9 : 0.35); };
-    this.pendKick = { dx: tx / tl, dz: tz / tl, hands, run: false, w: 0, t: hands ? 0.18 : -1, pw: long ? 0.9 : 0.35, swing, fn: () => this.doPass(a, best, long) };
+    this.pendKick = { dx: tx / tl, dz: tz / tl, hands, run: false, w: 0, t: hands ? 0.18 : -1, pw: long ? 0.9 : 0.35, q: long ? null : best, chk: 0.1, swing, fn: () => this.doPass(a, best, long) };
     if (hands) { a.p.yaw = Math.atan2(tx, tz); swing(); }
+  }
+
+  /**
+   * М'яч ще під ногою, а пас обраний до ~1 с тому: гравець дивиться, чи адресат досі вільний. Лінію закрили або адресат упав — віддає іншому,
+   * а нема кому — веде далі. Вікно замаху не починається спочатку. Слабкий помічає не завжди.
+   */
+  recheckPass(a, k) {
+    k.chk = 0.12;
+    const q = k.q, b = this.ball;
+    if (Math.random() > 0.35 + 0.65 * a.sk.iq) return;
+    const aim = this.passAim(q, Math.hypot(q.p.x - b.x, q.p.z - b.z), false, _pa);
+    if (!(q.stun > 0 || q.frozen > 0 || q.sliding || q.p.downed) && this.laneClear(b.x, b.z, aim.x, aim.z, this.mine, 0) >= 1.1) return;
+    let pm = 99;
+    for (let i = 1; i < this.mine.length; i++) { const m = this.mine[i].p, d = Math.hypot(m.x - a.p.x, m.z - a.p.z); if (d < pm) pm = d; }
+    const w = k.w, opt = this.choosePass(a, pm);
+    if (opt === q) return;
+    this.pendKick = null;
+    if (opt) { this.passTo(a, opt); this.pendKick.w = w; } else { a.p.dribble = !a.isGK; this.thinkT = 0.1; }
   }
 
   /** Куди повернути корпус в ударі на бігу: у бік удару, але не далі ~40° від курсу бігу — решту робить стопа (пас щічкою). */
@@ -879,8 +906,7 @@ export class Match {
     const b = this.ball, hands = a.isGK && !a.footBall && !long;   // кидок рукою (long — воротар вибиває ногою)
     const err = (1 - a.sk.pass) * (hands ? 1.2 : 3.2);                // рукою точніше
     // тому, хто забігає, — на хід, у простір перед ним; решті — майже в ноги
-    const d0 = Math.hypot(best.p.x - b.x, best.p.z - b.z), run = !hands && (best.job === JOB.RUN || best.job === JOB.GO), lead = run ? clamp(d0 / 26, 0.4, 1.1) : 0.35;
-    const lx = clamp(best.p.x + best.p.vx * lead, -L + 3, L - 3), lz = clamp(best.p.z + best.p.vz * lead, -W + 3, W - 3);
+    const aim = this.passAim(best, Math.hypot(best.p.x - b.x, best.p.z - b.z), hands, _pa), lx = aim.x, lz = aim.z;
     const dx = lx - b.x + (Math.random() - 0.5) * err, dz = lz - b.z + (Math.random() - 0.5) * err, d = Math.hypot(dx, dz) || 1;
     // воротар кидає рукою — м'якше, ніж б'є польовий (до ~32 м/с)
     const sp = (hands ? clamp(10 + d * 0.55, 13, 26) * GK_THROW : clamp(16 + d * 0.9, 22, 46)) * (0.92 + 0.16 * a.sk.pass);
@@ -943,15 +969,21 @@ export class Match {
     if (!a.isGK && toGoal < 58) {
       const sq = shotQuality(a.p.x, a.p.z, -1, this.mine), v = sq.q * (0.72 + 0.56 * a.sk.shoot) * (1 + br.ment * 0.3);
       // близько — і за відстанню до воріт, і за кутом: від прапорця ворота майже не видно, звідти м'яч іде лише в бічну сітку
-      const close = Math.hypot(toGoal, a.p.z) < 18 && sq.vis > 0.2 && sq.clear > 0.8;
+      const dG = Math.hypot(toGoal, a.p.z), close = dG < 18 && sq.vis > 0.2 && sq.clear > 0.8, far = dG > 26;
       // сильний момент — б'є; добрий — якщо передача нічого кращого не дає; під пресом біля воріт — хоч як, але б'є (майже без кута — лише коли нема кому віддати)
-      if (v > 0.3 || close || (v > 0.15 && ps < 1.4) || (toGoal < 30 && pm < 3 && v > 0.06 && (sq.vis > 0.2 || !opt)) || (v > 0.09 && this.dribbleT > 2.4 && ps < 0.6)) { this.startShot(a, sq.z); return; }
+      // здалеку лише коли передача й справді нічого не дає: дальній удар віддає м'яч воротареві; партнер, що стоїть для удару явно краще, отримує м'яч (відкат)
+      if (v > 0.3 || close || (v > 0.15 && ps < (far ? 0.3 : 1.4)) || (toGoal < 30 && pm < 3 && v > 0.06 && (sq.vis > 0.2 || !opt)) || (v > (far ? 0.13 : 0.09) && this.dribbleT > 2.4 && ps < 0.6)) {
+        if (opt && a.sk.iq > 0.35 && this.passChance > 0.25 && this.passChance > sq.q * 1.6) this.passTo(a, opt); else this.startShot(a, sq.z);
+        return;
+      }
     }
     // пас: під тиском охоче, інакше — коли дає помітно більше, ніж вести далі; поріг слабшає, що довше тримає м'яч
     if (opt) {
       // щойно прийняв і ніхто не наступає — спершу підніме голову: пас за пасом без паузи виглядає як настільний футбол
-      const settle = !a.isGK && this.dribbleT < 0.55 && pm > 3.2;
-      const need = a.isGK ? -9 : pm < 3.2 ? -1.2 : pm < 5.5 ? 0.15 : Math.max(0.5, 2 - this.dribbleT * 0.45 + (br.counter ? -0.5 : 0));
+      // перед ним вільно, а суперник збоку чи позаду — веде сам, доки передача не дасть більше: хто вправніше веде, той тримає м'яч довше. Темп гри задає не лише пас
+      const room = !a.isGK && pm > 2 && !(toGoal < 16 && Math.abs(a.p.z) > PITCH.BOX_W) ? Math.min(laneDist(a.p.x, a.p.z, a.p.x - 12, a.p.z * 0.9, this.mine, 1), 6) / 6 : 0;
+      const settle = !a.isGK && this.dribbleT < 0.55 + room * 0.35 && pm > 3.2;
+      const need = a.isGK ? -9 : pm < 2.8 ? -1.2 + room * (0.6 + a.sk.drib * 1.2) : pm < 4.5 ? 0.15 + room * 0.8 : Math.max(0.5, 2 + room * 0.9 - this.dribbleT * 0.45 + (br.counter ? -0.5 : 0));
       if (!settle && ps > need) { this.passTo(a, opt); return; }
     }
     // воротарю нема кому кинути: ще трохи чекає (партнери відкриваються), потім вибиває ногою далеко — своєму, найдальшому
@@ -972,6 +1004,7 @@ export class Match {
         // не зупиняється обходити м'яч: веде далі й дотиками розвертає м'яч у бік паса, а б'є, щойно м'яч перед ногою, а
         // корпус повернутий достатньо (пас — внутрішньою стороною стопи, до ~85° від бігу; довгий — до ~45°)
         k.w += dt;
+        if (k.q && (k.chk -= dt) <= 0) { this.recheckPass(a, k); if (this.pendKick !== k) return; }
         if (this.dribbleKick(a, k.dx, k.dz, dt, k.pw > 0.6 ? 0.8 : 1.75) || k.w > 1.1) { a.p.yaw = Math.atan2(k.dx, k.dz); k.swing(); k.t = 0.13; a.kickV = null; }
         else this.matesTackle(a, dt);                                // поки ще веде м'яч під пас, його можна встигнути відібратиться
       } else {                                                       // замах на бігу: м'яч котиться до ноги, тіло його наздоганяє
@@ -985,20 +1018,30 @@ export class Match {
     if (!rc && this.netAim) { this.netAim = null; if (a.p.mode === 'aim') a.p.setMode('idle'); }   // гість зник чи здався ШІ — приціл не тримає гравця в позі
     if (rc && this.netCmd && this.remoteWaiting()) { const c = this.netCmd; this.netCmd = null; this.remoteKick(a, c); return; }
     if (this.kickoff) {                                            // розведення суперника: мить постоїть у центрі, потім гра пішла
-      this.kickT = (this.kickT || 0) + dt; a.p.vx = a.p.vz = 0;
-      if (rc) { this.remoteAimPose(a); return; }                    // гість розводить сам
-      if (this.kickT < 1.0) return;
-      this.kickoff = false;
+      this.kickT = (this.kickT || 0) + dt;
+      if (rc) { a.p.vx = a.p.vz = 0; this.remoteAimPose(a); return; }   // гість розводить сам
       // розведення як у футболі: перший пас своєму — назад або вбік (на свою половину), а не біг із м'ячем уперед
-      let q = null, bs = -1e9;
-      for (let i = 1; i < this.opp.length; i++) {
+      let q = this.koQ, bs = -1e9;
+      if (!q) for (let i = 1; i < this.opp.length; i++) {
         const m = this.opp[i]; if (m === a) continue;
         const dx = m.p.x - a.p.x, dz = m.p.z - a.p.z, d = Math.hypot(dx, dz);
         if (d < 5 || d > 26 || dx < -2) continue;                      // не вперед (суперник атакує в бік −x)
         const sc = -Math.abs(d - 11) * 0.3 + this.laneClear(a.p.x, a.p.z, m.p.x, m.p.z, this.mine, 0) * 0.5 + Math.random();
         if (sc > bs) { bs = sc; q = m; }
       }
-      if (q) { this.passTo(a, q); return; }
+      this.koQ = q;
+      if (!q) { a.p.vx = a.p.vz = 0; if (this.kickT < 1.0) return; this.kickoff = false; }
+      else {
+        // поки гра стоїть, обходить м'яч і стає за ним на лінії паса: раніше годинник уже йшов, а він ще до ~1.1 с вів м'яч, щоб розвернутись
+        a.p.dribble = false;
+        const ux = q.p.x - b.x, uz = q.p.z - b.z, ul = Math.hypot(ux, uz) || 1, st = this.kickApproach(a, ux / ul, uz / ul, 0.95, 3.5, dt, this.koRun);
+        if (this.kickT >= 1.0 && st.ang < 0.4 && st.behind > 0.6) this.koRun = true;
+        const ready = this.kickReady(a, st, ux / ul, uz / ul);
+        if (this.kickT < 1.0 || (this.kickT < 2.0 && !ready)) return;
+        this.kickoff = false; this.passTo(a, q);
+        const k = this.pendKick; if (k && ready) { a.p.yaw = Math.atan2(k.dx, k.dz); k.swing(); k.t = 0.13; a.kickV = null; }   // не встиг обійти м'яч: розверне його дотиками (гілка k.t < 0), а не б'є спиною до адресата
+        return;
+      }
     }
     // воротар суперника спіймав м'яч: не викидає миттєво, а тримає — довершує прийом, притискає до грудей, оглядає поле й
     // робить кілька кроків уперед; лише потім розігрує (кидком чи ударом)
@@ -1073,11 +1116,12 @@ export class Match {
     if (a.isGK && !a.footBall) return;
     const b = this.ball;
     for (let i = 1; i < this.mine.length; i++) if (this.mine[i].tkl > 0) return;
+    if (this.lungePause(this.myTeam)) return;
     for (let i = 1; i < this.mine.length; i++) {
       const m = this.mine[i];
       if (m.manual || m.frozen > 0 || m.stun > 0 || m.noTrap > 0 || m.sliding) { m.nearT = 0; continue; }
       const db = Math.hypot(m.p.x - b.x, m.p.z - b.z);
-      if (this.tackleReady(m, db, (0.2 + 0.4 * (1 - m.sk.iq)) * (db < 2.5 && !this.myTeam.hasCover(m, b) ? 1.7 : 1), dt)) { this.startTackle(m); break; }
+      if (this.tackleReady(m, db, this.tacklePatience(m, this.myTeam, db), dt)) { this.startTackle(m); break; }
     }
   }
 
@@ -1130,7 +1174,7 @@ export class Match {
     this.kickoff = false; this.netAim = null; this.netWaitT = 0;
     a.p.dribble = false; if (a.p.mode === 'aim') a.p.setMode('idle');
     const swing = () => { if (hands) a.p.throwBall(); else a.p.kick(pw); };
-    this.pendKick = { dx, dz, hands, run: false, w: 0, t: hands ? 0.18 : -1, pw: Math.max(0.35, pw), swing, fn: () => this.remoteRelease(a, dx * speed, dz * speed, pw) };
+    this.pendKick = { dx, dz, hands, run: false, w: 0, t: hands ? 0.18 : -1, pw: Math.max(0.35, pw), q: null, chk: 0, swing, fn: () => this.remoteRelease(a, dx * speed, dz * speed, pw) };
     if (hands) { a.p.yaw = Math.atan2(dx, dz); swing(); }
   }
 
@@ -1999,24 +2043,37 @@ export class Match {
   checkTackles(dt) {
     if (this.holder.isGK && !this.holder.footBall) return;          // воротар тримає м'яч у руках: захисники не втручаються
     const b = this.ball;
-    if (this.oppLunging()) return;                                  // один випад за раз
+    // прицілом час сповільнено, а випад іде в часі гри: людина завжди встигає віддати, і захисник лише падає в порожнечу. Поки приціл короткий, він лишається в стійці; довгий приціл карається випадом. Онлайн без змін: гість цілиться без такого сповільнення
+    if (this.bs === 'aim' && this.shot.valid && !this.spec.online && this.readyReal < 2.2) return;
+    if (this.oppLunging() || this.lungePause(this.oppTeam)) return;   // один випад за раз
     for (let i = 1; i < this.opp.length; i++) {
       const a = this.opp[i];
       if (a.stun > 0 || a.noTrap > 0 || a.frozen > 0 || a.sliding || a.manual) { a.nearT = 0; continue; }
       const db = Math.hypot(a.p.x - b.x, a.p.z - b.z);
-      if (this.tackleReady(a, db, (0.15 + 0.55 * (1 - this.oppTeam.press)) * (db < 2.5 && !this.oppTeam.hasCover(a, b) ? 1.5 : 1), dt)) { this.startTackle(a); return; }
+      if (this.tackleReady(a, db, this.tacklePatience(a, this.oppTeam, db), dt)) { this.startTackle(a); return; }
     }
   }
 
   /** Чи хтось із суперників уже у випаді. */
   oppLunging() { for (let i = 0; i < this.opp.length; i++) if (this.opp[i].tkl > 0) return true; return false; }
 
-  /** Захисник у стійці біля м'яча вичікує момент (терпіння patience с, з розкидом), потім іде у випад. */
+  /** Партнер щойно провалився у випаді: наступний не кидається тієї ж миті на того самого носія, а дає йому зробити наступну дію. */
+  lungePause(team) { return this.time - (team.missT ?? -9) < 0.45; }
+
+  /** Скільки захисник вичікує в стійці. Суперник у кар'єрі залежить від пресингу ліги, наш — від інтелекту; онлайн обидві сторони однакові. Без страховки останній чекає довше. */
+  tacklePatience(a, team, db) {
+    const opp = team.side < 0 || team.even, base = opp ? 0.15 + 0.55 * (1 - team.press) : 0.2 + 0.4 * (1 - a.sk.iq);
+    return base * (db < 2.5 && !team.hasCover(a, this.ball) ? (opp ? 1.5 : 1.7) : 1);
+  }
+
+  /** Захисник у стійці біля м'яча вичікує момент (терпіння patience с, з розкидом), потім іде у випад. Куди нога вже не дістане (носій тікає), туди не кидається. */
   tackleReady(a, db, patience, dt) {
     if (db > 2.5) { a.nearT = 0; return false; }
     if (!a.nearT) a.patT = patience * (0.6 + 0.8 * Math.random());
     a.nearT = (a.nearT || 0) + dt;
-    return a.nearT > a.patT || db < 1.25;                          // зовсім впритул — б'є одразу
+    if (!(a.nearT > a.patT || (db < 1.25 && a.nearT > 0.1))) return false;   // зовсім впритул — б'є майже одразу
+    const b = this.ball, hp = (this.bs === 'ready' || this.bs === 'aim') && this.holder ? this.holder.p : null, T = 0.2 + 0.12 * (1 - a.sk.tack);
+    return Math.hypot(b.x + (hp ? hp.vx : b.vx) * T - a.p.x, b.z + (hp ? hp.vz : b.vz) * T - a.p.z) < 1.6 + 0.85 + 0.7 + 0.4 * a.sk.tack;   // тіло пролетить до 1.6 м, стопа ще 0.85, дотяг (resolveTackle)
   }
 
   /** Найближчий суперник до м'яча: «небезпека» 0..1 для підсвітки кільця. */
@@ -2218,7 +2275,7 @@ export class Match {
     const ux = b.vx / sp, uz = b.vz / sp;
     if (this.slideShotId !== this.shotId) { this.slideShotId = this.shotId; this.slideTries = 0; this.slid = false; }
     if (this.slid || this.slideTries >= 2) return;
-    const list = this.shotBy === 1 ? this.opp : this.mine, press = this.shotBy === 1 ? this.oppTeam.press : 0.6;
+    const list = this.shotBy === 1 ? this.opp : this.mine, tm = this.shotBy === 1 ? this.oppTeam : this.myTeam;
     // шукаємо єдиного, хто справді може дотягнутися: близько до лінії, встигає за часом польоту м'яча
     let best = null, bestScore = 1e9, bx = 0, bz = 0, bperp = 0;
     for (let i = 1; i < list.length; i++) {
@@ -2227,13 +2284,15 @@ export class Match {
       const rx = a.p.x - b.x, rz = a.p.z - b.z, along = rx * ux + rz * uz, perp = Math.abs(rx * uz - rz * ux);
       if (along < 3.5 || along > 18 || perp > 3.4) continue;                       // далеко від траєкторії
       const tb = along / (sp * 0.9), need = Math.max(0, perp - 1.1) / Math.max(0.05, tb);
-      if (tb < 0.16 || need > 10.5) continue;                                       // не встигає
+      if (tb < 0.16 || tb > 0.42 || need > 10.5) continue;                          // не встигає або м'яч ще далеко: ковзання (0.36 с) закінчиться раніше, ніж він долетить
+      { const ss = clamp(perp / 0.3, 6, 13.5), tt = Math.min(tb, 0.36); if (ss * 1.3 * (tt - (tt * tt) / 0.72) + 1.1 < perp) continue; }   // за час до м'яча ковзання (startSlide, гальмує до нуля) не дістане лінії
+      if (b.y + b.vy * tb - 4.9 * tb * tb > 1.1) continue;                          // м'яч пройде над тим, хто ковзає
       const score = perp + along * 0.04;
       if (score < bestScore) { bestScore = score; best = a; bx = b.x + ux * along; bz = b.z + uz * along; bperp = perp; }
     }
     if (!best) return;
     best.decided = this.shotId; this.slideTries++;
-    const p = (this.shotBy === 1 ? 0.3 + 0.4 * press : 0.5) * (1 - bperp / 4.4) * (0.6 + 0.8 * best.sk.iq);
+    const p = (this.shotBy === 1 || tm.even ? 0.3 + 0.4 * tm.press : 0.5) * (1 - bperp / 4.4) * (0.6 + 0.8 * best.sk.iq) * (tm.even ? 0.6 : this.shotBy === 1 ? 0.44 : 0.79);   // онлайн: обидві сторони однакові. Підкат тепер починається вчасно й дістає частіше, тож падати треба рідше, а не блокувати більше: множник тримає кількість контактів такою, як була
     if (Math.random() < p) { this.slid = true; this.startSlide(best, bx, bz); }
   }
 
@@ -2250,7 +2309,7 @@ export class Match {
   onSlideContact(a, speed, nx, nz) {
     if (a.slideHit === this.shotId) return true;
     a.slideHit = this.shotId;
-    const base = a.side > 0 ? 0.42 + 0.42 * a.sk.tack : 0.22 + 0.42 * a.sk.tack + 0.2 * this.oppTeam.press;
+    const base = a.side > 0 && !this.spec.online ? 0.42 + 0.42 * a.sk.tack : 0.22 + 0.42 * a.sk.tack + 0.2 * (a.side > 0 ? this.myTeam : this.oppTeam).press;   // онлайн: однаково для обох сторін
     const p = clamp(base - Math.max(0, speed - 26) * 0.011, 0.15, 0.9);
     const b = this.ball, v = this.view;
     if (Math.random() < p) {
@@ -2711,6 +2770,7 @@ export class Match {
       if (d < bd) { bd = d; best = a; }
     }
     if (!best) return;
+    if (bd > 3.2 && this.looseT < 5) return;                            // хтось уже біжить: м'яч не перелітає до нього сам (раніше ~4.4 м за 0.4 с)
     this.looseT = 0; best.noTrap = 0; best.cool = 0;
     if (best.side > 0) this.trapMine(best, 0); else this.trapOpp(best, 0);
   }

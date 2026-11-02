@@ -39,12 +39,20 @@
 | Сповільнення часу | `updateSlow`, `clearSlow`, `slowFactor` у `spec` |
 | Рішення суперника з м'ячем | `takerThink`, `updateTaker`, `choosePass` |
 | Хто біжить на м'яч, хто тисне й страхує | `Team.update` у `src/match/team.js` |
+| Затримка реакції на нову подію | `seeT` у `Team.update` |
+| Розведення суперника | блок `kickoff` в `updateTaker`, `koQ`, `koRun` |
+| Куди летить пас ШІ | `passAim` |
+| Перевірка лінії перед пасом | `recheckPass` |
+| Поріг паса проти ведення | `room` і `need` у `takerThink` |
 | Лінії блоку, зона пресингу, реакція на рахунок і час | `TeamBrain.setLines`, `defSpot`, `read` у `src/match/brain.js` |
 | Хто кого тримає | `TeamBrain.assignMarks`, гілка опіки в `place` |
 | Забіги, підтримка, ширина, штрафний, страховка | `TeamBrain.pickJob`, `assignRest`, вага робіт `JOB_W`, темп `JOB_SP` |
 | Рука вгору, коли відкритий | `TeamBrain.updateCalls`, `hand` |
 | Рішення носія суперника: удар, пас, ведення | `takerThink`, `choosePass` у `src/match/match.js`; оцінки `shotQuality`, `passRisk`, `pickCarry`, `zoneValue` у `src/match/brain.js` |
 | Відбір і підкат | `checkTackles`, `startTackle`, `startSlide`, `onSlideContact` |
+| Коли захисник іде у випад | `tacklePatience`, `tackleReady`, `lungePause` |
+| Частота підкату | множники в `p` в `updateSlides` |
+| Темп опіки й повернення | `TeamBrain.defPace` у `src/match/brain.js` |
 | Зіткнення гравців | `resolvePlayers`, `bump` |
 | Контакт м'яча з гравцем | `onBody`, `World.players` у `src/physics/world.js` |
 | Прийом м'яча | `claimBall`, `trapMine`, `trapOpp`, `controlScore` |
