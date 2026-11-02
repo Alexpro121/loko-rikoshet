@@ -14,10 +14,16 @@ import { CamDirector, camInfoBlank } from './camera.js';
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const _v = new THREE.Vector3();
 const _d = new THREE.Vector3();
+const _co = { asp: 1, preset: '', dist: 100, tilt: 0, follow: 100, snap: false };   // параметри режисера камери: без нового об'єкта щокадру
+/** Крок критично загасаної пружини: точка x зі швидкістю v до цілі tg. */
+function springStep(x, v, tg, w, h) {
+  v.x += (w * w * (tg.x - x.x) - 2 * w * v.x) * h; v.y += (w * w * (tg.y - x.y) - 2 * w * v.y) * h; v.z += (w * w * (tg.z - x.z) - 2 * w * v.z) * h;
+  x.x += v.x * h; x.y += v.y * h; x.z += v.z * h;
+}
 
 /** Екран поверх усього: графіка не запустилась або не повернулась (замість мовчазного порожнього поля). */
 export function gfxFail(text) {
-  const root = document.getElementById('ui');
+  const root = document.getElementById('ui') || document.body;
   if (root.querySelector('#gfx-fail')) return;
   const el = document.createElement('section');
   el.className = 'overlay'; el.id = 'gfx-fail'; el.style.zIndex = 99; el.style.background = '#08402c';
@@ -30,12 +36,13 @@ export class Game {
   constructor(canvas, ui) {
     this.canvas = canvas; this.ui = ui; ui.game = this;
     const coarse = matchMedia('(pointer: coarse)').matches;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: S.settings.quality !== 'low', powerPreference: 'high-performance', stencil: false, alpha: false });
+    this.aa = S.settings.quality !== 'low';                  // згладжування контексту незмінне: нова «якість» діє на нього лише після перезапуску
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.aa, powerPreference: 'high-performance', stencil: false, alpha: false });
     this.renderer.setClearColor(COL.skyMenu, 1);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.1;
     this.coarse = coarse;
     this.res = coarse ? 0.85 : 1; this.ema = 16; this.evalT = 0; this.goodRuns = 0; this.pr = 0;
-    this.slowT = 1; this.govBase = 0; this.govRes = 1; this.govStuck = false; this.upNeed = 3;
+    this.slowT = 1; this.govBase = 0; this.govRes = 1; this.govStuck = false; this.govProbe = 0; this.upNeed = 3;
     this.trauma = 0; this.fov = 0; this.time = 0;
     this.w = 1; this.h = 1;
 
@@ -86,6 +93,23 @@ export class Game {
   /** Звичайний матч (і сцена матчу, яку позичає онлайн-гість). */
   ensureMatch() { if (!this.solo) { this.solo = new Match(this); this.match = this.solo; this.computeMatchBase(); } if (!this.match) this.match = this.solo; return this.solo; }
 
+  /**
+   * Шейдери наперед, лише де компіляція не стоїть у кадрі (KHR_parallel_shader_compile): програми збираються паралельно, а не
+   * по одній у першому кадрі. Без розширення нічого не робимо: той самий фриз лише переїхав би на іншу мить.
+   * other — набір прожекторів іншого часу доби: кількість світла входить у ключ програми, тому день і ніч це різні шейдери.
+   */
+  warmShaders(other) {
+    const v = this.solo && this.solo.view, r = this.renderer;
+    if (!v || this.lost || !r.extensions.has('KHR_parallel_shader_compile')) return;
+    if (other) v.swapSpots();
+    let n = 0; for (const sl of v.spots) if (sl.visible) n++;
+    if (!(this.warmed & (1 << n))) {                         // кожен набір один раз: обхід сцени теж не безкоштовний
+      this.warmed |= 1 << n;
+      try { r.compile(v.scene, this.matchCam); } catch (e) { console.warn(e); }
+    }
+    if (other) v.swapSpots();
+  }
+
   // ---------------------------------------------------------------- стани
   buildStates() {
     const g = this;
@@ -97,6 +121,7 @@ export class Game {
         g.island.setTier(stadiumTier(), false); g.island.setTrophies(S.trophies);
         audio.music('menu');
         if (from === 'RESULT') g.island.celebrate();
+        g.warmShaders(true);
       },
       update(dt) {
         g.time += dt;
@@ -109,8 +134,8 @@ export class Game {
       enter(data) {
         if (data && data.resume) return;
         g.ui.hideMenu();
-        if (data.guest) { g.ensureMatch(); g.match = data.guest; data.guest.start(data.spec, data.hudSpec); return; }   // онлайн-гість: показ гри господаря
-        g.match = g.ensureMatch(); g.match.start(data.spec);
+        if (data.guest) { g.ensureMatch(); g.match = data.guest; data.guest.start(data.spec, data.hudSpec); g.warmShaders(false); return; }   // онлайн-гість: показ гри господаря
+        g.match = g.ensureMatch(); g.match.start(data.spec); g.warmShaders(false);
       },
       update(dt) { g.time += dt; g.match.update(dt); g.updateMatchCam(dt); },
     });
@@ -178,17 +203,25 @@ export class Game {
     if (this.evalT < 1.4 || S.settings.quality !== 'auto') return;
     this.evalT = 0;
     if (this.ema > 20.5) {
+      if (this.govProbe) {
+        // щойно повернули чіткість: кадр став помітно довшим, отже упирались таки в GPU — назад, і цей рівень запам'ятовуємо як базу
+        const worse = this.ema > this.govProbe * 1.2; this.govProbe = 0;
+        if (worse) { this.govBase = this.ema; this.govStuck = false; this.res = 0.7; this.goodRuns = 0; this.applyPixelRatio(false); return; }
+      }
       if (this.govStuck) return;
       if (this.res > 0.7) {
         if (!this.govBase) { this.govBase = this.ema; this.govRes = this.res; this.upNeed = Math.min(96, this.upNeed * 2); }   // кожен новий спад — обережніше піднімаємо назад
         this.res = Math.max(0.7, this.res - 0.1); this.goodRuns = 0; this.applyPixelRatio(false);
-      } else if (this.govBase && this.ema > this.govBase * 0.9) {
+      } else if (!this.govBase) {
+        // уже на 0.7 після минулого спаду, і кадр різко подовжився (увімкнувся режим економії 30 Гц): наступна оцінка перевірить, чи допомагає роздільність
+        if (this.ema > 26) this.govBase = this.ema;
+      } else if (this.ema > this.govBase * 0.9) {
         // роздільність не допомогла: упираємось не в GPU (режим економії 30 Гц, процесор) — повертаємо чітку картинку
-        this.res = this.govRes; this.govStuck = true; this.goodRuns = 0; this.applyPixelRatio(false);
+        this.res = this.govRes; this.govStuck = true; this.govProbe = this.ema; this.goodRuns = 0; this.applyPixelRatio(false);
       }
       return;
     }
-    this.govStuck = false; this.govBase = 0;
+    this.govStuck = false; this.govBase = 0; this.govProbe = 0;
     // рівні 60 Гц дають ~16.7 мс: поріг вище за них, інакше на таких екранах роздільність не верталась би ніколи
     if (this.ema < 17.6 && this.res < 1) { if (++this.goodRuns >= this.upNeed) { this.res = Math.min(1, this.res + 0.06); this.goodRuns = 0; this.applyPixelRatio(false); } }
     else this.goodRuns = 0;
@@ -203,8 +236,8 @@ export class Game {
     this.lostT = setTimeout(() => { if (this.lost) gfxFail('Графіка не повернулась. Онови сторінку, щоб продовжити.'); }, 5000);
   }
   onGlRestored() {
-    this.lost = false; clearTimeout(this.lostT); this.last = performance.now();
-    const f = document.getElementById('gfx-fail'); if (f) f.remove();
+    this.lost = false; clearTimeout(this.lostT); this.last = performance.now(); this.warmed = 0;
+    const f = !this.dead && document.getElementById('gfx-fail'); if (f) f.remove();
     if (!document.hidden) audio.resume();
   }
 
@@ -244,7 +277,9 @@ export class Game {
     // що важливо в моменті (м'яч, власник, хто тисне, адресат, приціл) — у координатах гравця: його команда атакує +X
     if (m.camInfo) m.camInfo(this.camI);
     const cv = m.celebView ? m.celebView() : null, st = S.settings;
-    cd.update(dt, this.camI, cv, { asp: this.w / this.h, preset: st.camMode, dist: st.camDist, tilt: st.camTiltOff, follow: st.camFollow, snap });
+    _co.asp = this.w / this.h; _co.preset = st.camMode; _co.dist = st.camDist; _co.tilt = st.camTiltOff; _co.follow = st.camFollow; _co.snap = snap;
+    cd.update(dt, this.camI, cv, _co);
+    if (m.view && m.view.dense) m.view.fitFog(cd.d);
     const s = st.camShake === false ? 0 : this.trauma * this.trauma, t = this.time;
     const sx = (Math.sin(t * 23) + 0.5 * Math.sin(t * 37 + 2)) * 0.4 * s, sy = (Math.sin(t * 29 + 1) + 0.5 * Math.sin(t * 41)) * 0.3 * s;   // м'який гул, а не дрібне тремтіння
     cam.position.set(cd.px + sx, cd.py + sy, cd.pz);
@@ -269,10 +304,7 @@ export class Game {
         // (гравець пригальмував, зупинився) — камера рухається плавно, без ривків швидкості й без перельоту
         const w = 1.25 * (ov.rate || 2.6), n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
         for (let i = 0; i < n; i++) {
-          for (const [x, v, tg] of [[o.p, o.pv, ov.p], [o.l, o.lv, ov.l]]) {
-            v.x += (w * w * (tg.x - x.x) - 2 * w * v.x) * h; v.y += (w * w * (tg.y - x.y) - 2 * w * v.y) * h; v.z += (w * w * (tg.z - x.z) - 2 * w * v.z) * h;
-            x.x += v.x * h; x.y += v.y * h; x.z += v.z * h;
-          }
+          springStep(o.p, o.pv, ov.p, w, h); springStep(o.l, o.lv, ov.l, w, h);
           o.fv += (w * w * (ov.fov - o.f) - 2 * w * o.fv) * h; o.f += o.fv * h;
         }
       }
@@ -296,7 +328,9 @@ export class Game {
   autoFocus(cam, m, fallback) {
     const fw = _d.set(0, 0, -1).applyQuaternion(cam.quaternion);
     let best = 1e9, wide = 1e9;
-    for (const p of m.view.players) {
+    const pl = m.view.players;
+    for (let i = 0; i < pl.length; i++) {
+      const p = pl[i];
       if (!p.root.visible) continue;
       _v.set(p.root.position.x, 1.25, p.root.position.z).sub(cam.position);
       const d = _v.length(); if (d < 1.2) continue;
@@ -402,14 +436,33 @@ export class Game {
 
   // ---------------------------------------------------------------- цикл
   tick(now) {
+    if (this.dead) return;
     requestAnimationFrame(this.tick);
+    try { this.step(now); this.badFrames = 0; }
+    catch (e) { this.onFrameError(e); }
+  }
+
+  /** Виняток у кадрі: один-два пропускаємо (у консоль), а якщо гра падає кадр за кадром — зупиняємо цикл і кажемо гравцю. */
+  onFrameError(e) {
+    this.badFrames = (this.badFrames || 0) + 1;
+    if (this.badFrames <= 3) console.error(e);
+    if (this.badFrames < 30) return;
+    this.dead = true;
+    try { audio.suspend(); } catch (_) { /* ignore */ }
+    try { gfxFail('У грі сталася помилка. Онови сторінку, щоб продовжити.'); } catch (_) { /* ignore */ }
+  }
+
+  step(now) {
     const calm = this.sm.name === 'MENU' && (this.ui.panel || !this.ui.started);   // острів під панеллю чи заставкою: ~30 кадрів достатньо
     if (calm && now - this.last < 30) return;
     if (calm && this.ui.panelCovers()) { this.last = now; return; }
+    // пауза: кадр стоїть під оверлеєм, ~15 кадрів вистачає (на панелі камери кадр за нею ще рухається)
+    const still = this.match === this.solo && this.match && this.match.phase === 'paused' && this.sm.name === 'MATCH';
+    if (still && now - this.last < 60) return;
     let dt = (now - this.last) / 1000; this.last = now;
     if (dt > 0.1) dt = 0.1; if (dt < 0) dt = 0;
     if (this.lost) return;
-    if (!calm) this.governor(dt);
+    if (!calm && !still) this.governor(dt);
     this.sm.update(dt);
     this.ui.map.update(dt);
     if (this.link) this.link.frame();                 // онлайн-господар: кадр поз гостю
@@ -420,6 +473,5 @@ export class Game {
     // перші кадри з ефектом перевіряємо: однотонний кадр (білий/небо) — драйвер телефона зламав прохід; тоді ефект вимикаємо
     if (done && (this.cineChecks = (this.cineChecks || 0) + 1) <= 4 && this.cineFlat()) { this.cineBroken = true; done = false; }
     if (!done) this.renderer.render(menu ? this.menuScene : this.match.view.scene, menu ? this.menuCam : this.matchCam);
-    if (this.fps) this.fps(dt);
   }
 }

@@ -1,6 +1,7 @@
 // Penalties: серія пенальті: своя панель, приціл, стрибок воротаря, 3D-політ м'яча.
 import * as THREE from 'three';
 import { PITCH } from '../config.js';
+import { ground } from '../physics/ballmodel.js';
 import { audio } from '../core/audio.js';
 import { ovr } from '../state/squad.js';
 import { esc } from '../online/profile.js';
@@ -25,6 +26,12 @@ export class Penalties {
     const m = this.m, ui = m.ui;
     document.querySelectorAll('#pen').forEach((e) => e.remove());
     m.phase = 'pens'; m.ts = 1; m.slow = false; m.slowT = 0; if (ui.setSlow) ui.setSlow(false); m.cancelAim();
+    // серія обриває гру посеред будь-якого епізоду: м'яч більше нічий (інакше воротар тримав би видимий м'яч усю серію),
+    // пунктир замаху не лишається, а видимий м'яч не змішується зі старим кроком фізики (tick у серії не йде)
+    m.hideAim(); m.telegraph = false; m.pendKick = null; m.glideT = 0; m.clearReceivers();
+    if (m.holder) m.holder.p.setThreat(0, 0);
+    for (const a of m.actors) a.manual = false;
+    m.holder = null; m.taker = null; m.bs = 'roll'; m.owner = 0; m.shotBy = 0; m.acc = 0; m.bpx = undefined; ground(m.ball);
     ui.setMatchUi(false); ui.hud.setTime('90:00', false, 'Пенальті', null); ui.hud.addedTime(null); ui.hud.warn(null); ui.hud.hint(null); ui.hud.setCard(null);
     this.k = 0; this.res = { me: [], opp: [] }; this.state = 'wait'; this.t = -1.6; this.mark = null; this.by = 0; this.bvy = 0; this.over = false; this.live = false;
     const order = (arr) => arr.slice(1).sort((x, y) => ovr(y.info) - ovr(x.info));
@@ -141,7 +148,7 @@ export class Penalties {
     gp.x = this.gx - this.dir * 0.8; gp.z = 0; gp.vx = gp.vz = 0; gp.yaw = this.dir > 0 ? -Math.PI / 2 : Math.PI / 2; gp.setMode('gkwait', 999); gp.gkAlert = 1;
     this.state = 'aim'; this.t = 0; this.live = false; this.mark = null; this.markEl.hidden = true; this.go.disabled = true; this.go.style.visibility = 'visible';
     this.go.querySelector('b').textContent = me ? 'УДАР!' : 'СТРИБОК!';
-    this.msg.innerHTML = me ? `<b>№${this.kicker.info.num} ${esc(this.kicker.info.name.split(' ')[0])}</b> б’є пенальті<small>Тапни у ворота, куди бити</small>` : `<b>Б’є ${esc(this.kicker.info.name.split(' ')[0])}</b><small>Тапни у ворота, куди стрибне воротар · ◀ ▶ — рух по лінії</small>`;
+    this.msg.innerHTML = me ? `<b>№${this.kicker.info.num} ${esc(this.kicker.info.name.split(' ').slice(-1)[0])}</b> б’є пенальті<small>Торкнись воріт, куди бити</small>` : `<b>Б’є ${esc(this.kicker.info.name.split(' ')[0])}</b><small>Торкнись воріт, куди стрибне воротар · ◀ ▶ — рух по лінії</small>`;
     this.moveEl.hidden = me; this.move.v = 0;
     this.m.ui.hud.setCard(null);
     audio.whistle(false);
@@ -226,7 +233,8 @@ export class Penalties {
 
     // --- виконавець: розбіг із розгоном → замах → контакт → проводка
     if (!this.kicked) {
-      const q = clamp(t / TK, 0, 1), e = run(q), x0 = sx - dir * ((this.runLen || RUN) + 0.7), x1 = sx - dir * 1.25;
+      // кінець розбігу: на kickP = 0.36 (через ~0.22 с після TK, тіло ще йде за інерцією) виконавець стоїть ~0.6 м позаду м'яча, і стопа саме дістає його
+      const L0 = (this.runLen || RUN) + 0.7, kI = 0.111 / TK, q = clamp(t / TK, 0, 1), e = run(q), x0 = sx - dir * L0, x1 = sx - dir * (0.33 + kI * L0) / (1 + kI);
       const z0 = dir * (this.runSide ?? 1.4), z1 = dir * 0.25;
       const px = kp.p.x, pz = kp.p.z;
       kp.p.x = x0 + (x1 - x0) * e; kp.p.z = z0 + (z1 - z0) * (1 - (1 - e) * (1 - e));   // заходить дугою, наприкінці — прямо на м'яч
@@ -410,7 +418,7 @@ export class Penalties {
     if (this.arrived) return;
     const b = this.m.ball, dir = this.dir, depth = (b.x - this.gx) * dir, y = this.cy;
     let out = null;
-    if (depth > R * 0.9) out = (Math.abs(b.z) < G - 0.05 && y < H - 0.05) ? 'goal' : (this.postHit ? 'post' : 'miss');
+    if (depth > R * 0.9) out = (Math.abs(b.z) < G - 0.05 && y < H - 0.05) ? 'goal' : (this.gkTouch ? 'save' : this.postHit ? 'post' : 'miss');
     else if (depth < -2.8 && this.bvx * dir < 0) out = this.gkTouch ? 'save' : this.postHit ? 'post' : 'miss';
     else if (this.gkTouch && this.bvx * dir < 0 && depth < -0.6 && Math.hypot(this.bvx, this.bvz) > 2) out = 'save';
     if (!out) return;

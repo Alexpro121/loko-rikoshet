@@ -4,6 +4,7 @@ import { PITCH, ACADEMY } from '../config.js';
 import { Player } from '../graphics/player.js';
 import { shadowTexture } from '../graphics/textures.js';
 import { drawFlag } from '../online/flag.js';
+import { whenLogo } from '../graphics/logo.js';
 
 const { W } = PITCH;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -12,6 +13,7 @@ const TAU = Math.PI * 2;
 // жилети волонтерів, що несуть прапори: номер зливається з тлом (його не видно)
 const VEST = { main: '#f2c53d', second: '#2b2f33', sleeve: '#2b2f33', shorts: '#2b2f33', socks: '#2b2f33', under: '#2b2f33', collar: '#2b2f33', boot: '#1b1d20', plate: '#f2c53d', numInk: '#f2c53d', ink: 'light' };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+const FLAG_POLE = [0.9, -1, 0.1];                                 // прапороносець: лікті вниз-назовні, кисті на древку перед грудьми
 
 /** Полотно прапора: два кольори з діагоналлю, біле коло з назвою клубу. */
 function flagTexture(a, b, title, sub) {
@@ -26,6 +28,18 @@ function flagTexture(a, b, title, sub) {
   g.font = '800 22px Rubik, Arial Black, sans-serif'; g.fillText(sub, 256, 196, 160);
   g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 8; g.strokeRect(4, 4, 504, 312);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+
+/** Прапор «Локомотива»: сигнальні червоний і зелений, біла смуга між ними, справжня емблема посередині. */
+function lokoFlagTexture() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 320;
+  const g = c.getContext('2d');
+  g.fillStyle = '#d4202c'; g.fillRect(0, 0, 512, 160);
+  g.fillStyle = '#1f8f3f'; g.fillRect(0, 160, 512, 160);
+  g.fillStyle = '#f1efe8'; g.fillRect(0, 148, 512, 24);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  whenLogo((img) => { const h = 292, w = h * 166 / 180; g.drawImage(img, 256 - w / 2, 14, w, h); t.needsUpdate = true; });
   return t;
 }
 
@@ -90,7 +104,7 @@ export class Walkout {
     this.view = view; this.group = new THREE.Group(); this.group.visible = false; view.scene.add(this.group);
     const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false, opacity: 0.55 });
     // великий прапор: 15 × 9 м, лежить горизонтально, висоту кожної точки рахує wave()
-    this.big = new Cloth(15, 9, 30, 18, flagTexture('#d4202c', '#1f8f3f', 'ЛОКО', 'КИЇВ · 1919'));
+    this.big = new Cloth(15, 9, 30, 18, lokoFlagTexture());
     this.big.mesh.rotation.x = -Math.PI / 2; this.group.add(this.big.mesh);
     this.bearers = [];
     // 12 волонтерів по периметру: по 4 на довгих краях, по 2 на коротких; (u, v) — де тримають край.
@@ -99,7 +113,7 @@ export class Walkout {
     spots.forEach(([u, v], i) => { const b = bearer(i, view, shadowMat); b.u = u; b.v = v; b.p.holdFacing = true; this.bearers.push(b); this.group.add(b.p.root, b.sh); });
     // прапороносці колон: наш прапор і прапор гостей
     this.poles = [0, 1].map((k) => { const b = bearer(12 + k, view, shadowMat); this.group.add(b.p.root, b.sh); return b; });
-    this.flags = [new PoleFlag(flagTexture('#d4202c', '#1f8f3f', 'ЛОКО', '1919')), new PoleFlag(flagTexture('#888', '#444', 'ГОСТІ', ''))];
+    this.flags = [new PoleFlag(lokoFlagTexture()), new PoleFlag(flagTexture('#888', '#444', 'ГОСТІ', ''))];
     for (const f of this.flags) this.group.add(f.group);
     this.cx = 0; this.cz = 5; this.t = 0; this.pyroT = 0;
   }
@@ -113,8 +127,8 @@ export class Walkout {
     const key = hm.join('|') + (home && home.flag ? JSON.stringify(home.flag) : '');
     if (this.homeKey !== key) {
       this.homeKey = key;
-      setFlag(this.big, home && home.flag ? clubFlagTexture(home.flag) : flagTexture(hm[0], hm[1], hm[2], home ? home.city || '' : 'КИЇВ · 1919'));
-      setFlag(this.flags[0].cloth, home && home.flag ? clubFlagTexture(home.flag) : flagTexture(hm[0], hm[1], hm[2], home ? '' : '1919'));
+      setFlag(this.big, home && home.flag ? clubFlagTexture(home.flag) : home ? flagTexture(hm[0], hm[1], hm[2], home.city || '') : lokoFlagTexture());
+      setFlag(this.flags[0].cloth, home && home.flag ? clubFlagTexture(home.flag) : home ? flagTexture(hm[0], hm[1], hm[2], '') : lokoFlagTexture());
     }
     this.cx = 0; this.cz = 5; this.t = 0; this.carry = false; this.group.visible = true;
     this.bearers.forEach((b, i) => { b.p.root.visible = true; b.p.setMode('idle'); b.p.gaitSys.ready = false; b.cut = true; });
@@ -173,7 +187,7 @@ export class Walkout {
       const px = p.x + fx * 0.3 + rx * 0.09, pz = p.z + fz * 0.3 + rz * 0.09;
       f.group.position.set(px, 0.42, pz); f.group.rotation.y = y + Math.PI / 2;
       f.update(t, clamp(sp / 2.5, 0, 1));
-      p.reach(0, px, 1.5, pz, 1); p.reach(1, px, 1.1, pz, 1);
+      p.reach(0, px, 1.5, pz, 1, false, false, FLAG_POLE); p.reach(1, px, 1.1, pz, 1, false, false, FLAG_POLE);
       p.animate(dt);
       b.sh.position.set(p.root.position.x + 0.3, 0.04, p.root.position.z - 0.2);
     }

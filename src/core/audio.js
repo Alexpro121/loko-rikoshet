@@ -11,6 +11,7 @@ class AudioEngine {
     this.nextT = 0;
     this.timer = 0;
     this.crowdGain = null;
+    this.wakeUntil = 0;
   }
 
   unlock() {
@@ -18,6 +19,7 @@ class AudioEngine {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       this.ctx = new AC({ latencyHint: 'interactive' });
+      this.wakeUntil = performance.now() + 300;
       this.master = this.ctx.createGain();
       this.master.gain.value = 0.8;
       const comp = this.ctx.createDynamicsCompressor();
@@ -45,11 +47,16 @@ class AudioEngine {
 
   suspend() { if (this.ctx && this.ctx.state === 'running') this.ctx.suspend(); }
   // interrupted — стан iOS після дзвінка чи блокування; без жесту браузер може відмовити, тоді спробуємо на наступному дотику
-  resume() { if (this.ctx && (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted')) this.ctx.resume().catch(() => {}); }
+  resume() { if (this.ctx && (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted')) { this.wakeUntil = performance.now() + 300; this.ctx.resume().catch(() => {}); } }
+  /**
+   * Чи можна планувати ефект. Зупинений контекст стоїть у часі: усе заплановане заграло б разом після відновлення, тому
+   * такі звуки пропускаємо. Виняток — мить після resume чи створення контексту: він оживе за кадр-два, а звук цього дотику потрібен.
+   */
+  live() { const c = this.ctx; return !!c && (c.state === 'running' || performance.now() < this.wakeUntil); }
 
   // --- примітиви ---
   tone(type, f0, f1, dur, vol, when = 0, dest = this.sfx) {
-    if (!this.ctx) return;
+    if (!this.live()) return;
     const c = this.ctx, t = c.currentTime + when;
     const o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(f0, t);
@@ -62,9 +69,9 @@ class AudioEngine {
   }
 
   hiss(freq, q, dur, vol, when = 0, type = 'bandpass', dest = this.sfx) {
-    if (!this.ctx) return;
+    if (!this.live()) return;
     const c = this.ctx, t = c.currentTime + when;
-    const s = c.createBufferSource(); s.buffer = this.noise;
+    const s = c.createBufferSource(); s.buffer = this.noise; s.loop = true;   // буфер 1 с, а шум буває до 2.2 с
     const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
     const g = c.createGain();
     g.gain.setValueAtTime(0.0001, t);
@@ -95,7 +102,7 @@ class AudioEngine {
   pass() { this.tone('triangle', 520, 780, 0.1, 0.3); }
   save() { this.tone('triangle', 330, 160, 0.14, 0.4); this.hiss(900, 0.7, 0.08, 0.25); }
   whistle(long = false) {
-    if (!this.ctx) return;
+    if (!this.live()) return;
     const c = this.ctx, t = c.currentTime, dur = long ? 0.9 : 0.4;
     const o = c.createOscillator(), g = c.createGain(), l = c.createOscillator(), lg = c.createGain();
     o.type = 'sine'; o.frequency.value = 2850;
@@ -105,7 +112,7 @@ class AudioEngine {
     o.connect(g); g.connect(this.sfx); o.start(t); l.start(t); o.stop(t + dur + 0.02); l.stop(t + dur + 0.02);
   }
   horn() {
-    if (!this.ctx) return;
+    if (!this.live()) return;
     const c = this.ctx, t = c.currentTime, dur = 1.15;
     const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1300;
     const g = c.createGain();

@@ -85,7 +85,7 @@ export class Hud {
         const el = this.t.tmM, old = this.last.min;
         this.last.min = m;
         if (old == null || old === '' || Math.abs(+m - +old) > 2) el.textContent = m;
-        else { el.innerHTML = `<s class="o">${old}</s><s class="n">${m}</s>`; el.classList.remove('flip'); void el.offsetWidth; el.classList.add('flip'); }
+        else { const o = document.createElement('s'), n = document.createElement('s'); o.className = 'o'; n.className = 'n'; o.textContent = old; n.textContent = m; el.replaceChildren(o, n); el.classList.remove('flip'); void el.offsetWidth; el.classList.add('flip'); }   // лише текст: у гостя рядок годинника приходить із мережі
       }
       this.t.tmS.textContent = sec;
     }

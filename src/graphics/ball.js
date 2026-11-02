@@ -8,7 +8,7 @@ const _UP = new THREE.Vector3(0, 1, 0);
 
 /** М'яч-«усічений ікосаедр»: ікосаедр деталізації 1, чорні «п'ятикутники» навколо 12 вершин. */
 function ballGeometry(r) {
-  let g = new THREE.IcosahedronGeometry(r, 1).toNonIndexed();
+  const g = new THREE.IcosahedronGeometry(r, 1);                        // уже без індексу
   const base = new THREE.IcosahedronGeometry(1, 0).attributes.position;
   const verts = [];
   for (let i = 0; i < base.count; i++) {

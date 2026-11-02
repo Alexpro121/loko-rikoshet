@@ -5,17 +5,17 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { PITCH } from '../config.js';
 import { VoxelBuilder, rng } from './voxel.js';
 import { drawFlag } from '../online/flag.js';
+import { whenLogo, logoReady, logoImg } from './logo.js';
 
-const TEXTS = ['ЛОКО, ВПЕРЕД!', 'ЗАЛІЗНИЧНИКИ', 'ЛОКОМОТИВ КИЇВ', 'СТОП ✕ ВПЕРЕД', 'ЛОКО · 1919', 'ДАВАЙ, ЛОКО!', 'ЗА КИЇВ!', 'ВІРИМО В ПЕРЕМОГУ', 'РИКОШЕТ!', 'ЛОКО В ЛІГУ ЧЕМПІОНІВ', 'МИ — ЗАЛІЗНИЧНИКИ', 'СЛАВА УКРАЇНІ'];
+const TEXTS = ['ЛОКО, ВПЕРЕД!', 'ЗАЛІЗНИЧНИКИ', 'ЛОКОМОТИВ КИЇВ', 'СТОП ✕ ВПЕРЕД', 'ЛОКО · 1919', 'ДАВАЙ, ЛОКО!', 'ЗА КИЇВ!', 'ВІРИМО В ПЕРЕМОГУ', 'РИКОШЕТ!', 'ЛОКО — ДО ВЕРШИНИ', 'МИ — ЗАЛІЗНИЧНИКИ', 'СЛАВА УКРАЇНІ'];
 const SCHEMES = [['#a8182b', '#f1efe8'], ['#157a46', '#f1efe8'], ['#f1efe8', '#a8182b'], ['#1c2328', '#e8b923'], ['#a8182b', '#e8b923'], ['#157a46', '#e8b923']];
 const BC = 2, BR = 7, BW = 384, BH = 128;     // атлас банерів: 2 колонки × 6 полотнищ + рядок для древків
 
-function bannerAtlas() {
-  const c = document.createElement('canvas'); c.width = BC * BW; c.height = BR * BH;
+function drawAtlas(c, texts, schemes) {
   const g = c.getContext('2d'), r = rng(31);
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  TEXTS.forEach((t, i) => {
-    const x = (i % BC) * BW, y = ((i / BC) | 0) * BH, [bg, fg] = SCHEMES[i % SCHEMES.length];
+  texts.forEach((t, i) => {
+    const x = (i % BC) * BW, y = ((i / BC) | 0) * BH, [bg, fg] = schemes[i % schemes.length];
     g.fillStyle = bg; g.fillRect(x, y, BW, BH);
     g.fillStyle = 'rgba(255,255,255,0.07)'; for (let k = 0; k < 6; k++) g.fillRect(x, y + k * 22 + r() * 6, BW, 8);   // складки тканини
     g.strokeStyle = fg; g.lineWidth = 5; g.strokeRect(x + 7, y + 7, BW - 14, BH - 14);
@@ -25,15 +25,21 @@ function bannerAtlas() {
     g.fillStyle = fg; g.fillText(t, x + BW / 2, y + BH / 2 + 3);
   });
   g.fillStyle = '#5a4630'; g.fillRect(0, (BR - 1) * BH, BC * BW, BH);
+}
+function bannerAtlas() {
+  const c = document.createElement('canvas'); c.width = BC * BW; c.height = BR * BH;
+  drawAtlas(c, TEXTS, SCHEMES);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO;
   return t;
 }
 
 const { L, W, WALL, GOAL_D } = PITCH;
 const ROW_D = 1.45, ROW_H = 0.92, SP = 0.98;
+const HOME_CLOTH = ['#a8182b', '#e8e4d8'], HOME_SCARF = ['#c8213a', '#f1efe8', '#157a46', '#c8213a'];
 const CLOTHES = ['#2b3a4a', '#58687a', '#c9c4b8', '#8f2a2f', '#2f6b4b', '#c99a45', '#3d3d44', '#7e8a94', '#e1ddd2', '#5b4a63', '#a5b3bd'];
 /** Хвиля полотнища у вершинному шейдері: рухаються лише вершини вище древка. uAmp росте під час співів і радості. */
 const WAVE = { uTime: { value: 0 }, uAmp: { value: 0.3 } };
+const smooth01 = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 function waveMat(mat) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = WAVE.uTime; sh.uniforms.uAmp = WAVE.uAmp;
@@ -56,7 +62,7 @@ export class Stands {
     const b = new VoxelBuilder(0.2);
     const fans = [], spots = [], awaySpots = [], sides = [], flagSpots = [];          // x, y, z, фаза, колір тіла, колір голови
     const rnd = rng(7);
-    const pickCloth = (home) => (home && rnd() > 0.35 ? (rnd() > 0.5 ? '#a8182b' : '#e8e4d8') : CLOTHES[(rnd() * CLOTHES.length) | 0]);
+    const pickCloth = (home) => (home && rnd() > 0.35 ? (rnd() > 0.5 ? HOME_CLOTH[0] : HOME_CLOTH[1]) : CLOTHES[(rnd() * CLOTHES.length) | 0]);
 
     // вісь «вздовж» (ax,az), вісь «углиб» (dx,dz) — від поля назовні
     // cut — проріз над тунелем гравців (лише трибуна вздовж X): по центру на ±cut.w нижні ряди прибрано, вищі стоять на
@@ -122,9 +128,11 @@ export class Stands {
     this.body.frustumCulled = this.head.frustumCulled = false;
     this.bx = new Float32Array(n); this.by = new Float32Array(n); this.bz = new Float32Array(n); this.ph = new Float32Array(n);
     const c = new THREE.Color();
+    this.homeFans = []; this.homeKey = '';
     for (let i = 0; i < n; i++) {
       this.bx[i] = fans[i * 6]; this.by[i] = fans[i * 6 + 1]; this.bz[i] = fans[i * 6 + 2]; this.ph[i] = fans[i * 6 + 3];
-      this.body.setColorAt(i, c.set(fans[i * 6 + 4]).multiplyScalar(0.85 + rnd() * 0.25));
+      const shade = 0.85 + rnd() * 0.25; this.body.setColorAt(i, c.set(fans[i * 6 + 4]).multiplyScalar(shade));
+      if (fans[i * 6 + 4] === HOME_CLOTH[0] || fans[i * 6 + 4] === HOME_CLOTH[1]) this.homeFans.push(i, fans[i * 6 + 4] === HOME_CLOTH[0] ? 0 : 1, shade);   // у клубному: їх перефарбовує setHome
       this.head.setColorAt(i, c.set(fans[i * 6 + 5]));
     }
     this.side = Int8Array.from(sides);
@@ -139,8 +147,8 @@ export class Stands {
     const scm = new THREE.MeshLambertMaterial({ flatShading: true });
     this.scarf = new THREE.InstancedMesh(noBottom(new THREE.BoxGeometry(0.62, 0.09, 0.14)), scm, n);
     this.scarf.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.scarf.frustumCulled = false;
-    const SC = ['#c8213a', '#f1efe8', '#157a46', '#c8213a'];
-    for (let i = 0; i < n; i++) this.scarf.setColorAt(i, c.set(SC[(rnd() * SC.length) | 0]));
+    this.scarfI = new Uint8Array(n);
+    for (let i = 0; i < n; i++) { this.scarfI[i] = (rnd() * HOME_SCARF.length) | 0; this.scarf.setColorAt(i, c.set(HOME_SCARF[this.scarfI[i]])); }
     this.rx = null; this.idleT = 0; this.frame = 0; this.chant = 0; this.flagSmoke = true;
     this.writeMatrices(0);
     this.group.add(this.body, this.head, this.arms, this.flash, this.scarf);
@@ -152,6 +160,7 @@ export class Stands {
   /** Банери на древках: кожен — окремий меш зі спільним атласом, гойдається та підстрибує під час радості. */
   buildBanners(spots, rnd) {
     const map = bannerAtlas(), mat = waveMat(new THREE.MeshLambertMaterial({ map, side: THREE.DoubleSide }));
+    this.homeTex = map;
     const BWW = 4.4, BHH = BWW * BH / BW, order = TEXTS.map((_, i) => i).sort(() => rnd() - 0.5);
     this.banners = [];
     spots.forEach((sp, n) => {
@@ -173,9 +182,13 @@ export class Stands {
 
   /** Прапори на довгих древках: клубні (червоно-зелені) і гостей (кольори суперника, оновлюються разом із банерами). */
   buildFlags(spots) {
-    const mk = (c1, c2) => { const c = document.createElement('canvas'); c.width = 128; c.height = 80; const g = c.getContext('2d'); g.fillStyle = c1; g.fillRect(0, 0, 128, 80); g.fillStyle = c2; g.beginPath(); g.moveTo(64, 0); g.lineTo(128, 0); g.lineTo(128, 80); g.lineTo(40, 80); g.closePath(); g.fill(); g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 4; g.strokeRect(2, 2, 124, 76); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return { t, c }; };
+    const paint = (c, c1, c2) => { const g = c.getContext('2d'); g.fillStyle = c1; g.fillRect(0, 0, 128, 80); g.fillStyle = c2; g.beginPath(); g.moveTo(64, 0); g.lineTo(128, 0); g.lineTo(128, 80); g.lineTo(40, 80); g.closePath(); g.fill(); g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 4; g.strokeRect(2, 2, 124, 76); };
+    const mk = (c1, c2) => { const c = document.createElement('canvas'); c.width = 128; c.height = 80; paint(c, c1, c2); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return { t, c }; };
     const home = mk('#c8213a', '#157a46'), away = mk('#254e9c', '#e4e8ec');
     this.flagAwayCanvas = away.c; this.flagAwayTex = away.t;
+    const loko = (c) => { const g = c.getContext('2d'); g.fillStyle = '#d4202c'; g.fillRect(0, 0, 128, 40); g.fillStyle = '#1f8f3f'; g.fillRect(0, 40, 128, 40); g.fillStyle = '#f1efe8'; g.fillRect(0, 37, 128, 6); if (logoReady()) { const h = 74, w = h * 166 / 180; g.drawImage(logoImg(), 64 - w / 2, 3, w, h); } };
+    loko(home.c); whenLogo(() => { if (!this.homeKey) { loko(home.c); home.t.needsUpdate = true; } });
+    this.flagHomeCanvas = home.c; this.flagHomeTex = home.t; this.flagHomeDraw = () => loko(home.c);
     const matH = waveMat(new THREE.MeshLambertMaterial({ map: home.t, side: THREE.DoubleSide })), matA = waveMat(new THREE.MeshLambertMaterial({ map: away.t, side: THREE.DoubleSide }));
     this.flags = [];
     for (const sp of spots) {
@@ -226,17 +239,40 @@ export class Stands {
   }
 
 
+  /**
+   * Домашній сектор онлайн-матчу: вболівальники, шарфи, банери й прапори в кольорах клубу господаря. null — знову «Локомотив»
+   * (кар'єра після онлайну). Лише на старті матчу: перефарбовує тисячі глядачів, тож без зміни клубу нічого не робить.
+   */
+  setHome(club) {
+    const key = club ? club.name + club.kit.main + club.kit.second + JSON.stringify(club.flag || 0) : '';
+    if (key === this.homeKey) return;
+    this.homeKey = key;
+    const a = club ? club.kit.main : HOME_CLOTH[0], b = club ? club.kit.second : HOME_CLOTH[1], c = new THREE.Color(), F = this.homeFans;
+    for (let i = 0; i < F.length; i += 3) this.body.setColorAt(F[i], c.set(F[i + 1] ? b : a).multiplyScalar(F[i + 2]));
+    this.body.instanceColor.needsUpdate = true;
+    const sc = club ? [a, b, a, a] : HOME_SCARF;
+    for (let i = 0; i < this.n; i++) this.scarf.setColorAt(i, c.set(sc[this.scarfI[i]]));
+    this.scarf.instanceColor.needsUpdate = true;
+    if (club) {
+      const n = String(club.name).toUpperCase(), base = [n, n + ' ВПЕРЕД!', 'ЗА ' + n, n + ' З НАМИ', 'ТІЛЬКИ ' + n, 'ДАВАЙ, ' + n + '!'];
+      drawAtlas(this.homeTex.image, TEXTS.map((_, i) => base[i % base.length]), [[a, b], [b, a]]);
+      if (club.flag) drawFlag(this.flagHomeCanvas.getContext('2d'), club.flag, 128, 80);
+    } else { drawAtlas(this.homeTex.image, TEXTS, SCHEMES); this.flagHomeDraw(); }
+    this.homeTex.needsUpdate = true; this.flagHomeTex.needsUpdate = true;
+  }
+
   /** Типи реакцій: goal (радість своїх/сум гостей), groan, gasp, wave, clap, flash. */
   react(type, o = {}) {
     const DUR = { goal: 3.8, groan: 2.6, gasp: 1.2, wave: 4.2, clap: 2.6, flash: 3.2 };
+    if (type !== 'flash') this.flash.count = 0;                // спалахи малює лише реакція flash: без цього застигли б білими квадратами
     this.rx = { type, t: 0, dur: o.dur || DUR[type] || 2, mine: o.mine !== false };
   }
   cheer(sec) { this.react('goal', { dur: sec, mine: true }); }
 
   /** Хор: кожні 16 с на ~9 с домашні сектори стрибають у ритм і піднімають руки/шарфи. */
   chantEnv(t) {
-    const c = t % 16, sm = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
-    return sm((c - 2) / 1.5) * (1 - sm((c - 10.5) / 1.5));
+    const c = t % 16;
+    return smooth01((c - 2) / 1.5) * (1 - smooth01((c - 10.5) / 1.5));
   }
 
   /** light: спокійний фон — рухаються лише тулуби й голови; руки та шарфи лежать згорнутими. */
@@ -290,12 +326,13 @@ export class Stands {
     WAVE.uTime.value = t; WAVE.uAmp.value = amp;
     // полотнища й прапори: тряска в ритм співів, сильніше під час радості
     const beat = Math.sin(t * 4.6);
-    for (const b of this.banners) {
+    for (let i = 0; i < this.banners.length; i++) {
+      const b = this.banners[i];
       b.m.rotation.z = Math.sin(t * (1.3 + 4 * amp) + b.ph) * (0.02 + 0.09 * amp) + beat * 0.05 * ch;
       b.m.rotation.x = Math.sin(t * 0.9 + b.ph * 2) * 0.03 + Math.abs(beat) * 0.06 * ch;
       b.m.position.y = b.y + Math.abs(Math.sin(t * 4.6 + b.ph * 0.2)) * 0.3 * ch + (react > 0 ? Math.abs(Math.sin(t * 7 + b.ph)) * 0.4 * react : 0);
     }
-    for (const f of this.flags) { f.gr.rotation.z = Math.sin(t * (1.1 + 3 * amp) + f.ph) * (0.03 + 0.12 * amp) + beat * 0.08 * ch; }
+    for (let i = 0; i < this.flags.length; i++) { const f = this.flags[i]; f.gr.rotation.z = Math.sin(t * (1.1 + 3 * amp) + f.ph) * (0.03 + 0.12 * amp) + beat * 0.08 * ch; }
     // фон оновлюємо з пониженою частотою; під час реакцій — щокадру
     this.frame++;
     if (rx) {

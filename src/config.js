@@ -10,6 +10,8 @@ export const PITCH = {
   WALL_H: 1.2,
   GOAL_H: 2.9,    // висота воріт (2.6 м; справжні 2.44 м)
   GOAL_D: 2.2,    // глибина воріт за лінією
+  BOX_D: 15.6,    // штрафний: глибина від лінії воріт (розмітка й правила воротаря)
+  BOX_W: 19,      // штрафний: пів-ширини
   R: 0.16,        // радіус м'яча у фізиці (трохи більший за видимий — м'яч легше прийняти й заблокувати)
   BALL_VIS: 0.14, // видимий радіус м'яча (діаметр ~25 см; справжній 22 см)
   POST_R: 0.16,
@@ -46,6 +48,22 @@ export const KITS = {
 };
 export const KIT_GK_LOKO = { main: '#e0a81c', second: '#23272b', shorts: '#23272b', socks: '#e0a81c', plate: '#23272b', numInk: '#f1efe8', ink: 'light' };
 
+/** Головні кольори ближчі за це (відстань у RGB): 22 гравці на полі вже не розрізняються. */
+export const KIT_CLASH = 60;
+const kitRgb = (k) => { const m = k && /^#([0-9a-f]{6})$/i.exec(k.main); if (!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+/** Відстань між головними кольорами двох форм; Infinity, якщо колір не вдалось прочитати (тоді форми вважаються різними). */
+export function kitDist(a, b) { const p = kitRgb(a), q = kitRgb(b); return p && q ? Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) : Infinity; }
+/**
+ * Форма на один матч (чиста функція, нічого не зберігає; кар'єра й онлайн). Повертає kit, якщо він не зливається з oppKit;
+ * інакше першу придатну з alts; якщо придатних нема, ту, що найдальша від суперника.
+ */
+export function pickKit(kit, oppKit, alts = []) {
+  if (kitDist(kit, oppKit) >= KIT_CLASH) return kit;
+  let best = kit, top = kitDist(kit, oppKit);
+  for (const a of alts) { const d = kitDist(a, oppKit); if (d >= KIT_CLASH) return a; if (d > top) { top = d; best = a; } }
+  return best;
+}
+
 const club = (name, city, a, b, gk) => ({
   name, city,
   kit: { main: a, second: b, shorts: b, socks: a, plate: '#f1efe8', numInk: '#1f2933', ink: 'dark' },
@@ -55,14 +73,21 @@ const club = (name, city, a, b, gk) => ({
 // Ліги: що вище, то щільніший пресинг, швидші гравці й краща розстановка суперника.
 export const LEAGUES = [
   { id: 'l2', name: 'Друга ліга', short: '2', formation: '442', note: '',
-    clubs: [club('НИВА', 'Тернопіль', '#8fc3dc', '#f1efe8', '#9fbf3a'), club('ПОДІЛЛЯ', 'Хмельницький', '#d9b02a', '#23272b', '#d86a8a'), club('ВОЛИНЬ', 'Луцьк', '#8d98a3', '#1f2933', '#9fbf3a')] },
+    clubs: [club('ЛЕЛЕКИ', 'Вербогір', '#8fc3dc', '#f1efe8', '#9fbf3a'), club('ГОНЧАРІ', 'Глинополь', '#d9b02a', '#23272b', '#d86a8a'), club('ЖУРАВЛІ', 'Журавлин', '#8d98a3', '#1f2933', '#9fbf3a')] },
   { id: 'l1', name: 'Перша ліга', short: '1', formation: '433', note: 'Суперник тисне вище',
-    clubs: [club('МЕТАЛІСТ', 'Харків', '#dcc12c', '#1f4fa8', '#d86a8a'), club('ЧОРНОМОРЕЦЬ', 'Одеса', '#254e9c', '#e4e8ec', '#9fbf3a'), club('КАРПАТИ', 'Львів', '#eceff1', '#237a3f', '#d86a8a')] },
-  { id: 'upl', name: 'Прем’єр-ліга УПЛ', short: 'У', formation: '4231', note: 'Швидкі фланги й кращі воротарі',
-    clubs: [club('ЗОРЯ', 'Луганськ', '#3a4048', '#eceff1', '#9fbf3a'), club('ДИНАМО', 'Київ', '#eceff1', '#2a5db8', '#d98a3a'), club('ШАХТАР', 'Донецьк', '#e0762a', '#161a1d', '#9fbf3a')] },
-  { id: 'ucl', name: 'Ліга чемпіонів', short: 'ЛЧ', formation: '433', note: 'Високий пресинг і швидкі контратаки',
-    clubs: [club('МІЛАН', 'Мілан', '#1a1d21', '#c2262e', '#9fbf3a'), club('МЮНХЕН', 'Мюнхен', '#eceff1', '#b3162a', '#e0a81c'), club('МАДРИД', 'Мадрид', '#f4f4f1', '#c6a02a', '#d86a8a'), club('МАНЧЕСТЕР', 'Манчестер', '#6cb8e0', '#12294d', '#e0a81c')] },
+    clubs: [club('БУРЕВІЙ', 'Золотополе', '#dcc12c', '#1f4fa8', '#d86a8a'), club('ПРИБІЙ', 'Мореград', '#254e9c', '#e4e8ec', '#9fbf3a'), club('СМЕРЕКА', 'Верхоліс', '#eceff1', '#237a3f', '#d86a8a')] },
+  { id: 'upl', name: 'Вища ліга', short: 'В', formation: '4231', note: 'Швидкі фланги й кращі воротарі',
+    clubs: [club('ТЕРИКОН', 'Рудоград', '#3a4048', '#eceff1', '#9fbf3a'), club('БАСТІОН', 'Кам’яноград', '#eceff1', '#6a3fa0', '#d98a3a'), club('ГОРНИЛО', 'Вогнеград', '#e0762a', '#2a2f6b', '#9fbf3a')] },
+  { id: 'ucl', name: 'Ліга чемпіонів', short: 'ЛЧ', formation: '433', note: 'Високий тиск і швидкі контратаки',
+    clubs: [club('ВАЛЬДОРА', 'Вальдора', '#3b2a5c', '#e8b923', '#9fbf3a'), club('НОРДГАЙМ', 'Нордгайм', '#eceff1', '#1c2b4a', '#e0a81c'), club('ТОРРЕМАР', 'Торремар', '#f4f4f1', '#c6a02a', '#d86a8a'), club('ГРЕЙВЕЛЛ', 'Грейвелл', '#2f8f8a', '#12294d', '#e0a81c'), club('ЛІНДЕНБУРГ', 'Лінденбург', '#1c3f94', '#d9e021', '#d86a8a')] },
+  { id: 'wc', name: 'Чемпіонат світу', short: 'ЧС', formation: '4231', note: 'Найсильніші клуби світу', cup: 'Кубок світу',
+    clubs: [club('ЗАМБАРА', 'Замбара', '#7b2cbf', '#f4d35e', '#9fbf3a'), club('АСАГАО', 'Асагао', '#f4f4f1', '#c2185b', '#e0a81c'), club('ОРІЛЬЯ', 'Санта-Орілья', '#f2c14e', '#0b5d8f', '#d86a8a'), club('ЛЕЙКВЮ', 'Лейквю', '#101820', '#00b4d8', '#9fbf3a')] },
 ];
+
+/** Навички польового гравця й воротаря, лінія кожної ролі. */
+export const STAT_KEYS = ['pace', 'shoot', 'pass', 'drib', 'tack', 'iq'];
+export const GK_KEYS = ['react', 'reach', 'hands', 'pass', 'iq'];
+export const LINE_OF = { GK: 'G', LB: 'D', CB: 'D', RB: 'D', DM: 'M', CM: 'M', AM: 'M', LM: 'M', RM: 'M', LW: 'W', RW: 'W', ST: 'F' };
 
 // Розстановки: u — глибина (0 власні ворота … 1 ворота суперника) у обороні/атаці, v — ширина (-1..1)
 const LINE = { D: [0.14, 0.40], M: [0.30, 0.62], F: [0.46, 0.84], W: [0.40, 0.76] };
@@ -82,7 +107,7 @@ LEAGUES.forEach((lg, li) => lg.clubs.forEach((c, ci) => FIXTURES.push({ league: 
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-/** Параметри матчу за прогресом: fixtureIdx 0..12 + номер сезону. */
+/** Параметри матчу за прогресом: fixtureIdx (порядковий номер у FIXTURES) + номер сезону. */
 export function matchSpec(fixtureIdx, season) {
   const fx = FIXTURES[fixtureIdx];
   const lg = LEAGUES[fx.league];
@@ -90,7 +115,7 @@ export function matchSpec(fixtureIdx, season) {
   // відбирає, швидше й точніше контратакує, дає менше часу на роздуми). Перші матчі — легші, ніж раніше
   const dr = fixtureIdx + season * FIXTURES.length;
   return {
-    fixtureIdx, season, league: fx.league, leagueName: lg.name, club: fx.club, no: fx.no, of: fx.of, final: fx.final,
+    fixtureIdx, season, league: fx.league, leagueName: lg.name, cupName: lg.cup || 'Кубок ліги', club: fx.club, no: fx.no, of: fx.of, final: fx.final,
     globalNo: fixtureIdx + 1 + season * FIXTURES.length,
     formation: lg.formation, note: lg.note,
     scale: 1 + dr * 0.42,
@@ -119,7 +144,7 @@ export const STRIKERS = [
 export const shotSkill = (v) => 0.82 + 0.36 * v;
 
 export const KEEPERS = [
-  { id: 'k0', name: 'Дід Мороз', price: 0, speed: 7.0, reach: 1.15, concede: 1.0, hair: 'bald', hairCol: '#c9cdd1', skin: '#e8bf9b', tip: 'Звичайний воротар' },
+  { id: 'k0', name: 'Alex LOKO', price: 0, speed: 7.0, reach: 1.15, concede: 1.0, hair: 'bald', hairCol: '#c9cdd1', skin: '#e8bf9b', tip: 'Звичайний воротар' },
   { id: 'k1', name: 'Сторож', price: 380, speed: 8.4, reach: 1.25, concede: 0.85, hair: 'crop', hairCol: '#374151', skin: '#d4a074', tip: 'Швидший, довші руки' },
   { id: 'k2', name: 'Шлагбаум', price: 1500, speed: 9.6, reach: 1.4, concede: 0.7, hair: 'band', hairCol: '#1f2933', skin: '#e8bf9b', tip: 'Перекриває пів воріт' },
   { id: 'k3', name: 'Диспетчер', price: 5600, speed: 11, reach: 1.5, concede: 0.55, hair: 'crop', hairCol: '#8a6a1c', skin: '#b07a52', tip: 'Читає удари наперед' },
@@ -147,13 +172,13 @@ export const ACADEMY = {
 
 // Стадіон: ярус за рівнем прокачки
 export const STADIUM_TIERS = [0, 2, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 26];
-export const STADIUM_TIER_NAMES = ['Перші трибуни', 'Бічні трибуни', 'Тунель і лавки', 'Прожектори', 'Другий ярус', 'LED-борти', 'Дах і табло', 'Прапори', 'Клубний магазин і кафе', 'Тренувальне поле', 'Музей клубу', 'Готель і офіс', 'Паркінг і автобуси', 'Золота арена'];
+export const STADIUM_TIER_NAMES = ['Перші трибуни', 'Бічні трибуни', 'Тунель і лавки', 'Прожектори', 'Другий ярус', 'Світлові борти', 'Дах і табло', 'Прапори', 'Клубна крамниця й кав’ярня', 'Тренувальне поле', 'Музей клубу', 'Готель і офіс', 'Стоянка й автобуси', 'Золота арена'];
 
 export const SETTINGS_DEFAULT = { sfx: true, music: true, haptics: true, quality: 'auto', control: 'auto', hand: 'right', joySize: 135, joyAlpha: 70, joyX: -1, joyY: -1, timeOfDay: 'day', weather: 'clear',
   camMode: 'classic', camDist: 100, camTiltOff: 0, camFollow: 100, camShake: true,
   mapOn: true, mapX: 1, mapY: 0, mapSize: 100, mapAlpha: 85, mapRun: true, mapBall: true, mapTrailA: 50, mapOpp: true, mapCam: true };
 /**
- * Пресети ігрової камери (core/camera.js). Усі — як у FIFA: сталий широкий план, що йде за м'ячем без відставання;
+ * Пресети ігрової камери (core/camera.js). Усі — як у телетрансляції футболу: сталий широкий план, що йде за м'ячем без відставання;
  * віддаляється лише тоді, коли важливі для моменту гравці не влазять (не далі, ніж grow).
  * el — нахил (°); yaw — звідки дивимось (0 — збоку; −π/2 — з-за наших воріт, атака вгору екрана); fov — кут огляду;
  * width — скільки поля (од.) видно поперек широкого екрана біля м'яча, depth — уздовж (вглиб); pmin — частка ширини,
@@ -166,6 +191,6 @@ export const CAM_PRESETS = {
   broadcast: { name: 'ТРАНСЛЯЦІЯ', note: 'Як телетрансляція: далі й ширше, камера на центральній лінії повертається за грою', el: 50, yaw: 0, fov: 30, width: 64, depth: 34, pmin: 0.55, af: 0.96, cf: 0.4, co: -3, lead: 0.12, rate: 4.6, swing: 0.18, grow: 1.25, mates: 2 },
   dynamic: { name: 'ДИНАМІЧНА', note: 'Трохи ближче й енергійніше, більше простору попереду атаки', el: 58, yaw: 0, fov: 38, width: 50, depth: 32, pmin: 0.6, af: 1, cf: 0.7, co: -1.5, lead: 0.18, rate: 6, swing: 0.08, grow: 1.35, mates: 1 },
   tactic: { name: 'ТАКТИЧНА', note: 'Високо й широко: видно розстановку, партнерів і вільні зони', el: 72, yaw: 0, fov: 34, width: 74, depth: 46, pmin: 0.6, af: 0.9, cf: 0.4, co: -1, lead: 0.1, rate: 4.6, swing: 0, grow: 1.2, mates: 4 },
-  vertical: { name: 'ВЕРТИКАЛЬНА', note: 'З-за спини: атака йде вгору екрана — для телефона, який тримаєш прямо', el: 62, yaw: -Math.PI / 2, fov: 42, width: 46, depth: 40, pmin: 0.75, af: 0.6, cf: 1, co: -3, lead: 0.1, rate: 5, swing: 0, grow: 1.3, mates: 2 },
-  auto: { name: 'АВТО', note: 'Класична на широкому екрані, вертикальна — коли телефон тримаєш прямо' },
+  vertical: { name: 'ВЕРТИКАЛЬНА', note: 'З-за спини: атака йде вгору екрана', el: 62, yaw: -Math.PI / 2, fov: 42, width: 46, depth: 40, pmin: 0.75, af: 0.6, cf: 1, co: -3, lead: 0.1, rate: 5, swing: 0, grow: 1.3, mates: 2 },
+  auto: { name: 'АВТО', note: 'Сама обирає камеру за формою екрана: на горизонтальному це класична' },
 };

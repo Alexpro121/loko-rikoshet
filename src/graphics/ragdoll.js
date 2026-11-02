@@ -14,13 +14,13 @@ const UP = new THREE.Vector3(0, 1, 0);
 const G = 9.8, H0 = 1 / 240;
 
 // точки: [вузол скелета, локальне зміщення (одиниці моделі), радіус для зіткнення з газоном]
-const PTS = (p, headY) => [
+const PTS = (p) => [
   [p.legL, 0, 0, 0, 0.1], [p.legR, 0, 0, 0, 0.1],                 // 0,1 стегна
   [p.shinL, 0, 0, 0, 0.08], [p.shinR, 0, 0, 0, 0.08],             // 2,3 коліна
   [p.footL, 0, 0, 0, 0.06], [p.footR, 0, 0, 0, 0.06],             // 4,5 щиколотки
   [p.footL, 0, -0.06, 0.2, 0.04], [p.footR, 0, -0.06, 0.2, 0.04], // 6,7 носки
   [p.thorax, 0, 0, 0, 0.14],                                      // 8 грудний відділ
-  [p.neck, 0, 0, 0, 0.08], [p.neck, 0, headY, 0.02, 0.19],        // 9 шия, 10 голова
+  [p.neck, 0, 0, 0, 0.08], [p.neck, 0, 0.29, 0.02, 0.19],        // 9 шия, 10 голова
   [p.armL, 0, 0, 0, 0.09], [p.armR, 0, 0, 0, 0.09],               // 11,12 плечі
   [p.foreL, 0, 0, 0, 0.09], [p.foreR, 0, 0, 0, 0.09],             // 13,14 лікті
   [p.handL, 0, -0.09, 0, 0.11], [p.handR, 0, -0.09, 0, 0.11],     // 15,16 кисті (радіус з запасом: кисть-блок лежить на траві, а не в ній)
@@ -43,11 +43,9 @@ export function ragPoints(p, out = []) {
   return out;
 }
 
-/** Опис точок гравця — один раз на гравця (і заново лише коли змінилась висота голови), а не масиви щокадру. */
+/** Опис точок гравця — один раз на гравця, а не масиви щокадру. */
 function ptsOf(p) {
-  const hy = p.headY ?? 0.29;
-  if (!p._ragPts || p._ragPtsY !== hy) { p._ragPts = PTS(p, hy); p._ragPtsY = hy; }
-  return p._ragPts;
+  return (p._ragPts ??= PTS(p));
 }
 
 export class Ragdoll {
@@ -64,9 +62,9 @@ export class Ragdoll {
   constructor(p, vel, push, trip = true, opts = {}) {
     const s = p.root.scale.x || 0.82;
     p.root.updateMatrixWorld(true);
-    this.p = p; this.s = s; this.t = 0; this.g = opts.g ?? G; this.dive = !!opts.dive; this.active = this.dive || !!opts.active; this.local = false; this.impact = 0; this.landT = -1; this.tone = 1; this.acc = 0;
+    this.p = p; this.s = s; this.t = 0; this.g = opts.g ?? G; this.dive = !!opts.dive; this.active = true; this.local = false; this.impact = 0; this.landT = -1; this.tone = 1; this.acc = 0;
     this.pos = []; this.prev = []; this.r = [];
-    const defs = PTS(p, p.headY ?? 0.29);
+    const defs = ptsOf(p);
     for (let i = 0; i < defs.length; i++) {
       const [node, x, y, z, r] = defs[i];
       const w = node.localToWorld(new THREE.Vector3(x, y, z));
@@ -92,7 +90,7 @@ export class Ragdoll {
   }
 
   /** Центр мас (точки рівної маси). */
-  com(P, out) { out.set(0, 0, 0); for (const q of P) out.add(q); return out.divideScalar(P.length); }
+  com(P, out) { out.set(0, 0, 0); for (let i = 0; i < P.length; i++) out.add(P[i]); return out.divideScalar(P.length); }
 
   /**
    * «М'язи»: куди кожна точка хоче стати відносно центру мас (з анімаційної пози — оберт тіла, руки з IK до м'яча, ноги),
@@ -127,14 +125,15 @@ export class Ragdoll {
   step(dt) {
     if (dt <= 0) return false;                                          // пауза, hit-stop: тіло стоїть
     // сталий підкрок 1/240 с із накопиченням залишку: час фізики дорівнює часу гри за будь-якої частоти кадрів і в слоумо
-    this.acc += Math.min(dt, 1 / 30);
-    const n = Math.floor((this.acc + 1e-9) / H0), h = H0, s = this.s;
+    // (межа — та сама 0.1 с, що й обрізання кадру в грі: нижче 30 fps тіло не сповільнюється відносно свого таймера)
+    this.acc += Math.min(dt, 0.1);
+    const n = Math.floor((this.acc + 1e-9) / H0), h = H0;
     this.acc -= n * H0;
     this.t += dt;
     // після удару об газон м'язи на мить піддаються (тіло «ляскає» об траву), потім знову тримають позу, але м'якше
     // удар об газон м'язи лише трохи «пропускають» (амортизація), і за ~0.25 с знову тримають тіло — людина не розсипається
     if (this.landT >= 0) { this.landT += dt; this.tone = this.landT < 0.08 ? 0.55 : 0.55 + 0.35 * Math.min(1, (this.landT - 0.08) / 0.25); }
-    let drv = false; if (this.active) for (let i = 0; i < this.dk.length; i++) if (this.dk[i] > 0) { drv = true; break; }
+    let drv = false; for (let i = 0; i < this.dk.length; i++) if (this.dk[i] > 0) { drv = true; break; }
     const loc = this.local;
     for (let it = 0; it < n; it++) {
       if (drv) { this.com(this.pos, _o); this.com(this.prev, _ex); }
@@ -143,8 +142,7 @@ export class Ragdoll {
       let sx = 0, sy = 0, sz = 0, nd = 0;
       for (let i = 0; i < this.pos.length; i++) {
         const p = this.pos[i], q = this.prev[i];
-        _v.subVectors(p, q).multiplyScalar(this.active ? 0.9998 : 0.995);   // жива людина в польоті — чиста балістика, без «в'язкого повітря»
-        // захисний рефлекс: перші 0.45 с кисті тягнуться вперед-униз, назустріч землі (у стрибку руки ведуть м'язи)
+        _v.subVectors(p, q).multiplyScalar(0.9998);                         // жива людина в польоті — чиста балістика, без «в'язкого повітря»
         let ax = 0, ay = -this.g, az = 0;
         if (drv && this.dk[i] > 0) {
           // м'яз: пружина до цільової точки відносно центру мас + загасання відносно його руху
@@ -156,16 +154,12 @@ export class Ragdoll {
           const fx = k * (tx - p.x) - c * (_v.x / h - vo.x), fy = k * (ty - p.y) - c * (_v.y / h - vo.y), fz = k * (tz - p.z) - c * (_v.z / h - vo.z);
           ax += fx; ay += fy; az += fz; sx += fx; sy += fy; sz += fz;
         }
-        if (!this.active && (i === 15 || i === 16) && this.t < 0.45) {
-          const tx = this.pos[8].x + this.fall.x * 0.55 * s, tz = this.pos[8].z + this.fall.z * 0.55 * s;
-          ax += (tx - p.x) * 60; az += (tz - p.z) * 60; ay += (this.r[i] - p.y) * 25;
-        }
         q.copy(p); p.add(_v).add(_a.set(ax * h * h, ay * h * h, az * h * h));
         // газон: не нижче радіуса, тертя гасить ковзання
         if (p.y < this.r[i]) {
           const vy = (p.y - q.y) / h;
           p.y = this.r[i];
-          if (this.active) {
+          {
             // удар тулуба об траву — сила приземлення (для пилу, звуку, камери); далі ковзання з тертям (μ ≈ 0.55)
             if (vy < -1.2 && this.t > 0.08) { if (TORSO.includes(i) || i === 10) this.impact = Math.max(this.impact, -vy); if (this.landT < 0 && (TORSO.includes(i) || i === 10 || i >= 13)) this.landT = 0; }
             // тертя Кулона тіла об траву (μ ≈ 0.7): гальмує вага й сам удар — бічний імпульс до μ × нормального (жорстке
@@ -174,18 +168,18 @@ export class Ragdoll {
             // ноги, що ще черкають траву, гасили бічну швидкість, і тіло летіло вдвічі повільніше, ніж відштовхнулось
             const hx = p.x - q.x, hz = p.z - q.z, hv = Math.hypot(hx, hz), dec = this.dive && this.landT < 0 && i >= 2 && i <= 7 ? 0 : 0.7 * (this.g * h + Math.max(0, -vy)) * h;
             const k = hv > dec ? (hv - dec) / hv : 0; q.x = p.x - hx * k; q.z = p.z - hz * k;
-          } else { q.x += (p.x - q.x) * 0.45; q.z += (p.z - q.z) * 0.45; }
+          }
           if (q.y < p.y - 0.001) q.y = p.y;
         }
       }
       if (drv) {                                   // сили м'язів внутрішні: їхня сума не штовхає центр мас
         const m = this.pos.length, hh = h * h;
-        for (const p of this.pos) { p.x -= sx / m * hh; p.y -= sy / m * hh; p.z -= sz / m * hh; }
+        for (let i = 0; i < m; i++) { const p = this.pos[i]; p.x -= sx / m * hh; p.y -= sy / m * hh; p.z -= sz / m * hh; }
       }
       for (let k = 0; k < 6; k++) {
-        for (const [a, b, len, st] of this.cons) {
-          const A = this.pos[a], B = this.pos[b];
-          _v.subVectors(B, A); const d = _v.length() || 1e-6, diff = (d - len) / d * 0.5 * st;
+        for (let ci = 0; ci < this.cons.length; ci++) {
+          const c = this.cons[ci], A = this.pos[c[0]], B = this.pos[c[1]];
+          _v.subVectors(B, A); const d = _v.length() || 1e-6, diff = (d - c[2]) / d * 0.5 * c[3];
           A.addScaledVector(_v, diff); B.addScaledVector(_v, -diff);
         }
         this.limitKnees(); this.limitLegs(); this.limitBody();
@@ -216,7 +210,7 @@ export class Ragdoll {
       }
     }
     let ke = 0; for (let i = 0; i < this.pos.length; i++) ke += this.pos[i].distanceToSquared(this.prev[i]);
-    return this.t > 0.5 && ke / (h * h) / this.pos.length < (this.active ? 0.4 : 0.05) && (!this.active || this.landT > 0.35);
+    return this.t > 0.5 && ke / (h * h) / this.pos.length < 0.4 && this.landT > 0.35;
   }
 
   /** Коліно не згинається назад: тримаємо його попереду лінії «стегно — щиколотка». */
@@ -225,7 +219,8 @@ export class Ragdoll {
     _a.subVectors(P[1], P[0]);                                         // праворуч
     _b.addVectors(P[11], P[12]).multiplyScalar(0.5).sub(_c.addVectors(P[0], P[1]).multiplyScalar(0.5));   // угору
     _c.crossVectors(_a, _b).normalize();                               // уперед
-    for (const [hp, kn, an] of [[0, 2, 4], [1, 3, 5]]) {
+    for (let i = 0; i < 2; i++) {
+      const hp = i, kn = 2 + i, an = 4 + i;
       _v.addVectors(P[hp], P[an]).multiplyScalar(0.5).sub(P[kn]).negate();
       const d = _v.dot(_c), min = 0.01 * this.s;
       if (d < min) { const f = min - d; P[kn].addScaledVector(_c, f * 0.6); P[hp].addScaledVector(_c, -f * 0.2); P[an].addScaledVector(_c, -f * 0.2); }
@@ -352,8 +347,30 @@ export class Ragdoll {
 // ---- постановка кісток за точками (спільні тимчасові змінні модуля — нуль виділень у кадрі)
 const _hip = new THREE.Vector3(), _q1 = new THREE.Quaternion(), _qU = new THREE.Quaternion(), _qD = new THREE.Quaternion(), _qS = new THREE.Quaternion(), _qId = new THREE.Quaternion();
 const TOE_REST = new THREE.Vector3(0, -0.06, 0.2).normalize();
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
 
-function blendQ(node, q, w) { if (w >= 0.999) node.quaternion.copy(q); else node.quaternion.slerp(q, w); }
+function blendQ(node, q, w) {
+  if (w >= 0.999) { node.quaternion.copy(q); (node.userData.arcQ ??= new THREE.Quaternion()).copy(q); }
+  else arcBlend(node, node.quaternion, q, w, true);
+}
+
+/**
+ * node.quaternion ← суміш from → to з вагою w без перельоту. slerp іде коротшою дугою, тож коли поза й ціль майже протилежні
+ * (поворот ~180°), дуга за кадр міняє бік, і кінцівка перелітає через тіло. Тому беремо з двох дуг ту, що ближча до результату
+ * минулого кадру (node.userData.arcQ); hasPrev = false — минулого результату нема, коротша дуга. from і to можуть бути node.quaternion.
+ */
+export function arcBlend(node, from, to, w, hasPrev) {
+  const rq = (node.userData.arcQ ??= new THREE.Quaternion());               // один на вузол, не щокадру
+  const c = from.dot(to), abs = Math.abs(c), sg = c > 0 ? -1 : 1;           // to · sg — кінець довгої дуги
+  const fx = from.x, fy = from.y, fz = from.z, fw = from.w, tx = to.x * sg, ty = to.y * sg, tz = to.z * sg, tw = to.w * sg;
+  _qa.copy(from).slerp(to, w);
+  if (hasPrev && Math.abs(_qa.dot(rq)) < 0.97 && abs < 0.9995) {
+    const th = Math.acos(-abs), st = Math.sin(th), k0 = Math.sin((1 - w) * th) / st, k1 = Math.sin(w * th) / st;
+    _qb.set(fx * k0 + tx * k1, fy * k0 + ty * k1, fz * k0 + tz * k1, fw * k0 + tw * k1);
+    if (Math.abs(_qb.dot(rq)) > Math.abs(_qa.dot(rq))) _qa.copy(_qb);
+  }
+  rq.copy(_qa); node.quaternion.copy(_qa);
+}
 
 function basisQ(P, r0, r1, u0, u1, out) {
   _a.subVectors(P[r1], P[r0]).normalize();

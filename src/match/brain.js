@@ -50,7 +50,7 @@ export function zoneValue(x, z, side) {
   return 0.42 * clamp((x * side + L) / (2 * L), 0, 1) + 0.58 * near * near;
 }
 
-const _shot = { q: 0, z: 0, clear: 0 };
+const _shot = { q: 0, z: 0, clear: 0, vis: 0 };
 /**
  * Якість удару 0..1: кут, під яким видно ворота, відстань, лінія удару й місце воротаря. У _shot.z найкраща точка у воротах:
  * найдальша від воротаря серед незакритих ліній. Те саме, що робить людина: дивиться, куди бити, а не лише «чи близько».
@@ -67,7 +67,7 @@ export function shotQuality(x, z, side, foes) {
   const out = Math.abs(gk.x - gx), open = Math.abs(gk.z - bz);
   let q = Math.min(1, vis / 0.55) * Math.exp(-d / 26) * (bc < 1 ? 0.22 : bc < 2 ? 0.6 : 1);
   if (open > 2.6 && out < 9) q *= 1.25;                                 // воротар не встигає в той кут
-  _shot.q = Math.min(1, q); _shot.z = bz; _shot.clear = bc;
+  _shot.q = Math.min(1, q); _shot.z = bz; _shot.clear = bc; _shot.vis = vis;
   return _shot;
 }
 
@@ -99,11 +99,12 @@ export function pickCarry(a, side, foes, pm, cdx, cdz) {
   const ax = fd > 0.01 ? (fx - p.x) / fd : 0, az = fd > 0.01 ? (fz - p.z) / fd : 0;
   let bs = -99, bx = side, bz = 0;
   for (let i = 0; i < 9; i++) {
-    const an = CAR_A[i]; if (Math.abs(an) > 1.6 && pm > 5) continue;
+    const an = CAR_A[i]; if (Math.abs(an) > 1.6 && pm > 5 && p.x * side < L - 8) continue;      // назад — під тиском або від самої лінії воріт: уперед там уже нема куди
     const dx = Math.cos(an) * side, dz = Math.sin(an), ex = p.x + dx * 10, ez = p.z + dz * 10;
     const c = laneDist(p.x, p.z, ex, ez, foes, 0);
     let s = Math.min(c, 6) * 0.8 + (zoneValue(ex, ez, side) - z0) * 12 + (dx * cdx + dz * cdz) * 0.7 - Math.abs(an) * 0.25;
-    if (Math.abs(ez) > W - 3 || Math.abs(ex) > L - 3) s -= 3.5;
+    if (Math.abs(ez) > W - 3) s -= 3.5;
+    if (Math.abs(ex) > L - 3) s -= 3.5;                                  // у кут гірше, ніж просто до лінії: звідти лише назад
     if (pm < 6) s -= (dx * ax + dz * az) * (6 - pm) * 0.55;
     s += (Math.random() - 0.5) * (1 - iq) * 1.8;
     if (s > bs) { bs = s; bx = dx; bz = dz; }
@@ -152,7 +153,7 @@ export class TeamBrain {
   /** Лінії блоку в обороні: захист, півзахист і вістря тримаються разом; від м'яча й від найглибшого чужого нападника. */
   setLines(c, ax, att, t) {
     const T = this.team, pr = T.press, side = T.side;
-    const tl = (side < 0 ? T.line : 0) * 2 * L;
+    const tl = (side < 0 && !T.even ? T.line : 0) * 2 * L;
     this.cp = !att && t - this.lostT < 2 + 1.6 * pr && ax > -L * 0.35;      // щойно втратили: тиснуть одразу, поки суперник не роздивився
     let cap = -8 + 26 * pr + tl + this.ment * 7;
     if (this.cp) cap += 8;
@@ -171,7 +172,7 @@ export class TeamBrain {
   defSpot(a, b, out) {
     const r = a.role, side = this.team.side, u = r.line === 'D' ? this.lineU : r.line === 'M' ? this.midU + (r.name === 'DM' ? -3 : 0) : r.line === 'W' ? this.midU + 5 : this.foreU;
     out.x = clamp(u, -L + 7, L - 7) * side;
-    out.z = clamp(r.v * (W - 3.6) * 0.74 + clamp(b.z, -24, 24) * 0.34, -(W - 2.2), W - 2.2);
+    out.z = clamp(r.v * side * (W - 3.6) * 0.74 + clamp(b.z, -24, 24) * 0.34, -(W - 2.2), W - 2.2);
   }
 
   /** Щілини в останній лінії суперника: туди, а не на захисника, біжить той, хто забігає. */
@@ -254,7 +255,7 @@ export class TeamBrain {
       const ok = dB > 6 && dB < 42, lane = ok ? laneDist(b.x, b.z, p.x, p.z, opps, 0) : 0, free = ok ? nearest(p.x, p.z, opps) : 0;
       if (a.callT > 0) { if (lane < 1.5 || free < 2.6) a.callT = 0; else { live++; continue; } }
       if (a.callCool > 0 || !ok || lane < 1.9 || free < 3.8) continue;
-      // просять передусім ті, хто попереду; хто стоїть позаду м'яча, руку підіймає лише коли носія притиснули
+      // просять передусім ті, хто попереду; хто стоїть надто далеко позаду м'яча, руку не підіймає
       const fwd = (p.x * side - ax) / 18; if (fwd < -0.35) continue;
       if (Math.random() > 0.4 + 0.55 * a.sk.iq) continue;
       const s = fwd * 1.5 + Math.min(free, 10) * 0.12 + Math.min(lane, 5) * 0.15 + (a.job === RUN || a.job === GO ? 0.7 : 0);
@@ -294,7 +295,7 @@ export class TeamBrain {
   /** Вибір роботи в атаці: один і той самий підрахунок для всіх точок, чи це підтримка, забіг, ширина, чи штрафний. */
   pickJob(a, c, base) {
     const T = this.team, side = T.side, b = c.ball, t = c.t || 0, p = a.p, r = a.role, iq = a.sk.iq, opps = c.opps, out = T.out;
-    const ax = b.x * side, sgn = r.v >= 0 ? 1 : -1, bsg = b.z >= 0 ? 1 : -1, W2 = JOB_W[r.line] || JOB_W.M, line = r.line, deep = ax < -L * 0.45;
+    const ax = b.x * side, sgn = r.v * side >= 0 ? 1 : -1, bsg = b.z >= 0 ? 1 : -1, W2 = JOB_W[r.line] || JOB_W.M, line = r.line, deep = ax < -L * 0.45;
     _n = 0;
     CX[_n] = base.x; CZ[_n] = base.z; CT[_n++] = SHAPE;
     if (a.job !== SHAPE && a.jUntil > t) { CX[_n] = a.jx; CZ[_n] = a.jz; CT[_n++] = a.job; }
@@ -317,7 +318,7 @@ export class TeamBrain {
     if (line === 'M') add(side, ax + 2, -bsg * W * 0.5, SUPPORT);
     // м'яч на фланзі в чужій третині: штрафний заповнюють рівномірно: ближня штанга, дальня, пенальті, край, відкат
     if (ax > L - 34 && line !== 'D') {
-      const bz = Math.abs(b.z) > 9 ? bsg : (r.v >= 0 ? 1 : -1);
+      const bz = Math.abs(b.z) > 9 ? bsg : sgn;
       add(side, L - 6, bz * 3, BOX); add(side, L - 6, -bz * 3.5, BOX); add(side, L - 12, 0, BOX); add(side, L - 20, -bz * 5, BOX); add(side, L - 13, bz * 13, BOX);
     }
     let best = 0, bs = -1e9;
@@ -362,7 +363,7 @@ export class TeamBrain {
       if (a.job === REST) {
         // страховка: позаду м'яча й позаду найглибшого чужого нападника, але не в своїх воротах
         out.x = clamp(Math.min(ax - 24 - Math.max(0, -this.ment) * 8, this.oppDeep - 2.5), -L + 14, L * 0.45) * side;
-        out.z = clamp(a.role.v * (W - 3.6) * 0.55 + b.z * 0.3, -(W - 3), W - 3);
+        out.z = clamp(a.role.v * this.team.side * (W - 3.6) * 0.55 + b.z * 0.3, -(W - 3), W - 3);
         out.sp = JOB_SP[REST]; a.jx = out.x; a.jz = out.z;
         return;
       }

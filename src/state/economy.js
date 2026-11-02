@@ -40,9 +40,16 @@ export const keeperTier = () => KEEPERS.indexOf(keeper());
 /** Каса стадіону: пасивний дохід, що копичиться між візитами. */
 export const CASH_CAP_MIN = 90;
 export const cashRate = () => (4 + 1.6 * S.up.stadium) * incomeMult();
+const accrued = (now) => Math.min(CASH_CAP_MIN, Math.max(0, (now - S.cashAt) / 60000)) * cashRate();
 export function pendingCash(now = Date.now()) {
-  const min = Math.min(CASH_CAP_MIN, Math.max(0, (now - S.cashAt) / 60000));
-  return Math.floor(min * cashRate());
+  if (S.cashAt > now) S.cashAt = now;              // годинник перевели назад: каса не стоїть, доки час дожене збережений запис
+  return Math.floor(accrued(now) + 1e-6);
+}
+/** Те, що змінює ставку каси (стадіон, випускник). Уже накопичене лишається за старою ставкою: відлік зсувається так, щоб сума не змінилась, а далі йде нова ставка. */
+export function keepCash(change) {
+  const now = Date.now(), c = accrued(now);
+  change();
+  S.cashAt = now - (c / cashRate()) * 60000;
 }
 
 export function rollGraduate() {

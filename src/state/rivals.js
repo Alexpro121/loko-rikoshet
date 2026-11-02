@@ -15,8 +15,8 @@ export const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length
 
 /** Стилі: зсуви параметрів матчу на повну силу стилю (k = 1). */
 export const STYLES = [
-  { id: 'press', name: 'ПРЕСИНГ', tip: 'тиснуть високо й відбирають', mod: { press: 0.18, line: 0.05, runSpeed: 0.35, slowFactor: 0.025 } },
-  { id: 'counter', name: 'КОНТРАТАКИ', tip: 'сидять глибоко й швидко б’ють у відповідь', mod: { press: -0.06, line: -0.04, runSpeed: 0.5, counterSpeed: 5 } },
+  { id: 'press', name: 'ТИСК', tip: 'тиснуть високо й відбирають', mod: { press: 0.18, line: 0.05, runSpeed: 0.35, slowFactor: 0.025 } },
+  { id: 'counter', name: 'КОНТРАТАКИ', tip: 'грають глибоко на своїй половині й швидко б’ють у відповідь', mod: { press: -0.06, line: -0.04, runSpeed: 0.5, counterSpeed: 5 } },
   { id: 'tech', name: 'ТЕХНІКА', tip: 'точні паси й удари', mod: { gkErr: -0.8, tackle: 0.03 }, bias: { pass: 8, drib: 6, shoot: 4 } },
   { id: 'power', name: 'СИЛА', tip: 'жорсткий відбір і сильні удари', mod: { tackle: 0.08, counterSpeed: 3, press: 0.06 }, bias: { tack: 8, pace: 3 } },
 ];
@@ -57,10 +57,13 @@ function scoutKnow(spec) {
   return clamp(sc.n / 5, 0, 1) * clamp(0.35 + 0.18 * spec.league, 0.35, 0.9);
 }
 
-/** Записати матч: результат проти клубу і що суперники помітили в нашій грі (ковзне середнє — свіже важить більше). */
-export function recordMatch(spec, me, opp, log) {
-  const r = rec(spec.club.name);
-  r.met++; r.gf += me; r.ga += opp; if (me > opp) r.w++; else if (me < opp) r.l++; else r.d++;
+/**
+ * Записати матч: результат проти клубу і що суперники помітили в нашій грі (ковзне середнє — свіже важить більше).
+ * outcome — підсумок матчу з Match.end: серія пенальті вирішує нічию, а me й opp лишаються рахунком основного часу.
+ */
+export function recordMatch(spec, me, opp, log, outcome) {
+  const r = rec(spec.club.name), res = outcome || (me > opp ? 'win' : me < opp ? 'loss' : 'draw');
+  r.met++; r.gf += me; r.ga += opp; if (res === 'win') r.w++; else if (res === 'loss') r.l++; else r.d++;
   const sc = (S.scout ||= { n: 0, corner: 0, flank: 0, dist: 20, aim: 1, shots: 0 });
   if (log && log.shots.length) {
     const n = log.shots.length, a = clamp(0.25 + n * 0.04, 0.25, 0.55);

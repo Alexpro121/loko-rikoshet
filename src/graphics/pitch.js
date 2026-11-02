@@ -53,15 +53,15 @@ export function buildPitch() {
   }
 
   const b = new VoxelBuilder(0);
-  // --- земля навколо: бетонна площадка, далі темна смуга
+  // --- земля навколо: бетонна площадка (верх -0.1), на ній смуги й плями
   b.box(0, -0.6, 0, 2 * L + 130, 1, 2 * W + 110, '#8b9296');
-  b.box(0, -0.58, 0, 2 * L + 34, 0.04, 2 * W + 30, '#7a8185');
-  b.box(0, -0.56, 0, 2 * L + 17, 0.04, 2 * W + 14, '#9aa1a4');
+  b.box(0, -0.11, 0, 2 * L + 34, 0.04, 2 * W + 30, '#7a8185');
+  b.box(0, -0.10, 0, 2 * L + 17, 0.04, 2 * W + 14, '#9aa1a4');
   const rnd = rng(11);
   for (let i = 0; i < 40; i++) {            // тріщини/плями на бетоні
     const x = (rnd() - 0.5) * (2 * L + 110), z = (rnd() - 0.5) * (2 * W + 90);
     if (Math.abs(x) < L + 4 && Math.abs(z) < W + 4) continue;
-    b.box(x, -0.53, z, 1 + rnd() * 3, 0.02, 0.8 + rnd() * 2, rnd() > 0.5 ? '#868d91' : '#a5acaf', rnd() * 3);
+    b.box(x, -0.075, z, 1 + rnd() * 3, 0.02, 0.8 + rnd() * 2, rnd() > 0.5 ? '#868d91' : '#a5acaf', rnd() * 3);
   }
   // підлога воріт
   for (const sd of [-1, 1]) b.box(sd * (L + GOAL_D / 2), -0.02, 0, GOAL_D, 0.04, 2 * G + 0.4, '#2e6a36');
@@ -81,7 +81,7 @@ export function buildPitch() {
   b.shape(new THREE.RingGeometry(8.6, 8.78, 56), 0, 0.04, 0, LINE, -Math.PI / 2);
   b.shape(new THREE.CircleGeometry(0.4, 14), 0, 0.045, 0, LINE, -Math.PI / 2);
   for (const sd of [-1, 1]) {
-    const x0 = sd * (L - 0.9), x1 = sd * (L - 15.6), x2 = sd * (L - 5.2), ph = 19, gh = 8.6;
+    const x0 = sd * (L - 0.9), x1 = sd * (L - PITCH.BOX_D), x2 = sd * (L - 5.2), ph = PITCH.BOX_W, gh = 8.6;
     lineSeg(b, x1, -ph, x1, ph); lineSeg(b, x1, -ph, x0, -ph); lineSeg(b, x1, ph, x0, ph);
     lineSeg(b, x2, -gh, x2, gh); lineSeg(b, x2, -gh, x0, -gh); lineSeg(b, x2, gh, x0, gh);
     b.shape(new THREE.CircleGeometry(0.3, 12), sd * (L - 10.4), 0.045, 0, LINE, -Math.PI / 2);
@@ -92,7 +92,8 @@ export function buildPitch() {
   // кутові прапорці
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     b.box(sx * (L - 1.9), 1.1, sz * (W - 1.9), 0.14, 2.2, 0.14, '#f1efe8');
-    b.box(sx * (L - 1.9) - sx * 0.38, 2.0, sz * (W - 1.9), 0.8, 0.5, 0.06, '#e8b923');
+    b.box(sx * (L - 1.9) - sx * 0.38, 2.125, sz * (W - 1.9), 0.8, 0.25, 0.06, '#d4202c');
+    b.box(sx * (L - 1.9) - sx * 0.38, 1.875, sz * (W - 1.9), 0.8, 0.25, 0.06, '#1f8f3f');
   }
 
   // --- борти: корпус + шапка; рекламні панелі нижче окремим мешем

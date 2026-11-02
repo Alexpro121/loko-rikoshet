@@ -14,7 +14,7 @@ const surname = (n) => String(n).split(' ').slice(-1)[0];   // так героя
 
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-const NAMES = ['СОКІЛ', 'ГРІМ', 'ВОВКИ', 'БУРЯ', 'КОМЕТА', 'ЛЕВИ', 'ШТОРМ', 'ЯСТРУБИ', 'ВУЛКАН', 'МАЯК', 'ЛАВІНА', 'ЗУБРИ', 'ДРАКОНИ', 'ЕКСПРЕС', 'ТАЙФУН', 'БЛИСКАВКА', 'ВІТЕР', 'ГЕТЬМАН', 'КОЗАКИ', 'ФЕНІКС'];
+const NAMES = ['КАЖАНИ', 'ГРІМ', 'ВОВКИ', 'БУРЯ', 'КОМЕТА', 'ЛЕВИ', 'ШТОРМ', 'ЯСТРУБИ', 'ВУЛКАН', 'МАЯК', 'ЛАВІНА', 'ЗУБРИ', 'ДРАКОНИ', 'ЕКСПРЕС', 'ТАЙФУН', 'БЛИСКАВКА', 'ВІТЕР', 'ОТАМАН', 'КОЗАКИ', 'ФЕНІКС'];
 const CITIES = ['Полтава', 'Черкаси', 'Суми', 'Житомир', 'Ужгород', 'Рівне', 'Чернігів', 'Вінниця', 'Ізмаїл', 'Кременчук', 'Бердичів', 'Дрогобич', 'Мукачево', 'Умань', 'Коломия', 'Ніжин', 'Біла Церква', 'Прилуки'];
 
 const GK_COLS = ['#e0a81c', '#d86a8a', '#9fbf3a', '#3fb7d8', '#f08a24', '#8a5cd6'];
@@ -75,6 +75,44 @@ export function newClub() {
   return { v: 1, club: { name: pick(NAMES), city: pick(CITIES), flag, gk: pick(GK_COLS), form }, heroes, nm: 1, lvl: 1, xp: 0, coins: 300, rating: 1000, rec: { w: 0, d: 0, l: 0 }, goals: 0, games: 0 };
 }
 
+const isHex = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+const hasKey = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+const count = (v, a, d, b = Infinity) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, a, b) : d);
+/** Ремонт за будовою (за зразком defaults/merge кар'єри): чинні значення не чіпаємо, зіпсоване поле чи героя замінюємо, клуб лишається. */
+function repair(o) {
+  if (!o.club || typeof o.club !== 'object') o.club = newClub().club;
+  if (o.live != null && !(typeof o.live === 'object' && Number.isFinite(o.live.r) && Number.isFinite(o.live.at))) o.live = null;
+  const c = o.club;
+  if (typeof c.name !== 'string' || !c.name.trim()) c.name = pick(NAMES);
+  if (typeof c.city !== 'string') c.city = pick(CITIES);
+  if (!isHex(c.gk)) c.gk = pick(GK_COLS);
+  if (c.form !== undefined && !ONLINE_FORMS.includes(c.form)) c.form = '433';
+  // старий прапор без оздоби оновить migrate; у решти виправляємо лише те, що не проходить normFlag
+  if (c.flag && typeof c.flag === 'object' && c.flag.ov !== undefined) { const n = normFlag(c.flag); for (const k in n) if (JSON.stringify(c.flag[k]) !== JSON.stringify(n[k])) c.flag[k] = n[k]; }
+  o.lvl = count(o.lvl, 1, 1); o.xp = count(o.xp, 0, 0); o.coins = count(o.coins, 0, 300); o.rating = count(o.rating, 0, 1000); o.goals = count(o.goals, 0, 0); o.games = count(o.games, 0, 0);
+  const r = o.rec && typeof o.rec === 'object' ? o.rec : (o.rec = {});
+  r.w = count(r.w, 0, 0); r.d = count(r.d, 0, 0); r.l = count(r.l, 0, 0);
+  const sl = slotsOf(c.form), H = o.heroes, used = new Set();
+  H.length = Math.min(H.length, 11);
+  for (const e of H) if (e && typeof e.name === 'string') { used.add(surname(e.name)); used.add('f:' + e.name.split(' ')[0]); }
+  for (let i = 0; i < 11; i++) {
+    const e = H[i];
+    if (!e || typeof e !== 'object') { H[i] = newHero(sl[i], used); continue; }
+    if (typeof e.name !== 'string' || !e.name.trim()) e.name = newName(used, hasKey(RARITY, e.rar) ? e.rar : 'c');
+    if (!e.stats || typeof e.stats !== 'object') e.stats = {};
+    for (const k of keysFor(lineOf(sl[i]))) e.stats[k] = count(e.stats[k], 8, 45, 99);
+    if (typeof e.id !== 'string') e.id = 'h' + Math.floor(Math.random() * 1e9).toString(36);
+    e.num = count(e.num, 1, sl[i].num, 99); e.xp = count(e.xp, 0, 0); e.lvl = count(e.lvl, 1, 1); e.apps = count(e.apps, 0, 0); e.goals = count(e.goals, 0, 0); e.beard = count(e.beard, 0, 0, 3);
+    if (!hasKey(RARITY, e.rar)) e.rar = 'c';
+    if (e.trait != null && !hasKey(TRAITS, e.trait)) e.trait = null;
+    if (typeof e.skin !== 'string') e.skin = ACADEMY.allSkins[1];
+    if (typeof e.hair !== 'string') e.hair = 'crop';
+    if (typeof e.hairCol !== 'string') e.hairCol = '#1f2933';
+  }
+  relabel(H, c.form);
+}
+const keepBroken = (raw) => { try { localStorage.setItem(KEY + '-broken', raw); } catch (_) { /* ignore */ } };   // наступний запис затре зіпсоване: лишаємо копію, як кар'єра
+
 /** Старе збереження: прапор із новими шарами й герої з іменами нового генератора. Лише раз: результат одразу записуємо, інакше випадковість мінялася б з кожним запуском. */
 function migrate(o) {
   if (o.club && o.club.flag && o.club.flag.ov !== undefined && o.nm && o.club.form) return;
@@ -84,21 +122,47 @@ function migrate(o) {
 }
 
 function load() {
-  try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && o.v === 1 && Array.isArray(o.heroes) && o.heroes.length === 11) { migrate(o); return o; } } } catch (_) { /* приватний режим */ }
+  let raw = null;
+  try {
+    raw = localStorage.getItem(KEY);
+    if (raw) {
+      const o = JSON.parse(raw);
+      if (o && o.v === 1 && Array.isArray(o.heroes)) {
+        const was = JSON.stringify(o); repair(o);
+        if (JSON.stringify(o) !== was) { keepBroken(raw); localStorage.setItem(KEY, JSON.stringify(o)); }
+        migrate(o); return o;
+      }
+      keepBroken(raw);
+    }
+  } catch (_) { if (raw) keepBroken(raw); }                 // зламаний запис (без raw це приватний режим)
   const o = newClub(); try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (_) { /* ignore */ }
   return o;
 }
 
 export let OP = load();
 export function saveOP() { try { localStorage.setItem(KEY, JSON.stringify(OP)); } catch (_) { /* ignore */ } }
+/** Матч почався: якщо сторінку закриють, не дограють до кінця, наступний запуск зарахує технічну поразку. */
+export function markLive(r) { OP.live = { r: Number.isFinite(r) ? r : 1000, at: Date.now() }; saveOP(); }
+export function clearLive() { if (OP.live) { OP.live = null; saveOP(); } }
+export function settleLive() { const l = OP.live; if (!l) return false; OP.live = null; applyResult('loss', 0, l.r, []); return true; }
 export function resetOP() { OP = newClub(); saveOP(); return OP; }
 
 // ------------------------------------------------------------------ форма й прапор
 const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
+const kitFrom = (a, b) => { const dark = lum(a) > 0.6; return { main: a, second: b, shorts: b, socks: a, plate: dark ? '#14231e' : '#f1efe8', numInk: dark ? '#f1efe8' : '#13321f', ink: 'dark' }; };
 /** Форма з кольорів прапора: футболка — перший колір, шорти — другий; номер — контрастний. */
-export function kitOf(club) {
-  const [a, b] = club.flag.c, dark = lum(a) > 0.6;
-  return { main: a, second: b, shorts: b, socks: a, plate: dark ? '#14231e' : '#f1efe8', numInk: dark ? '#f1efe8' : '#13321f', ink: 'dark' };
+export function kitOf(club) { const [a, b] = club.flag.c; return kitFrom(a, b); }
+const KIT_NEAR = 110;                                        // той самий поріг, що й у мінімапи (ui/minimap.js, near)
+const kitDist = (p, q) => { const a = parseInt(p.slice(1), 16), b = parseInt(q.slice(1), 16); return Math.hypot((a >> 16) - (b >> 16), ((a >> 8) & 255) - ((b >> 8) & 255), (a & 255) - (b & 255)); };
+/**
+ * Форма гостей на цей матч: футболки надто схожі — гості вдягають інший колір свого прапора (другий, третій…), а якщо
+ * весь прапор схожий, то білу чи темну. Лише кольори прапорів і без випадковості: обидва гравці мають обчислити те саме.
+ */
+export function awayKit(home, club) {
+  const c = club.flag.c, k = kitOf(club);
+  if (kitDist(k.main, home.main) >= KIT_NEAR) return k;
+  for (let i = 1; i < c.length; i++) if (kitDist(c[i], home.main) >= KIT_NEAR) return kitFrom(c[i], c[0]);
+  return lum(home.main) < 0.5 ? kitFrom('#f1efe8', '#14231e') : kitFrom('#14231e', '#f1efe8');
 }
 export function gkKitOf(club) { return { main: club.gk, second: '#1f2933', shorts: '#1f2933', socks: club.gk, plate: '#1f2933', numInk: '#f1efe8', ink: 'light' }; }
 export const shortOf = (club) => String(club.name).replace(/[^A-ZА-ЯІЇЄҐ0-9]/gi, '').slice(0, 3).toUpperCase() || 'ОНЛ';
@@ -148,8 +212,8 @@ export function toWire() {
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const col = (v, d) => (typeof v === 'string' && HEX.test(v) ? v : d);
-/** Чужий рядок: без символів розмітки (імена потрапляють у табло), обрізаний. */
-export const plain = (v) => String(v).replace(/[<>&"'`\\]/g, '').replace(/\s+/g, ' ').trim();
+/** Чужий рядок: без символів розмітки й керівних символів (імена потрапляють у табло), обрізаний. */
+export const plain = (v) => String(v).replace(/\s/g, ' ').replace(/[<>&"'`\\\p{Cc}\p{Cf}]/gu, '').replace(/\s+/g, ' ').trim();   // Cc, Cf: нульові й невидимі символи, зміна напряму тексту
 const str = (v, d, n) => (typeof v === 'string' && plain(v) ? plain(v).slice(0, n) : d);
 const num = (v, a, b, d) => (Number.isFinite(+v) ? clamp(Math.round(+v), a, b) : d);
 /** Профіль суперника з мережі — усе перевіряємо й обрізаємо (дані чужі: жодного HTML, лише відомі значення). */
@@ -166,7 +230,7 @@ export function fromWire(w) {
     for (const k of keysFor(line)) st[k] = num(h.stats && h.stats[k], 8, 99, 45);
     return {
       id: 'o' + i, role: s.name, pos: s.name, line, num: num(h.num, 1, 99, s.num), name: str(h.name, 'Гравець ' + (i + 1), 22), custom: true, stats: st, xp: 0, lvl: 1, apps: 0, goals: 0,
-      rar: RARITY[h.rar] ? h.rar : 'c', trait: TRAITS[h.trait] ? h.trait : null,
+      rar: hasKey(RARITY, h.rar) ? h.rar : 'c', trait: hasKey(TRAITS, h.trait) ? h.trait : null,
       skin: ACADEMY.allSkins.includes(h.skin) ? h.skin : ACADEMY.allSkins[1], hair: ACADEMY.allHairs.includes(h.hair) ? h.hair : 'crop', hairCol: ACADEMY.allHairCols.includes(h.hairCol) ? h.hairCol : '#1f2933', beard: num(h.beard, 0, 3, 0),
     };
   });

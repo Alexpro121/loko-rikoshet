@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { ANISO } from './textures.js';
 import { PITCH } from '../config.js';
-import { VoxelBuilder, rng } from './voxel.js';
+import { VoxelBuilder, rng, vcMat } from './voxel.js';
 import { whenLogo, logoReady, logoImg } from './logo.js';
 
 const { L, W, WALL, GOAL_D } = PITCH;
@@ -56,7 +56,8 @@ export function buildSurround() {
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.6; group.add(ground);
 
   // фасади над трибунами
-  const ft = facadeTexture(), fm = new THREE.MeshLambertMaterial({ map: ft, side: THREE.DoubleSide });
+  // лише лицьовий бік (до поля): камера гостя онлайн буває за дальньою трибуною, і двосторонній фасад закривав би їй м'яч
+  const ft = facadeTexture(), fm = new THREE.MeshLambertMaterial({ map: ft });
   const zf = W + WALL + 3.2, farBack = -(zf + 10 * ROW_D + 0.6), farH = 1 + 10 * ROW_H + 0.6;
   const far = new THREE.Mesh(new THREE.PlaneGeometry(2 * L + 20, 12), fm); far.position.set(0, farH + 6, farBack); group.add(far);
   const endW = 2 * W + 10;
@@ -85,7 +86,7 @@ export function buildSurround() {
   };
   for (let i = 0; i < 5; i++) car(-i * 12.4 - 12, 12, false);
   car(0, 12, true);
-  const train = tb.mesh(); train.frustumCulled = false; group.add(train);
+  const train = tb.mesh(vcMat(), { static: false }); train.frustumCulled = false; group.add(train);
 
   // багатоповерхівки за залізницею (текстура вікон + різні кольори)
   const wt = windowsTexture(), cols = ['#d9d4c8', '#c7d1d6', '#e0c9bd', '#cfd6c4', '#b9c0c8', '#e4dccb'];

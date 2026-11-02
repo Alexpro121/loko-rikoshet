@@ -54,13 +54,16 @@ function osc(o, target, w, z, dt, push = 0) {
 }
 
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3();
+const AS_DEF = { amp: 1, elb: 0, cross: 0.2, ph: 0 };                       // манера рук за замовчуванням
+/** Мах руки в бігу за кутом стегна lp: уперед сильніше, назад менше; у межах backMax і fwdMax. */
+const armOf = (lp, kap, backMax, fwdMax) => clamp((lp < 0 ? -lp * 1.7 : -lp * 0.6) * kap, -backMax, fwdMax);
 
 export class Gait {
   /** R: розміри ноги моделі { THIGH, SHIN, YA, HIP_X } в одиницях моделі (до масштабу). */
   constructor(R) {
     this.R = R; this.LEG = R.THIGH + R.SHIN;
     this.feet = [-1, 1].map((side, i) => ({ side, off: i * 0.5, st: 'stance', x: 0, z: 0, yaw: 0, yaw0: 0, sx: 0, sz: 0, t: 0, T: 0.35, ul: 0, u: 0,
-      timed: true, clear: 0, age: 1, psi: 0, psi0: 0, h: 0, tdT: 0 }));
+      timed: true, clear: 0, age: 1, psi: 0, psi0: 0, h: 0, tdT: 0, tw: 0 }));
     this.ready = false; this.cycling = false; this.phi = 0; this.running = false;
     this.y = 0; this.vy = 0; this.ay = 0; this.ayS = 0; this.time = 0; this.yLO = 0; this.tLO = 0;
     this.pitch = { a: 0, v: 0 }; this.roll = { a: 0, v: 0 }; this.trunk = { a: 0, v: 0 }; this.yOff = 0;
@@ -81,7 +84,7 @@ export class Gait {
       const w = feetWorld && feetWorld[f.side < 0 ? 0 : 1];
       f.x = w ? w.x : st.x + cy * f.side * this.R.HIP_X * s; f.z = w ? w.z : st.z - sy * f.side * this.R.HIP_X * s;
       const air = w ? Math.max(0, w.y - this.R.YA * s) : 0;
-      f.yaw = f.yaw0 = st.yaw; f.age = 1; f.psi = 0; f.timed = true;
+      f.yaw = f.yaw0 = st.yaw; f.age = 1; f.psi = 0; f.timed = true; f.tw = 0;
       if (air > 0.05) { f.st = 'swing'; f.sx = f.x; f.sz = f.z; f.t = 0; f.T = 0.25; f.clear = air; f.h = air; f.u = 0; } else { f.st = 'stance'; f.h = 0; }
     }
     this.cycling = false; this.yS = undefined;
@@ -104,7 +107,7 @@ export class Gait {
     const v = Math.hypot(st.vx, st.vz);
     const ax = fx * st.aLong + rx * st.aLat, az = fz * st.aLong + rz * st.aLat;   // прискорення центру мас у світі
     if (!this.ready) this.reset(st);
-    for (const f of this.feet) if (Math.hypot(f.x - st.x, f.z - st.z) > 2.2 * Lw) { this.reset(st); break; }   // телепорт
+    for (let i = 0; i < 2; i++) { const f = this.feet[i]; if (Math.hypot(f.x - st.x, f.z - st.z) > 2.2 * Lw) { this.reset(st); break; } }   // телепорт
 
     // ---- режим і ритм
     // боком (швидкість переважно поперек погляду) — приставний крок, а не біг навхрест
@@ -150,7 +153,7 @@ export class Gait {
     const omega0 = Math.sqrt(G / Math.max(0.3, this.y));
 
     // старт циклу: першою відривається стопа, що далі позаду відносно руху
-    if (!this.cycling && v > 0.3 && this.feet.every((f) => f.st === 'stance')) {
+    if (!this.cycling && v > 0.3 && this.feet[0].st === 'stance' && this.feet[1].st === 'stance') {
       const f0 = this.feet[0], f1 = this.feet[1];
       this.hip(f0.side); const b0 = (f0.x - this.hx) * mdx + (f0.z - this.hz) * mdz; this.hip(f1.side); const b1 = (f1.x - this.hx) * mdx + (f1.z - this.hz) * mdz;
       const first = this.shuffle ? (sDir > 0 ? 1 : 0) : b0 <= b1 ? 0 : 1, other = this.feet[1 - first];
@@ -173,21 +176,21 @@ export class Gait {
       const lagMax = L0 * Math.sqrt(0.98 - (0.99 - lerp(0.07, 0.08, this.runW)) ** 2);
       // і закрутка: опорна стопа повернута відносно корпусу більше ніж на ~43° (розворот) — переступає, а не скручує ногу
       const tw = f.st === 'stance' ? Math.abs(angDiff(f.yaw, yaw)) : 0;
-      if (f.st === 'stance' && (lag > lagMax || tw > 0.75) && (o.st === 'stance' || o.u > 0.6 || this.runW > 0.5 || (v > 2.4 && tw > 0.75)) && f.age > 0.06) {   // на швидкості можна й у короткий політ
+      if (f.st === 'stance' && (lag > lagMax || tw > 0.75) && (o.st === 'stance' || o.u > 0.6 || this.runW > 0.5 || this.running || (v > 2.4 && tw > 0.75)) && f.age > 0.06) {   // на швидкості можна й у короткий політ
         this.phi = mod1(f.off + beta); f.ul = beta; o.ul = mod1(this.phi - o.off);
         this.liftOff(f, (1 - beta) / fStride, v, st, Lw); continue;
       }
       // відрив: фаза дійшла до кінця опори, або за ритмом нога вже мала б бути в маху, а друга її підстраховує
       if (f.st === 'stance' && ul >= beta && (prev < beta || o.st === 'stance') && !(v < 0.3 && o.st === 'stance')) this.liftOff(f, Math.max(0.14, (1 - ul) / fStride), v, st, Lw);
-      else if (f.st === 'swing' && (f.t >= f.T || wrapped)) this.touchDown(f, o);
+      else if (f.st === 'swing' && (f.t >= f.T || (wrapped && f.u > 0.3))) this.touchDown(f, o);   // на самому початку маху фаза могла перескочити через рефлекс другої ноги: нога доносить крок, а не сідає позаду
     }
-    for (const f of this.feet) f.age += dt;
-    if (this.cycling && v < 0.25 && this.feet.every((f) => f.st === 'stance')) { this.cycling = false; for (const f of this.feet) f.timed = true; }
+    this.feet[0].age += dt; this.feet[1].age += dt;
+    if (this.cycling && v < 0.25 && this.feet[0].st === 'stance' && this.feet[1].st === 'stance') { this.cycling = false; this.feet[0].timed = this.feet[1].timed = true; }
 
     // ---- стоїть: кроки на місці, коли рівновага чи поворот корпусу цього вимагають
     if (!this.cycling) {
       const capX = st.x + st.vx / omega0, capZ = st.z + st.vz / omega0;     // точка захоплення
-      if (this.feet.every((f) => f.st === 'stance')) {
+      if (this.feet[0].st === 'stance' && this.feet[1].st === 'stance') {
         // розворот на місці: стопа, що найбільше «відстала» від нового курсу, переступає першою (крок-півот)
         const errs = this._errs;
         for (let k = 0; k < 2; k++) { const f = this.feet[k]; this.hip(f.side); errs[k] = Math.hypot(f.x - this.hx, f.z - this.hz) + 0.3 * Math.abs(angDiff(f.yaw, yawT)); }
@@ -196,12 +199,13 @@ export class Gait {
         const need = Math.abs(angDiff(f.yaw, yawT)) > 0.3 || errs[i] > 0.22 * Lw / 0.94 || capErr > 0.2 * Lw / 0.94;
         if (need && f.age > 0.18 && this.feet[1 - i].age > 0.1) { this.liftOff(f, 0.26 * Math.sqrt(Lw / 0.94), v, st, Lw); f.timed = true; }
       }
-      for (const f of this.feet) if (f.st === 'swing' && f.t >= f.T) this.touchDown(f, this.feet[f.side < 0 ? 1 : 0]);
+      for (let i = 0; i < 2; i++) { const f = this.feet[i]; if (f.st === 'swing' && f.t >= f.T) this.touchDown(f, this.feet[1 - i]); }
     }
 
     // ---- мах: ціль за регулятором рівноваги, траєкторія мінімального ривка від точки відриву
     const hOverG = Math.max(0.3, this.y) / G, tSt = beta / fStride;
-    for (const f of this.feet) {
+    for (let fi = 0; fi < 2; fi++) {
+      const f = this.feet[fi];
       if (f.st !== 'swing') continue;
       f.t += dt;
       const u = Math.min(1, f.t / f.T);
@@ -227,8 +231,7 @@ export class Gait {
         // приставний крок: ведуча нога (з боку руху) ступає назовні, друга стає поруч із нею на ширину стійки
         const o = this.feet[f.side < 0 ? 1 : 0], W = 1.9 * R.HIP_X * s + 0.6 * (st.wide || 0);   // приставлена — на ширину плечей (у воротаря трохи ширше)
         const lx = o.st === 'swing' ? (o.tx ?? o.x) : o.x, lz = o.st === 'swing' ? (o.tz ?? o.z) : o.z;
-        const lat = (q, w) => (q - st.x) * rx + (w - st.z) * rz, fwd = (q, w) => (q - st.x) * fx + (w - st.z) * fz;
-        const tl = lat(tx, tz), tf = clamp(fwd(tx, tz), -0.12 * Lw, 0.12 * Lw), ol = lat(lx, lz);
+        const tl = (tx - st.x) * rx + (tz - st.z) * rz, tf = clamp((tx - st.x) * fx + (tz - st.z) * fz, -0.12 * Lw, 0.12 * Lw), ol = (lx - st.x) * rx + (lz - st.z) * rz;
         let nl = tl;
         // ведуча — не ближче за стійку і так, щоб таз у середньому був над серединою між стопами (а не попереду, ніби ноги
         // «тягнуться» за тулубом)
@@ -264,7 +267,8 @@ export class Gait {
     }
 
     // ---- кут стопи в опорі: перекат з п'ятки на носок — з того, де стопа відносно стегна
-    for (const f of this.feet) {
+    for (let fi = 0; fi < 2; fi++) {
+      const f = this.feet[fi];
       if (f.st !== 'stance') continue;
       this.hip(f.side); const hx = this.hx, hz = this.hz, fw = ((f.x - hx) * fx + (f.z - hz) * fz) / Lw;
       const push = lerp(this.cycling ? -0.45 : 0, -0.6, this.runW);
@@ -277,7 +281,8 @@ export class Gait {
     // амортизація коліна: між ходою й бігом — плавно (інакше таз стрибав би на ~16 см у мить переходу)
     const comp = lerp(this.cycling ? 0.02 : 0.012 + 0.04 * (st.crouch || 0), lerp(HUMAN.kneeComp[0], HUMAN.kneeComp[1], sp), this.runW);
     let yG = Infinity;
-    for (const f of this.feet) {
+    for (let fi = 0; fi < 2; fi++) {
+      const f = this.feet[fi];
       if (f.st !== 'stance') continue;
       this.hip(f.side); const hx = this.hx, hz = this.hz, d = Math.hypot(f.x - hx, f.z - hz);
       const uSt = this.cycling && !f.timed ? clamp(mod1(this.phi - f.off) / beta, 0, 1) : 0.5;
@@ -322,7 +327,8 @@ export class Gait {
     // ніг. Розгін і гальмування в цілому (середня сила) вже дає нахил усього тіла (pitch з aLong) — тут їх не дублюємо,
     // інакше тулуб «відпливав» назад від ніг і перекидався на гальмуванні. У польоті горизонтальної сили немає.
     let aH = 0;
-    if (this.cycling && v > 0.3) for (const f of this.feet) {
+    if (this.cycling && v > 0.3) for (let fi = 0; fi < 2; fi++) {
+      const f = this.feet[fi];
       if (f.st !== 'stance' || f.timed) continue;
       const uSt = clamp(mod1(this.phi - f.off) / beta, 0, 1), ub = this.running ? 0.45 : 0.5;
       let Fb = (this.running ? 0.45 + 0.15 * sp : this.shuffle ? 0.06 : 0.09) * G, Fp = Fb * ub / (1 - ub);   // площі синусоїд рівні
@@ -330,7 +336,7 @@ export class Gait {
     }
     // перенесення ваги: центр мас зміщується до опорної стопи (у ході ~25% її бічного відступу, у бігу ~15%)
     let ml = 0, nS = 0;
-    for (const f of this.feet) if (f.st === 'stance') { ml += (f.x - st.x) * rx + (f.z - st.z) * rz; nS++; }
+    for (let fi = 0; fi < 2; fi++) { const f = this.feet[fi]; if (f.st === 'stance') { ml += (f.x - st.x) * rx + (f.z - st.z) * rz; nS++; } }
     const shX = osc(this.shX, nS ? (ml / nS) * (this.running ? 0.15 : this.cycling ? 0.28 : 0.2) : 0, 11, 0.75, dt);
     // тіло рухається від цих сил відносно середньої швидкості (яку задає гра); у польоті швидкість стала. Пружина таза (~0.6 Гц)
     // тримає тулуб над ногами: пульсація ±1.5–2 см, без дрейфу вперед чи назад
@@ -367,7 +373,7 @@ export class Gait {
     const zl = ((fl.x - st.x) * fx + (fl.z - st.z) * fz), zr = ((fr.x - st.x) * fx + (fr.z - st.z) * fz);
     const pelY = osc(this.pelY, clamp(0.11 * (zl - zr) / Lw, -0.09, 0.09), 26, 0.85, dt);   // таз встигає за кожним кроком
     const pelZ = osc(this.pelZ, lerp(0.05, 0.09, this.runW) * ((fl.st === 'swing' ? 1 : 0) - (fr.st === 'swing' ? 1 : 0)), 14, 0.85, dt);
-    let ext = 0; for (const f of this.feet) if (f.st === 'stance') ext = Math.max(ext, -(((f.x - st.x) * fx + (f.z - st.z) * fz) / Lw));
+    let ext = 0; for (let fi = 0; fi < 2; fi++) { const f = this.feet[fi]; if (f.st === 'stance') ext = Math.max(ext, -(((f.x - st.x) * fx + (f.z - st.z) * fz) / Lw)); }
     const pelX = osc(this.pelX, (this.cycling ? 0.22 : 0) * clamp(ext, -0.3, 0.6), 12, 0.85, dt);
 
     // ---- ноги: 3D-IK від стегна до щиколотки (відведення, згин стегна, коліно, кут і поворот стопи)
@@ -380,10 +386,15 @@ export class Gait {
       const f = this.feet[i], wx = f.x - st.x, wz = f.z - st.z;
       _v.set((wx * cy - wz * sy - shX) / s, (YAw + this.liftOf(f.psi) * s + f.h) / s - yModel, (wx * sy + wz * cy - this.surX) / s).applyQuaternion(_q1);   // світ → тіло → таз (зі зміщенням)
       _v.x -= f.side * R.HIP_X;
-      const abd = Math.atan2(_v.x, -_v.y), down = Math.hypot(_v.x, _v.y) * Math.sign(-_v.y || 1);
+      // стопа на рівні стегна чи вище: відведення без перескоку atan2 до ±π, а «вниз» — неперервна проєкція на площину ноги (не стрибає зі зміною знака)
+      const abd = Math.atan2(_v.x, Math.max(0.05, -_v.y)), down = _v.x * Math.sin(abd) - _v.y * Math.cos(abd);
       this.legIK(_v.z, down, ik);
       // поворот стопи відносно таза — у межах кульшового суглоба: носок назовні до ~40°, усередину лише до ~25°
-      const tw0 = angDiff(yaw + pelY, f.yaw), ank = -f.psi - pitch + ik.hip - ik.knee, tw = f.side * clamp(f.side * tw0, -0.42, 0.7);
+      const tw0 = angDiff(yaw + pelY, f.yaw), ank = -f.psi - pitch + ik.hip - ik.knee, twS = f.side * tw0;
+      // стопа майже за спиною (кут перетинає ±π): знак нічого не значить — лишається та межа, де стопа вже стоїть; і за кадр не далі ніж на ~14 рад/с
+      const twT = Math.abs(twS) > 2.2 ? (f.tw > 0.14 ? 0.7 : -0.42) : clamp(twS, -0.42, 0.7);
+      f.tw = f.tw === undefined ? twT : f.tw + clamp(twT - f.tw, -14 * dt, 14 * dt);
+      const tw = f.side * f.tw;
       let hip = ik.hip, knee = ik.knee, an = ank;
       // ключові пози махової ноги поверх IK: вага — посередині маху, на відриві й перед контактом нуль (стопа точно туди, куди
       // поставив регулятор рівноваги). Прохід: п'ята високо, коліно попереду; перед контактом — гомілка вперед і назад-«загріб»
@@ -404,26 +415,25 @@ export class Gait {
     // удар приземлення опускає передпліччя; лікоть 70–110°, на замаху назад розкривається
     // мах плеча проти стегна. Стегно вперед згинається сильно (до ~60°), а назад розгинається мало (~20°),
     // тож рука дзеркалить це асиметрично: уперед ~35° → 60° на спринті, назад ~25° → 45°
-    const AS = st.arms || { amp: 1, elb: 0, cross: 0.2, ph: 0 };
+    const AS = st.arms || AS_DEF;
     // для кубічних моделей мах ширший за людський (~×1.3) — силует читається й здалеку
     const rw = this.runW, walkK = this.cycling ? 0.55 : 0.1;
     const kap = 1.3 * lerp(walkK, 1 + 0.3 * sp, rw) * AS.amp * (1 - 0.45 * (this.bkW || 0)), mv = clamp(v / 3, 0, 1);   // назад руки працюють менше
     const fwdMax = 1.25 * lerp(20, 35 + 25 * sp, rw) * DEG, backMax = 1.25 * lerp(15, 25 + 20 * sp, rw) * DEG;
-    const armOf = (lp) => clamp((lp < 0 ? -lp * 1.7 : -lp * 0.6) * kap, -backMax, fwdMax);
-    const legP = [out.legA, out.legB], legM = (out.legA + out.legB) / 2;
-    // у ході рука — маятник проти ноги навколо середнього положення ніг: рівно вперед і назад (~±20°), а не «волочиться» позаду
-    const armWalk = (i) => clamp(-(legP[i] - legM) * 1.25 * AS.amp * (this.cycling ? 1 : 0.2), -backMax, fwdMax);
+    const legM = (out.legA + out.legB) / 2;
     for (let i = 0; i < 2; i++) {
+      const lp = i ? out.legB : out.legA;
+      // у ході рука — маятник проти ноги навколо середнього положення ніг: рівно вперед і назад (~±20°), а не «волочиться» позаду
+      const armWalk = clamp(-(lp - legM) * 1.25 * AS.amp * (this.cycling ? 1 : 0.2), -backMax, fwdMax);
       // жива мінливість: кожен мах трохи інший (повільні коливання амплітуди й ліктя, різні для кожної руки)
       const nz = 0.035 * Math.sin(this.time * 1.7 + AS.ph + i * 2.1) + 0.02 * Math.sin(this.time * 3.3 + AS.ph * 1.7 + i);
-      const a = osc(this.arms[i], 0.06 + lerp(armWalk(i), armOf(legP[i]), rw) * (1 + nz * 2) + nz * mv, 10 + 3 * sp, 0.42, dt, -3 * st.aLong - aH / 0.45);
+      const a = osc(this.arms[i], 0.06 + lerp(armWalk, armOf(lp, kap, backMax, fwdMax), rw) * (1 + nz * 2) + nz * mv, 10 + 3 * sp, 0.42, dt, -3 * st.aLong - aH / 0.45);
       // лікоть тримає чіткий прямий кут у бігу (~90°), уперед ще згинається, назад ледь розкривається
       // у ході рука розслаблена: лікоть лише ледь зігнутий (~20–30°), а не «марширує» під прямим кутом, як у бігу
       osc(this.elb[i], lerp(0.3, lerp(0.48, 1.6, rw), mv) + AS.elb * mv * (0.4 + 0.6 * rw) + 0.15 * sp + (0.1 + 0.2 * rw) * Math.max(0, a) - 0.15 * Math.max(0, -a) + nz, lerp(9, 14, rw), 0.5, dt, -this.ayV * 0.25);
     }
     // рука, що йде вперед, заходить до середньої лінії й повертається всередину; позаду — трохи відходить убік
-    const armRot = (a) => (0.1 + 0.2 * sp) * mv + AS.cross * 1.2 * Math.max(0, a) * mv;
-    const armAbd = (a) => (0.1 * Math.max(0, -a) - AS.cross * 0.35 * Math.max(0, a)) * mv;
+    const a0 = this.arms[0].a, a1 = this.arms[1].a, rot0 = (0.1 + 0.2 * sp) * mv;
     // грудна клітка крутиться назустріч тазу і сильніше за нього (±12° проти ±5°): її тягнуть руки
     // груди крутяться назустріч тазу (≈1.5–2× його кута, як у людини: ±5° у ході, ±8–10° у бігу) — жорстко зв'язано з кроком
     const chestY = osc(this.chestY, -lerp(1.6, 2.2, this.runW) * pelY + 0.08 * (this.arms[1].a - this.arms[0].a), 24, 0.85, dt);
@@ -431,14 +441,15 @@ export class Gait {
     const hd = osc(this.head, -(pitch + trunk) * 0.8, 13, 0.75, dt, (this.ayV * 0.25 - aH * 0.4) / 0.25);
     const hdZ = osc(this.headZ, -roll * 0.7, 12, 0.85, dt);
     // тулуб на приземленні ледь стискається (до ~6% висоти), у польоті трохи витягується — відчуття ваги на кубах
-    const flight = this.cycling && this.feet.every((f) => f.st === 'swing');
+    const flight = this.cycling && this.feet[0].st === 'swing' && this.feet[1].st === 'swing';
     const sqT = this.cycling ? clamp((this.ayV - 0.15 * G) / (1.3 * G), 0, 1) * 0.07 - (flight ? 0.025 : 0) : 0;
     const squash = osc(this.squash, sqT, 20, 0.55, dt);
 
     // поля вихідного об'єкта — напряму (без тимчасового об'єкта щокадру на кожного гравця)
     out.hip = yModel; out.shX = shX / s; out.surX = this.surX / s; out.pitch = pitch; out.roll = roll; out.pelX = pelX; out.pelY = pelY; out.pelZ = pelZ; out.squash = squash;
     out.armA = this.arms[0].a; out.armB = this.arms[1].a; out.elbA = this.elb[0].a; out.elbB = this.elb[1].a;
-    out.armTwA = armRot(this.arms[0].a); out.armTwB = armRot(this.arms[1].a); out.sdA = armAbd(this.arms[0].a); out.sdB = armAbd(this.arms[1].a);
+    out.armTwA = rot0 + AS.cross * 1.2 * Math.max(0, a0) * mv; out.armTwB = rot0 + AS.cross * 1.2 * Math.max(0, a1) * mv;
+    out.sdA = (0.1 * Math.max(0, -a0) - AS.cross * 0.35 * Math.max(0, a0)) * mv; out.sdB = (0.1 * Math.max(0, -a1) - AS.cross * 0.35 * Math.max(0, a1)) * mv;
     out.spread = 0.06 + 0.05 * sp + Math.abs(roll) * 0.4 + 0.22 * this.crouchS;
     out.leanX = trunk; out.leanY = chestY; out.leanZ = -roll * 0.35 - pelZ * 0.6;
     out.hdX = hd; out.hdY = -chestY * 0.6; out.hdZ = hdZ;
@@ -457,7 +468,7 @@ export class Gait {
     if (f.tdT) this.contacts = lerp(this.contacts || f.age, f.age, 0.3);
     f.st = 'swing'; f.sx = f.x; f.sz = f.z; f.t = 0; f.T = T; f.u = 0; f.yaw0 = f.yaw; f.psi0 = f.psi;
     f.clear = (this.shuffle ? 0.045 : this.back ? 0.05 : this.running ? 0.05 + 0.05 * v : this.cycling ? 0.07 : 0.06) * (Lw / 0.94) * (st.dribble ? 0.7 : 1);
-    if (this.feet.every((q) => q.st === 'swing')) { this.yLO = this.y; this.tLO = this.time; }   // початок польоту
+    if (this.feet[0].st === 'swing' && this.feet[1].st === 'swing') { this.yLO = this.y; this.tLO = this.time; }   // початок польоту
   }
 
   touchDown(f, o) {
@@ -487,7 +498,7 @@ export class Gait {
   get phaseAngle() { return Math.PI * (this.steps + clamp((this.time - this.lastTD) / this.stepT, 0, 1)); }
 
   /** Підйом щиколотки, коли стопа перекочується на п'ятку (psi > 0) або носок (psi < 0), в одиницях моделі. */
-  liftOf(psi) { const YA = this.R.YA; return YA * Math.cos(psi) + (psi > 0 ? 0.09 * Math.sin(psi) : -0.2 * Math.sin(psi)) - YA; }
+  liftOf(psi) { const YA = this.R.YA; return YA * Math.cos(psi) + (psi > 0 ? 0.09 * Math.sin(psi) : -0.265 * Math.sin(psi)) - YA; }
 
   /** Дволанкова IK у площині ноги: x — уперед, y — униз. hip — згин стегна (уперед +), knee — згин коліна. */
   legIK(x, y, out) {

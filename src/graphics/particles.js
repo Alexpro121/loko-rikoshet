@@ -1,7 +1,9 @@
 // Particles: пул частинок без алокацій (голи, удари, конфеті).
 import * as THREE from 'three';
 
-const _c = new THREE.Color();
+// розбір рядка кольору дорогий і виділяє пам'ять: кожен колір розбираємо один раз (їх у грі кілька десятків)
+const _cols = new Map();
+const colorOf = (v) => { let c = _cols.get(v); if (!c) { c = new THREE.Color(v); _cols.set(v, c); } return c; };
 
 /**
  * Пул вокселів-частинок в одному InstancedMesh.
@@ -35,8 +37,8 @@ export class Particles {
     this.life[i] = life; this.maxLife[i] = life;
     this.size[i] = size; this.grav[i] = grav; this.drag[i] = drag;
     this.spin[i] = spin; this.ang[i] = Math.random() * 6.28; this.grow[i] = grow;
-    _c.set(color);
-    this.cr[i] = _c.r; this.cg[i] = _c.g; this.cb[i] = _c.b;
+    const c = colorOf(color);
+    this.cr[i] = c.r; this.cg[i] = c.g; this.cb[i] = c.b;
   }
 
   burst(x, y, z, count, speed, life, size, colors, grav = 16, up = 0.7) {

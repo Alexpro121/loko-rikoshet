@@ -6,18 +6,21 @@ import { mountTurntable } from './portrait.js';
 import { esc } from '../online/profile.js';
 
 export const formName = (f) => String(f).split('').join('-');
-/** Висота ролі на полі у відсотках (0 свої ворота, 100 чужі). */
-const DEPTH = { GK: 9, CB: 20, LB: 25, RB: 25, DM: 39, CM: 50, LM: 52, RM: 52, AM: 63, LW: 72, RW: 72, ST: 84 };
+/** Висота ролі на полі у відсотках (0 свої ворота, 100 чужі). Сусідні лінії в одному стовпчику розходяться на 19 %: це висота фішки разом із підписом на будь-якому екрані. */
+const DEPTH = { GK: 7, CB: 27, LB: 25, RB: 25, DM: 46, CM: 65, LM: 52, RM: 52, AM: 65, LW: 83, RW: 83, ST: 86 };
 const lastWord = (n) => String(n).trim().split(' ').slice(-1)[0];
 
 /**
  * a (адаптер): list() усі гравці (перші 11 — основа), forms, form(), setForm(f), swap(i, j), canSwap(i), col(e), portrait(e),
- * view(e) → { look, key }, role(e, i), detail(e, i), defaultSel(), render(), changed(), toast(t), host(), renderer(), deny.
+ * view(e) → { look, key }, role(e, i), detail(e, i), defaultSel(), render(), changed(), toast(t), host(), renderer(), deny, denyFor(i, j) — необов'язкова причина відмови саме цього обміну.
  */
 export class Tactics {
   constructor(a) { this.a = a; this.sel = null; this.seen = -1; this.swapFrom = null; this.formOpen = false; }
+  /** Панель закрили: обмін і вибір схеми не чекають на наступне відкриття. */
+  reset() { this.swapFrom = null; this.formOpen = false; }
   pos(i) {
     const r = i === 0 ? { name: 'GK', v: 0 } : (FORMATIONS[this.a.form()] || FORMATIONS['433'])[i - 1];
+    if (i === 0) return 'left:50%;bottom:0;margin-bottom:0';                            // воротар стоїть на лінії й ніколи не виходить за край поля
     return `left:${(50 + r.v * 41).toFixed(1)}%;bottom:${DEPTH[r.name] || 50}%`;
   }
   token(e, i, bench) {
@@ -100,7 +103,7 @@ export class Tactics {
     if (from == null) { audio.click(); this.sel = this.seen = i; return this.patch(true); }
     this.swapFrom = null;
     if (i === from) { audio.back(); return this.patch(false); }
-    if (!a.swap(from, i)) { audio.deny(); a.toast(a.deny); return this.patch(false); }
+    if (!a.swap(from, i)) { audio.deny(); a.toast((a.denyFor && a.denyFor(from, i)) || a.deny); return this.patch(false); }
     audio.buy(); this.sel = this.seen = i; a.changed();
     return from >= 11 || i >= 11 ? a.render() : this.patch(true);        // запас змінив склад фішок: перемальовуємо
   }

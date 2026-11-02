@@ -5,7 +5,9 @@ import { stepFree } from './ballmodel.js';
 const { L, W, G, CH, GOAL_D, POST_R, GOAL_H } = PITCH;
 const BAR_Y = GOAL_H - POST_R;          // вісь поперечини (верх рамки — на висоті воріт)
 const WALL_GAP = 0.1;                   // с: два дотики борту швидше за це — один рикошет (стик борту й зрізаного кута)
-const BODY_VY_MAX = 14;                 // од/с: м'яч, відбитий тілом угору, не летить вище ~9 од
+const BODY_VY_MAX = 14;                 // од/с: м'яч, відбитий тілом чи поперечиною, не летить вище ~9 од і не стрибає так само від газону
+const NET_BACK = 6;                     // од/с: найбільша швидкість, з якою задня сітка вертає м'яч
+const NET_OUT = 5;                      // 1/с: загасання руху до лінії у воротах: відбитий сіткою м'яч лягає у воротах, а не котиться в поле
 
 /**
  * На якій частці шляху (x0, z0) → (x1, z1) м'яч торкається кола (cx, cz) радіуса rr; −1 — не торкається або вже всередині.
@@ -70,9 +72,10 @@ export class World {
 
   buildStatic() {
     const s = (a, b, c, d, e) => this.seg(a, b, c, d, e);
-    s(-L + CH, -W, L - CH, -W); s(L - CH, -W, L, -W + CH); s(L, -W + CH, L, -G);
-    s(L, G, L, W - CH); s(L, W - CH, L - CH, W); s(L - CH, W, -L + CH, W);
-    s(-L + CH, W, -L, W - CH); s(-L, W - CH, -L, G); s(-L, -G, -L, -W + CH); s(-L, -W + CH, -L + CH, -W);
+    // порядок важливий: відрізки обробляються по черзі, тож у кожному куті той самий порядок (прямі борти, потім зріз), інакше кути не дзеркальні
+    s(-L + CH, -W, L - CH, -W); s(L - CH, W, -L + CH, W);
+    s(L, -W + CH, L, -G); s(L, G, L, W - CH); s(-L, W - CH, -L, G); s(-L, -G, -L, -W + CH);
+    s(L - CH, -W, L, -W + CH); s(L, W - CH, L - CH, W); s(-L + CH, W, -L, W - CH); s(-L, -W + CH, -L + CH, -W);
     this.netSeg0 = this.segs.length;          // далі — сітки воріт (зсередини воріт їх замінює пружна сітка, див. net())
     for (const sd of [1, -1]) {              // сітка воріт зовні майже не відбиває
       s(sd * L, G, sd * (L + GOAL_D), G, 0.1); s(sd * L, -G, sd * (L + GOAL_D), -G, 0.1);
@@ -91,7 +94,8 @@ export class World {
     s.x += s.vx * h; s.z += s.vz * h;
     let hit = 0;
 
-    const sg = this.segs, inGoal = Math.abs(s.z) < G + 0.5 && Math.abs(s.x) > L + 0.05 && s.y < GOAL_H;
+    // м'яч, що вже був у воротах, лишається в них, навіть якщо за крок перескочив бічну сітку: її тримає пружна сітка, а не відрізок
+    const sg = this.segs, inGoal = (Math.abs(s.z) < G + 0.5 || (Math.abs(z0) < G + 0.5 && Math.abs(x0) > L + 0.05)) && Math.abs(s.x) > L + 0.05 && s.y < GOAL_H;
     for (let i = 0; i < sg.length; i += 5) {
       if (inGoal && i >= this.netSeg0) continue;                         // усередині воріт — пружна сітка нижче
       const x1 = sg[i], z1 = sg[i + 1], dx = sg[i + 2] - x1, dz = sg[i + 3] - z1;
@@ -141,12 +145,15 @@ export class World {
         const d = Math.sqrt(d2) || 1e-4, nx = dx / d, ny = dy / d;
         s.x = bx + nx * rr; s.y = Math.max(0, BAR_Y + ny * rr - r);
         const vn = s.vx * nx + s.vy * ny;
-        if (vn < 0) { s.vx -= (1 + PHYS.postE) * vn * nx; s.vy -= (1 + PHYS.postE) * vn * ny; s.w *= 0.5; if (-vn > 1.5) { hit = 1; if (cb && cb.post) cb.post(nx, 0, -vn); } }
+        if (vn < 0) { s.vx -= (1 + PHYS.postE) * vn * nx; s.vy -= (1 + PHYS.postE) * vn * ny; s.vy = s.vy > BODY_VY_MAX ? BODY_VY_MAX : s.vy < -BODY_VY_MAX ? -BODY_VY_MAX : s.vy; s.w *= 0.5; if (-vn > 1.5) { hit = 1; if (cb && cb.post) cb.post(nx, 0, -vn); } }
       } else if (r + s.y > GOAL_H + r * 0.5) {
         // над воротами: площина x = ±L (огорожа) — м'яч не залітає «у ворота згори»
         const a = (x0 - bx) * sd, c2 = (s.x - bx) * sd;
         if (a <= -r && c2 > -r) { s.x = bx - sd * r; if (s.vx * sd > 0) { s.vx = -s.vx * 0.45; hit = 1; if (cb && cb.wall) cb.wall(-sd, 0, Math.abs(s.vx), 0.45); } }
       }
+      // лінію перетнули вище осі поперечини (відскік від її верху): це не шлях у ворота, далі огорожа, а не дах сітки, інакше дах опустив би м'яч у ворота
+      const a0 = (x0 - bx) * sd, a1 = (s.x - bx) * sd;
+      if (a0 <= 0 && a1 > 0 && cy0 + (r + s.y - cy0) * (a0 / (a0 - a1)) > BAR_Y) { s.x = x0; if (s.vx * sd > 0) { s.vx = -s.vx * 0.45; hit = 1; if (cb && cb.wall) cb.wall(-sd, 0, Math.abs(s.vx), 0.45); } }
       if ((s.x - bx) * sd > 0 && r + s.y > GOAL_H - 0.25) { s.y = GOAL_H - 0.25 - r; if (s.vy > 0) s.vy *= -0.35; s.vx *= 0.92; s.vz *= 0.92; }   // дах сітки
     }
     const ps = this.posts;
@@ -172,12 +179,18 @@ export class World {
       }
     }
     if (inGoal) this.net(s, h);
-    // страховка від тунелювання
-    const inMouth = Math.abs(s.z) < G + 0.4;
-    if (!inMouth && Math.abs(s.x) > L) s.x = s.x > 0 ? L : -L;
-    if (Math.abs(s.z) > W + 0.1 && Math.abs(s.x) <= L) s.z = s.z > 0 ? W - r : -W + r;
-
     if (dyn) this.players(s, cb, x0, z0, y0);
+    // страховка від тунелювання й виштовхування тілом за межу: м'яч на свій бік і швидкість від борту (інакше він їде вздовж лінії всередині борту)
+    const inMouth = Math.abs(s.z) < G + 0.4;
+    if (!inMouth && Math.abs(s.x) > L) { const q = s.x > 0 ? 1 : -1; s.x = q * (L - r); if (s.vx * q > 0) s.vx *= -PHYS.wallE; }
+    if (Math.abs(s.z) > W + 0.1 && Math.abs(s.x) <= L) { const q = s.z > 0 ? 1 : -1; s.z = q * (W - r); if (s.vz * q > 0) s.vz *= -PHYS.wallE; }
+    const over = Math.abs(s.x) + Math.abs(s.z) - (L + W - CH);           // за зрізом кута: відрізок непрозорий і ззовні, сам м'яч не повернеться
+    if (over > 0) {
+      const qx = s.x > 0 ? 1 : -1, qz = s.z > 0 ? 1 : -1, k = over / 2 + r * Math.SQRT1_2, nx = -qx * Math.SQRT1_2, nz = -qz * Math.SQRT1_2;
+      s.x -= qx * k; s.z -= qz * k;
+      const vn = s.vx * nx + s.vz * nz;
+      if (vn < 0) bounce(s, nx, nz, vn, PHYS.wallE, PHYS.wallMu);
+    }
     return hit;
   }
 
@@ -230,7 +243,7 @@ export class World {
         const vn = (s.vx - cvx) * nx + (s.vy - cvy) * ny + (s.vz - cvz) * nz;
         const speed = Math.sqrt(s.vx * s.vx + s.vy * s.vy + s.vz * s.vz);
         if (cb && cb.body && cb.body(o, vn, nx, nz, speed)) continue;
-        if (vn < 0) { const j = -(1 + o.e) * vn; s.vx += j * nx; s.vy += j * ny; s.vz += j * nz; s.w *= 0.4; if (s.vy > BODY_VY_MAX) s.vy = BODY_VY_MAX; }
+        if (vn < 0) { const j = -(1 + o.e) * vn; s.vx += j * nx; s.vy += j * ny; s.vz += j * nz; s.w *= 0.4; if (s.vy > BODY_VY_MAX) s.vy = BODY_VY_MAX; else if (s.vy < -BODY_VY_MAX) s.vy = -BODY_VY_MAX; }   // униз теж: газон повернув би цю швидкість угору
         const out = s.vx * nx + s.vz * nz;
         if (out < o.sep) { s.vx += nx * (o.sep - out); s.vz += nz * (o.sep - out); }
         if (s.y > 0 && s.vy === 0) s.vy = 0.01;                           // відбитий угору м'яч — у польоті
@@ -239,9 +252,10 @@ export class World {
   }
 
   /**
-   * Сітка воріт зсередини — пружна: м'яч входить у неї (сітка прогинається до ~0.5 м), гальмує й відскакує назад частиною
-   * швидкості (як справжня: ~0.4), а сітка ще й «хапає» дотичний рух. Задня стінка й бічні — пружини з загасанням;
-   * this.netPush — глибина й точка прогину для малювання (видно, як сітка вигинається).
+   * Сітка воріт зсередини — пружна: м'яч входить у неї (сітка прогинається до ~0.5 м), гальмує й відскакує назад, але не швидше
+   * за NET_BACK і далі швидко гасне (NET_OUT): лягає у воротах, а не котиться в поле. Сітка ще й «хапає» дотичний рух. Задня
+   * стінка й бічні — пружини з загасанням; this.netPush — глибина й точка прогину для малювання (видно, як сітка вигинається),
+   * його пише лише справжній м'яч: прогнози (AimPath, BallPlan) ганяють свій стан і сітку не прогинають.
    */
   net(s, h) {
     const sd = s.x > 0 ? 1 : -1, r = s.r, back = L + GOAL_D - r, K = 4200, C = 30;
@@ -252,6 +266,7 @@ export class World {
       s.vx -= sd * (K * pb + C * vn) * h;
       const g = Math.exp(-5 * h); s.vz *= g; s.vy = s.vy > 0 ? s.vy * g : s.vy; s.w *= g;
       if (pb > 0.55) { s.x = sd * (back + 0.55); if (s.vx * sd > 0) s.vx = 0; }
+      if (s.vx * sd < -NET_BACK) s.vx = -sd * NET_BACK;
       push = pb;
     }
     const ps = Math.abs(s.z) - (G - r);                                   // бічні стінки
@@ -262,7 +277,8 @@ export class World {
       if (ps > 0.4) { s.z = zs * (G - r + 0.4); if (s.vz * zs > 0) s.vz = 0; }
       push = Math.max(push, ps * 0.6);
     }
-    this.netPush = push > 0 ? { sd, depth: push, y: s.y + r, z: s.z } : null;
+    if (s.x * sd > L + r && s.vx * sd < 0) s.vx *= Math.exp(-NET_OUT * h);
+    if (s === this.ball) this.netPush = push > 0 ? { sd, depth: push, y: s.y + r, z: s.z } : null;
   }
 
   /** Чи м'яч повністю за лінією воріт: +1 праві (суперника), -1 ліві (наші), 0 ні. */

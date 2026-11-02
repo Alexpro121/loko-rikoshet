@@ -35,7 +35,7 @@
 | Хто отримає пас | `pickMyReceiver`, `pickOppReceiver` |
 | Пас і удар гравця | `launchShot`, `doPass`, `passTo`, `startShot` |
 | Розбіг перед ударом | `kickApproach`, `kickReady`, `kickFollow` |
-| Ведення м'яча | `carry`, `dribbleKick`, `dribbleStep` у `src/match/dribble.js` |
+| Ведення м'яча | `carry`, `dribbleKick`, `dribbleStep`, `keepBallIn` у `src/match/dribble.js` |
 | Сповільнення часу | `updateSlow`, `clearSlow`, `slowFactor` у `spec` |
 | Рішення суперника з м'ячем | `takerThink`, `updateTaker`, `choosePass` |
 | Хто біжить на м'яч, хто тисне й страхує | `Team.update` у `src/match/team.js` |
@@ -52,6 +52,14 @@
 | Гол і зарахування | `onGoal`, `World.goalSide` |
 | Годинник і доданий час | `update`, `stoppage`, `whistlePeriod`, `timeOver` |
 | Перерва | `startBreak`, `updateBreak` |
+| Як м'яч поводиться в сітці після гола | `net`, `NET_BACK`, `NET_OUT` у `src/physics/world.js` |
+| Що вважати сейвом, досвід воротаря | `creditSave`, `onBody`, `trapMine` у `src/match/match.js` |
+| Автор гола, автогол | `byTeam` в `onGoal`, `goalsBy` у `src/match/match.js` |
+| Коли суддя свистить кінець тайму | `calmBall`, `ballFlying` у `src/match/match.js` |
+| Межі штрафного | `PITCH.BOX_D`, `PITCH.BOX_W` у `src/config.js` |
+| Напрям і пунктир удару ШІ | `aimCounter`, `counterPath` у `src/match/match.js` |
+| Де стоїть виконавець пенальті в контакті | `x1` у `liveStep`, `src/match/penalty.js` |
+| Куди біжить автор гола «до фанатів» | початок `setupCelebration` у `src/match/match.js` |
 
 ## Модель і анімація
 
@@ -68,6 +76,9 @@
 | Вибір вигляду в редакторі | `allHairs`, `allSkins` в `ACADEMY`; `renderCustom` в `src/ui/ui.js` |
 
 Новий суглоб, який має рухатись у онлайн-гостя, додай у `NODES` у `src/online/codec.js`.
+| Поза удару в мить контакту, швидкість замаху | `KICK_*` і блок `this.kicking > 0` в `animate`, `src/graphics/player.js` |
+| Суміш поз без перельоту кінцівки | `arcBlend` у `src/graphics/ragdoll.js` |
+| Коли опорна стопа прикріплюється до газону | `plantFeet` у `src/graphics/player.js` |
 
 ## Сцена й ефекти
 
@@ -113,8 +124,15 @@
 | Зразок мінімапи в налаштуваннях | `DemoMatch` у `src/ui/minimap-demo.js`; схема екрана: `planHtml`, `SPOTS` у `src/ui/minimap.js` |
 | Мінімапа: місце, розмір, обхід HUD | `MapHud.compute`, зони `.z-*` у `src/style.css`; поля `map*` у `SETTINGS_DEFAULT`; вкладка `map` у `renderSettings` |
 | Іконки | `src/ui/icons.js`, `src/ui/vox.js` |
-| Звуки й музика | `AudioEngine` у `src/core/audio.js`; для онлайну також `SND_FWD` |
+| Звуки й музика | `AudioEngine` у `src/core/audio.js`; для онлайну також `SND_FWD` і `SND_OK` |
 | Клавіші, дотики, повний екран | `Game.bindInput`, `UI.key` |
+| Звук на зупиненому контексті | `AudioEngine.live` у `src/core/audio.js` |
+| Коли наша форма міняється на матч | `pickKit`, `KIT_CLASH` у `src/config.js`, `matchKit` у `src/state/squad.js` |
+| Скидання вигляду гравця | `customizeLook`, `resetLook` у `src/state/squad.js` |
+| Межі перетягування джойстика | `joyCenter` у `src/ui/ui.js` |
+| Зменшення назв на табло меню | `fitFlaps` у `src/ui/ui.js`, `--k` у `.flap` |
+| Висота ліній на екрані складу | `DEPTH` у `src/ui/tactics.js` |
+| Перевірка збереження на вході | `normalize`, `cleanPlayer`, `cleanSquad`, `RANGE` у `src/state/save.js` |
 
 ## Онлайн
 
@@ -136,6 +154,15 @@
 | Сервери STUN/TURN, таймаути | `src/online/net.js` |
 | Формат кадру | `src/online/codec.js`, разом із `PROTO` |
 | Команди гостя | `pointerUp` у `src/online/guest.js`, `HostLink.onMsg`, `remoteRelease` |
+| Вирівнювання сторін онлайн | `Team.even`, `spec.online` у `src/match/match.js` |
+| Час до обриву, коли господар мовчить | `NET_SILENCE` у `src/online/guest.js` |
+| Автопрограш за вихід | `AWAY_MS`, `onVis`, `techLoss`, `dropped` у `src/online/session.js`; `markLive`, `settleLive` у `src/online/profile.js` |
+| Назви клубів і ліг | `LEAGUES` у `src/config.js`; старі назви в пам'яті суперників міняє `RENAMED` у `src/state/save.js` |
+| Прапори Локо | `lokoFlagTexture` у `src/match/walkout.js`, `buildFlags` у `src/graphics/stands.js`, прапори острова в `src/graphics/island.js` |
+| Черга кадрів | `FRAME_QUEUE` у `src/online/net.js` |
+| Форма гостей при збігу кольорів | `awayKit` у `src/online/profile.js` |
+| Домашні трибуни онлайн | `Stands.setHome` у `src/graphics/stands.js` |
+| Ремонт збереження онлайн-клубу | `repair` у `src/online/profile.js` |
 
 ## Випуск
 
@@ -146,3 +173,5 @@
 | Офлайн-кеш | `public/sw.js` |
 | Назва, іконки PWA | `public/manifest.webmanifest`, `index.html` |
 | Google Play | `store/PLAY_STORE.md`, `twa-manifest.json`, `public/.well-known/assetlinks.json` |
+| Офлайн-кеш, прийняття релізу | `adopt`, `shell`, `fits` у `public/sw.js` |
+| Частота кадрів у паузі, помилка в кадрі | `still` у `Game.step`, `Game.onFrameError` у `src/core/game.js` |

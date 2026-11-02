@@ -42,7 +42,7 @@ const lookOf = (o = {}) => { const k = kitOf(o.kit ?? S.kit); return { kit: k[2]
 const ANIMS = [
   ['idle', 'Стійка'], ['run', 'Біг'], ['aim', 'Прицілювання'], ['kick', 'Удар'], ['pkick', 'Пенальті: удар'], ['control', 'Прийом'], ['chest', 'Груди'],
   ['header', 'Удар головою'], ['block', 'Блок'], ['hit', 'Влучання м’ячем'], ['tackle', 'Відбір'], ['slide', 'Підкат'], ['stumble', 'Падіння'],
-  ['kneel', 'Ковзання на колінах'], ['knock', 'Поштовх (рекдол)'], ['cheer', 'Радість'], ['sad', 'Розчарування'], ['gkwait', 'Воротар: стійка'], ['catch', 'Воротар: ловить'], ['scoop', 'Воротар: підбирає'],
+  ['kneel', 'Ковзання на колінах'], ['knock', 'Поштовх (падіння тіла)'], ['cheer', 'Радість'], ['sad', 'Розчарування'], ['gkwait', 'Воротар: стійка'], ['catch', 'Воротар: ловить'], ['scoop', 'Воротар: підбирає'],
   ['gkdive', 'Воротар: стрибок'], ['pdive', 'Пенальті: стрибок'], ['gkjump', 'Воротар: вгору'], ['parry', 'Воротар: відбиває'], ['gkpunch', 'Воротар: кулаками'], ['gktip', 'Воротар: через поперечину'], ['gkfoot', 'Воротар: ногою'], ['gkstar', 'Воротар: «зірочка»'], ['gkknee', 'Воротар: на коліно'], ['gkfall', 'Воротар: падає на бік'], ['throw', 'Воротар: кидок'],
   ['gkshuffle', 'Воротар: рух по лінії'], ['stagger', 'Втримав рівновагу'], ['fend', 'Тримає суперника рукою'],
 ];
@@ -89,7 +89,7 @@ function spawn() {
   players = [];
   const looks = S.squad
     ? [{}, { kit: 'away', hair: 'curly', skin: '#8a5a3c', hairCol: '#111827', num: 7 }, { kit: 'third', hair: 'long', skin: '#f3d2b3', hairCol: '#d8b25a', num: 9, beard: 0 },
-      { kit: 'gk', hair: 'band', skin: '#b07a52', hairCol: '#1f2933', num: 1 }, { kit: 'ДИНАМО', hair: 'mohawk', skin: '#e8bf9b', hairCol: '#9c2a1c', num: 22, beard: 3 },
+      { kit: 'gk', hair: 'band', skin: '#b07a52', hairCol: '#1f2933', num: 1 }, { kit: 'БАСТІОН', hair: 'mohawk', skin: '#e8bf9b', hairCol: '#9c2a1c', num: 22, beard: 3 },
       { kit: 'home', hair: 'slick', skin: '#5f3d29', hairCol: '#111827', num: 4, beard: 2 }]
     : [{}];
   looks.forEach((o, i) => {
@@ -400,7 +400,7 @@ const relook = () => { for (const p of players) if (!S.squad) p.setLook(lookOf()
 
 function renderPanel() {
   panel.innerHTML = '';
-  panel.append(h('h1', { innerHTML: 'ЛОКО <b>·</b> Лабораторія гравця' }), h('div', { className: 'sub', textContent: 'Модель, форма й усі анімації зблизька. Обертай мишею, коліщатко — зум.' }));
+  panel.append(h('h1', { innerHTML: 'ЛОКО <b>·</b> Лабораторія гравця' }), h('div', { className: 'sub', textContent: 'Модель, форма й усі анімації зблизька. Обертай мишею, коліщатко — наближення.' }));
 
   panel.append(h('h2', { textContent: 'Анімація' }));
   const anims = h('div', { className: 'chips' });

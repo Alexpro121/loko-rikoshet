@@ -2,9 +2,12 @@
 // WebRTC-з'єднання. Два канали в одному з'єднанні:
 //  ctl — надійний і впорядкований (JSON): привітання, старт, події матчу, команди удару, кінець;
 //  st  — ненадійний і невпорядкований (бінарний): кадри поз 20 разів на секунду; загублений кадр не гальмує наступні.
-// Пінг раз на секунду дає затримку (RTT) і пульс: 6 с тиші — з'єднання вважаємо втраченим.
+// Пінг раз на секунду дає затримку (RTT) і пульс: обрив — понад 8 с тиші, лише якщо й саме з'єднання вже не «connected».
+// Тишу кадрів при живому з'єднанні (господар згорнув гру) ловить гість: guest.js, NET_SILENCE.
 
 const PREFIX = 'lokorush-v1-';
+const TK_KEY = 'loko-online-tk';
+const FRAME_QUEUE = 16e3;                            // ~5 кадрів (250 мс): кадр — 3.2 КБ, 20/с, тобто 64 КБ/с. Далі черга лише старить картинку, свіжий кадр важливіший
 const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';     // без 0/O, 1/I — код легко продиктувати
 export const PROTO = 1;
 export const makeCode = () => Array.from({ length: 5 }, () => ALPH[(Math.random() * ALPH.length) | 0]).join('');
@@ -22,7 +25,17 @@ const PEER_CFG = {
 };
 
 let PeerCls = null;
-async function loadPeer() { if (!PeerCls) PeerCls = (await import('peerjs')).Peer; return PeerCls; }
+/** Мітка гостя: у sessionStorage вкладки, тож після F5 господар упізнає свого гостя навіть раніше, ніж помітить обрив. */
+function tabToken() {
+  const mk = () => Math.random().toString(36).slice(2);
+  try { let t = sessionStorage.getItem(TK_KEY); if (!t) { t = mk(); sessionStorage.setItem(TK_KEY, t); } return t; } catch (_) { return mk(); }
+}
+
+// чанк PeerJS вантажиться лише тут: після релізу старий файл зник (404), а збій import() браузер пам'ятає, тож допоможе лише перезавантаження
+async function loadPeer() {
+  if (!PeerCls) { try { PeerCls = (await import('peerjs')).Peer; } catch (e) { console.error(e); throw Object.assign(new Error('chunk'), { type: 'chunk' }); } }
+  return PeerCls;
+}
 
 function openPeer(Peer, id) {
   return new Promise((res, rej) => {
@@ -39,7 +52,7 @@ export class Net {
   constructor() {
     this.h = {}; this.peer = null; this.conn = null; this.st = null; this.role = null; this.code = '';
     this.open = false; this.rtt = 0; this.lastRx = 0; this.closed = false; this._ping = 0; this.retry = 0;
-    this.tk = Math.random().toString(36).slice(2); this.guestTk = null;   // мітка гостя: за нею господар упізнає свого після обриву
+    this.tk = tabToken(); this.guestTk = null;           // мітка гостя: за нею господар упізнає свого після обриву
   }
   on(ev, fn) { (this.h[ev] ??= []).push(fn); return this; }
   emit(ev, ...a) { for (const f of this.h[ev] || []) { try { f(...a); } catch (e) { console.error(e); } } }
@@ -148,8 +161,14 @@ export class Net {
   /** Кадр поз: лише ненадійним каналом; якщо черга росте (повільна мережа) — кадр пропускаємо, наступний буде свіжіший. */
   sendFrame(buf) {
     const st = this.st;
-    if (st && st.readyState === 'open' && st.bufferedAmount < 192e3) { try { st.send(buf); } catch (_) { /* ignore */ } }
+    if (st && st.readyState === 'open' && st.bufferedAmount < FRAME_QUEUE) { try { st.send(buf); } catch (_) { /* ignore */ } }
   }
+
+  /** Лише поточне з'єднання (чужий клієнт): кімната лишається й чекає наступного гостя. */
+  drop() { try { if (this.conn) this.conn.close(); } catch (_) { /* ignore */ } }
+
+  /** Зв'язок зник у нас, а не в суперника: немає мережі або недоступний сервер кімнат. */
+  offline() { return navigator.onLine === false || !!this.netDown || !!(this.peer && this.peer.disconnected && !this.peer.destroyed); }
 
   lost() {
     if (!this.open || this.closed) return;
@@ -162,7 +181,7 @@ export class Net {
   async rejoin() {
     if (this.closed || this.open) return;
     if (++this.retry > 8) { this.emit('gone'); return; }
-    try { await this.join(this.code); } catch (_) { setTimeout(() => this.rejoin(), 2500); }
+    try { await this.join(this.code); } catch (e) { this.netDown = !!e && ['network', 'server-error', 'socket-error'].includes(e.type); setTimeout(() => this.rejoin(), 2500); }
   }
 
   /** linger — скільки ще тримати з'єднання: закриття обриває те, що браузер не встиг надіслати (прощальне повідомлення). */

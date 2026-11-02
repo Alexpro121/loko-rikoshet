@@ -43,7 +43,7 @@ export class OnlineScreen {
     ui.root.addEventListener('focusin', (e) => { if (e.target.matches('.on-name, .on-city, .on-code-in')) setTimeout(() => e.target.scrollIntoView({ block: 'center' }), 350); });
     ui.root.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-oname], [data-ocity]')) e.target.blur(); });
     ui.root.addEventListener('change', (e) => { if (e.target.matches('[data-ocol]')) this.patchFe(); });   // свій колір: панель перемальовуємо лише після вибору, інакше палітра закриється
-    this.s = new Online(game, ui);
+    this.s = new Online(game, ui); this.s.onOpp = () => this.patchOpp();
     // запрошення за посиланням ?room=КОД: відкриваємо вкладку й одразу заходимо в кімнату
     // пінг у лобі оновлюється сам (без перемальовування панелі — щоб не збивати натискання)
     setInterval(() => {
@@ -83,11 +83,14 @@ export class OnlineScreen {
   // ------------------------------------------------------------------ клуб
   /** Картка клубу: прапор на сцені, назва, цифри. Спільна для гри, кімнати й лобі. */
   clubCard(p, o = {}) {
-    const c = p.club, rating = p.rating, power = teamRating(p.heroes), lvl = p.lvl, x = o.vs;
-    const cmp = (a, b) => (x ? (a > b ? 'up' : a < b ? 'down' : '') : '');
+    const c = p.club;
     return `<div class="on-stage ${o.opp ? 'opp' : ''}">${waveFlag(c.flag, o.opp ? 'mirror' : '')}${o.stamp || ''}</div>
       <div class="on-cc-n"><b>${esc(c.name)}</b><em>${esc(c.city || '')}${c.form ? ' · ' + formName(c.form) : ''}</em></div>
-      <div class="on-tiles">${tile('Рейтинг', rating, cmp(rating, x && x.rating))}${tile('Сила', power, cmp(power, x && teamRating(x.heroes)))}${tile('Рівень', lvl, cmp(lvl, x && x.lvl))}</div>`;
+      ${this.clubTiles(p, o.vs)}`;
+  }
+  clubTiles(p, x) {
+    const rating = p.rating, power = teamRating(p.heroes), lvl = p.lvl, cmp = (a, b) => (x ? (a > b ? 'up' : a < b ? 'down' : '') : '');
+    return `<div class="on-tiles">${tile('Рейтинг', rating, cmp(rating, x && x.rating))}${tile('Сила', power, cmp(power, x && teamRating(x.heroes)))}${tile('Рівень', lvl, cmp(lvl, x && x.lvl))}</div>`;
   }
   /** Форма клубу на справжніх гравцях: рендер кешується за кольорами, тож кожен новий колір малюється один раз. */
   kitsHtml() {
@@ -213,7 +216,7 @@ export class OnlineScreen {
 
   // ------------------------------------------------------------------ гра
   playHtml() {
-    const s = this.s, st = this.playState(), err = s.err ? `<p class="on-err">${esc(s.err)}</p>` : '';
+    const s = this.s, st = this.playState(), err = s.err ? `<p class="on-err">${esc(s.err)}</p>${s.errReload ? '<button class="btn alt" data-act="on-reload"><b>ОНОВИТИ СТОРІНКУ</b></button>' : ''}` : '';
     if (st === 'idle' || st === 'hosting') this.rdy = { me: false, opp: false };
     if (st === 'idle') {
       return `<div class="on-play">
@@ -238,15 +241,33 @@ export class OnlineScreen {
     }
     // лобі: обидва на зв'язку
     const o = s.opp, rtt = s.net && s.net.rtt ? Math.round(s.net.rtt) : 0;
-    const stampOf = (key, on) => { const nw = on && !this.rdy[key]; this.rdy[key] = on; return on ? `<div class="on-stamp ${nw ? 'new' : ''}">ГОТОВИЙ</div>` : ''; };
-    const myStamp = stampOf('me', s.ready.me), opStamp = stampOf('opp', s.ready.opp);
+    const myStamp = this.stampOf('me', s.ready.me);
+    this.oppKey = null;
     const bars = rtt ? (rtt < 60 ? 4 : rtt < 120 ? 3 : rtt < 220 ? 2 : 1) : 0, sig = [1, 2, 3, 4].map((i) => `<u class="${i <= bars ? 'on' : ''}"></u>`).join('');
-    const oc = o ? `${this.clubCard(o, { opp: true, vs: OP, stamp: opStamp })}<div class="on-ready ${s.ready.opp ? 'yes' : ''}">${s.ready.opp ? 'ГОТОВИЙ ДО МАТЧУ' : `чекаємо<span class="on-dots"><u></u><u></u><u></u></span>`}</div>` : `<div class="on-busy mini"><div class="on-wheel">${emblemSvg('wheel')}</div><b>Отримуємо дані суперника</b></div>`;
+    const oc = this.oppCard();
     return `<div class="on-play on-lobby">
       <section class="on-card on-cc on-fromL">${this.clubCard(OP, { vs: o, stamp: myStamp })}<button class="btn ${s.ready.me ? 'on' : 'go'} on-rdy" data-act="on-ready" ${o ? '' : 'disabled'}><b>${s.ready.me ? 'ГОТОВИЙ ✓' : 'Я ГОТОВИЙ'}</b></button></section>
-      <div class="on-vs on-a" style="--d:3"><i class="on-vs-l"></i><b>VS</b><i class="on-vs-l"></i><div class="on-sig" aria-hidden="true">${sig}</div><small class="on-ping">${rtt ? 'пінг ' + rtt + ' мс' : 'пінг —'}</small><small>${s.role === 'host' ? 'ти господар' : 'ти в гостях'}</small><small>код ${esc(s.code)}</small></div>
+      <div class="on-vs on-a" style="--d:3"><i class="on-vs-l"></i><b>ПРОТИ</b><i class="on-vs-l"></i><div class="on-sig" aria-hidden="true">${sig}</div><small class="on-ping">${rtt ? 'пінг ' + rtt + ' мс' : 'пінг —'}</small><small>${s.role === 'host' ? 'ти господар' : 'ти в гостях'}</small><small>код ${esc(s.code)}</small></div>
       <section class="on-card on-cc on-fromR">${oc}</section>
       <div class="on-foot">${err}<button class="btn alt" data-act="on-cancel"><b>ВИЙТИ З КІМНАТИ</b></button></div></div>`;
+  }
+
+  stampOf(key, on) { const nw = on && !this.rdy[key]; this.rdy[key] = on; return on ? `<div class="on-stamp ${nw ? 'new' : ''}">ГОТОВИЙ</div>` : ''; }
+  /** Картка суперника в лобі. */
+  oppCard() {
+    const s = this.s, o = s.opp;
+    return o ? `${this.clubCard(o, { opp: true, vs: OP, stamp: this.stampOf('opp', s.ready.opp) })}<div class="on-ready ${s.ready.opp ? 'yes' : ''}">${s.ready.opp ? 'ГОТОВИЙ ДО МАТЧУ' : `чекаємо<span class="on-dots"><u></u><u></u><u></u></span>`}</div>` : `<div class="on-busy mini"><div class="on-wheel">${emblemSvg('wheel')}</div><b>Отримуємо дані суперника</b></div>`;
+  }
+  /** Суперник змінив клуб чи готовність: оновлюємо лише його картку й порівняння зі своїм клубом. Панель не перемальовуємо: зберігаються ввід, повзунок і натискання «Я ГОТОВИЙ». */
+  patchOpp() {
+    const s = this.s, o = s.opp, P = this.ui.el.panel;
+    if (this.ui.panel !== 'online' || this.tab !== 'play' || this.playState() !== 'lobby' || !o) return;
+    const key = JSON.stringify([o.club, o.rating, o.lvl, teamRating(o.heroes), s.ready.opp]);
+    if (key === this.oppKey) return;
+    const box = P.querySelector('.on-fromR'), mine = P.querySelector('.on-fromL .on-tiles');
+    if (!box) return;
+    this.oppKey = key; box.innerHTML = this.oppCard();
+    if (mine) mine.outerHTML = this.clubTiles(OP, o);
   }
 
   // ------------------------------------------------------------------ дії
@@ -278,7 +299,7 @@ export class OnlineScreen {
     const ed = () => { s.sync(); return re(); };             // свій клуб змінився — суперник теж має це бачити
     switch (k) {
       case 'on-tab': audio.click(); this.tab = x; this.tac.swapFrom = null; return re();
-      case 'on-train': { const c = trainHero(+x, y); if (c === false) { audio.deny(); this.ui.toast(OP.heroes[+x] && OP.heroes[+x].stats[y] >= 99 ? 'Навичка на максимумі' : 'Не вистачає монет — грай онлайн-матчі'); } else { audio.buy(); this.popKey = y; this.bump = true; } return ed(); }
+      case 'on-train': { const c = trainHero(+x, y); if (c === false) { audio.deny(); this.ui.toast(OP.heroes[+x] && OP.heroes[+x].stats[y] >= 99 ? 'Навичка на максимумі' : 'Бракує монет — грай онлайн-матчі'); } else { audio.buy(); this.popKey = y; this.bump = true; } return ed(); }
       case 'on-scout': {
         const h = scoutHero(+x);
         if (!h) { audio.deny(); this.ui.toast('Скаут коштує ' + SCOUT_PRICE + ' монет'); return; }
@@ -302,7 +323,8 @@ export class OnlineScreen {
       case 'on-col': this.remember(); this.histT = 0; this.setColor(x); audio.click(); return this.flagDone();
       case 'on-reset':
         if (el.dataset.arm) { resetOP(); audio.horn(); this.ui.toast('Новий клуб: ' + OP.club.name); this.tac.sel = 1; this.hist = []; this.cands = null; return ed(); }
-        el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО? ГЕРОЇ Й МОНЕТИ ЗНИКНУТЬ'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'НОВИЙ ВИПАДКОВИЙ КЛУБ'; }, 3000); return;
+        el.dataset.arm = 1; el.querySelector('b').textContent = 'СПРАВДІ? ГЕРОЇ Й МОНЕТИ ЗНИКНУТЬ'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'НОВИЙ ВИПАДКОВИЙ КЛУБ'; }, 3000); return;
+      case 'on-reload': location.reload(); return;
       case 'on-create': audio.click(); audio.unlock(); return s.create();
       case 'on-join': { audio.click(); audio.unlock(); const inp = this.ui.el.panel.querySelector('[data-ocode]'); return s.join(inp ? inp.value : this.codeIn); }
       case 'on-cancel': audio.back(); s.leave(); return re();
@@ -348,7 +370,7 @@ export class OnlineScreen {
       me: { name: sp.home ? sp.home.name : OP.club.name, crest: flag(sp.home) }, opp: { name: sp.club ? sp.club.name : 'СУПЕРНИК', crest: flag(sp.club) },
       score: [r.me, r.opp], scorers: r.scorers, chips, fact: 'Монети онлайн-клубу: ' + fmt(OP.coins),
       head: 'Нагороди клубу', lines, total: rew ? rew.coins : null,
-      buttons: [...(can ? [['go', 'on-rematch', 'РЕВАНШ', I.play]] : []), ['alt', 'on-menu', can ? 'В ЛОБІ' : 'ДО ОНЛАЙНУ']],
+      buttons: [...(can ? [['go', 'on-rematch', 'РЕВАНШ', I.play]] : []), ['alt', 'on-menu', can ? 'ДО КІМНАТИ' : 'ДО ОНЛАЙНУ']],
     });
   }
 }

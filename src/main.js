@@ -25,7 +25,7 @@ async function boot() {
   window.__loko = game;
 }
 
-boot();
+boot().catch((e) => { console.error(e); gfxFail('Гру не вдалося запустити. Онови сторінку; якщо не допоможе, очисти дані сайту.'); });
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {}));

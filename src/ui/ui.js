@@ -1,7 +1,7 @@
 // UI: меню, панелі, пауза, налаштування, результат, джойстик. Кнопки: data-act -> UI.act.
 import { S, commit, resetAll, subscribe, onSaveError } from '../state/save.js';
 import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, KITS, matchSpec, CAM_PRESETS } from '../config.js';
-import { stadiumCost, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
+import { stadiumCost, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, keepCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
 import { audio, vibrate } from '../core/audio.js';
 import { I, crest, lokoCrest } from './icons.js';
 import { VOX } from './vox.js';
@@ -10,7 +10,7 @@ import { Hud } from './hud.js';
 import { MapHud } from './minimap.js';
 import { playIntro } from './intro.js';
 import { portrait } from './portrait.js';
-import { ensureSquad, oppSquad, allPlayers, swapPlayers, swapStarters, setTactic, bestLine, CAREER_FORMS, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook, myKit, lookSig } from '../state/squad.js';
+import { ensureSquad, oppSquad, allPlayers, swapPlayers, swapStarters, setTactic, bestLine, CAREER_FORMS, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook, myKit, matchKit, lookSig, customizeLook, resetLook } from '../state/squad.js';
 
 /** Тестові інструменти (+10 000 монет) лише з ?test в адресі або в dev-збірці. */
 const TEST_MODE = !!(import.meta.env && import.meta.env.DEV) || /[?&]test/.test(location.search);
@@ -21,7 +21,7 @@ import { rivalOf, scoutNote } from '../state/rivals.js';
 const rarCol = (id) => ACADEMY.rarities.find((r) => r.id === id) || ACADEMY.rarities[0];
 const acKey = (p) => 'ac-' + p.id + p.num + p.skin + p.hair + p.hairCol + (S.kitId || 'home');
 /** Родовий відмінок назв ліг (порядок як у LEAGUES). */
-const LEAGUE_GEN = ['Другої ліги', 'Першої ліги', 'Прем’єр-ліги УПЛ', 'Ліги чемпіонів'];
+const LEAGUE_GEN = ['Другої ліги', 'Першої ліги', 'Вищої ліги', 'Ліги чемпіонів', 'Чемпіонату світу'];
 
 function countTo(el, to, ms = 650, fmtFn = fmt) {
   const from = Number(el.dataset.v || 0); el.dataset.v = to;
@@ -42,7 +42,7 @@ const sheet = (title, body, cls = '') => `
 </div>`;
 
 const LOW_SCREEN = matchMedia('(max-height: 500px)');
-const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .on-bench, .sym, .on-play, .on-id, .on-fe-b, .set-grid, .cu-wrap, .cu-opts';
+const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .on-bench, .sym, .on-play, .on-id, .on-fe-b, .set-grid, .cu-wrap, .cu-opts, .stad-i, .tiers';
 /** Замінює вміст вікна; keep — те саме вікно малюється заново, тож прокрутка лишається на місці. */
 function redraw(host, html, keep) {
   const sc = keep ? [...host.querySelectorAll(SCROLLS)].map((n) => [n.scrollLeft, n.scrollTop]) : [];
@@ -94,7 +94,7 @@ export class UI {
     <div class="pz-l">
       <h2 class="pz-t" data-t="ПАУЗА">ПАУЗА</h2>
       <div class="pz-sc" id="p-score"></div>
-      <div class="pz-fact"><b>Знали?</b><p class="fact" id="p-fact"></p></div>
+      <div class="pz-fact"><b>Чи знаєш?</b><p class="fact" id="p-fact"></p></div>
     </div>
     <div class="pz-r">
       <button class="pz-b go" data-act="resume">${I.play}<b>Продовжити</b></button>
@@ -121,6 +121,7 @@ export class UI {
     <div class="ios-hint" id="ios-hint" hidden><b>Для повного екрана на iPhone</b><ol><li>Натисни <i class="shr">⬆︎</i> «Поділитись» у Safari</li><li>Обери «На початковий екран»</li><li>Відкрий гру з нової іконки</li></ol><button class="btn alt" data-act="ios-ok"><b>ЗРОЗУМІЛО</b></button></div>
   </div>
 </section>
+<div class="joy-scrim" id="joy-scrim" hidden></div>
 <div class="joy-bar" id="joy-bar" hidden><span>Перетягни джойстик у зручне місце</span><button class="btn alt" data-act="joy-reset"><b>СКИНУТИ</b></button><button class="btn go" data-act="joy-done"><b>ГОТОВО</b></button></div>
 <div class="joy" id="joy" hidden><div class="joy-ring"><i class="joy-knob"></i></div></div>
 <div class="toast" id="toast" hidden></div>
@@ -131,7 +132,7 @@ export class UI {
     root.addEventListener('input', (e) => {
       if (this.online && this.online.input(e.target)) return;
       const nm = e.target.closest('[data-cname]');
-      if (nm && this.cu != null) { const pl = allPlayers()[this.cu]; if (pl) { pl.name = nm.value.trim().slice(0, 22) || pl.name; pl.custom = true; commit(); } return; }
+      if (nm && this.cu != null) { const pl = allPlayers()[this.cu]; if (pl) { pl.name = nm.value.trim().slice(0, 22) || pl.name; commit(); } return; }
       const t = e.target.closest('[data-range]'); if (!t) return;
       const k = t.dataset.range, v = +t.value;
       S.settings[k] = v; this.applyControls(); commit();
@@ -144,7 +145,7 @@ export class UI {
       if (e.target === this.el.custom) return this.closeCustom();
       const t = e.target.closest('[data-act]'); if (t) this.act(t.dataset.act, t);
     });
-    this.hud.onShow = () => this.setMatchUi(true);
+    this.hud.onShow = () => { this.setMatchUi(true); this.kitNote(); };
     this.hud.onHide = () => this.setMatchUi(false);
     this.tiltNav();
     this.hud.onCine = (on) => { if (this.cineOn !== on) { this.cineOn = on; this.applyControls(); } };
@@ -161,6 +162,7 @@ export class UI {
   onResize(w, h) {
     const s = document.documentElement.style;
     s.setProperty('--vh', h / 100 + 'px'); s.setProperty('--vw', w / 100 + 'px');
+    this.fitFlaps(); this.placeJoy(); this.map.fitPreview();
     const rot = h > w * 1.02;
     if (this.rotated !== rot) {
       this.rotated = rot;
@@ -181,6 +183,7 @@ export class UI {
     if (e.key === 'Escape' || e.code === 'KeyP') {
       if (this.joyEdit) this.act('joy-done');
       else if (this.map.editing) this.act('map-done');
+      else if (!this.el.reveal.hidden) this.act('close-reveal');
       else if (!this.el.settings.hidden) this.closeSettings();
       else if (!this.el.custom.hidden) this.closeCustom();
       else if (g.sm.name === 'MATCH') { if (!this.el.pause.hidden) this.act('resume'); else this.pause(); }
@@ -216,14 +219,23 @@ export class UI {
       jel.classList.add('off'); jel.querySelector('.joy-knob').style.transform = ''; if (this.joyRelease) this.joyRelease(false);
       this._joyT = setTimeout(() => { if (jel.classList.contains('off')) jel.hidden = true; }, 400);
     }
-    const js = this.el.joy.style, st0 = S.settings, custom = st0.joyX >= 0 && st0.joyY >= 0;
-    js.left = custom ? st0.joyX * 100 + '%' : ''; js.top = custom ? st0.joyY * 100 + '%' : '';
-    js.right = js.bottom = custom ? 'auto' : ''; js.transform = custom ? 'translate(-50%, -50%)' : '';
+    this.placeJoy();
     this.root.classList.toggle('hand-left', S.settings.hand === 'left');
     const st = this.root.style;
     st.setProperty('--joy-s', (S.settings.joySize / 100).toFixed(2));
     st.setProperty('--joy-a', (S.settings.joyAlpha / 100).toFixed(2));
     this.map.apply(this.matchActive && !this.cineOn);
+  }
+  /** Центр перетягнутого джойстика в пікселях: уся зона дотику лишається на екрані за будь-якого розміру. Збережені частки не міняються, межі рахуються щоразу. */
+  joyCenter(fx, fy) {
+    const vw = innerWidth, vh = innerHeight, half = Math.min(vh * 0.01, vw * 0.007) * 16 * S.settings.joySize / 100;
+    const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+    return { x: cl(fx * vw, Math.max(vw * 0.1, half), Math.min(vw * 0.9, vw - half)), y: cl(fy * vh, Math.max(vh * 0.2, half), Math.min(vh * 0.88, vh - half)) };
+  }
+  placeJoy() {
+    const js = this.el.joy.style, st0 = S.settings, custom = st0.joyX >= 0 && st0.joyY >= 0, c = custom ? this.joyCenter(st0.joyX, st0.joyY) : null;
+    js.left = custom ? c.x + 'px' : ''; js.top = custom ? c.y + 'px' : '';
+    js.right = js.bottom = custom ? 'auto' : ''; js.transform = custom ? 'translate(-50%, -50%)' : '';
   }
   initJoy() {
     const el = this.el.joy, ring = el.querySelector('.joy-ring'), knob = el.querySelector('.joy-knob');
@@ -258,8 +270,8 @@ export class UI {
     });
     el.addEventListener('pointermove', (e) => {
       if (this.joyEdit && e.pointerId === drag) {
-        const cl = (v, a, b) => Math.max(a, Math.min(b, v));
-        S.settings.joyX = cl(e.clientX / innerWidth, 0.1, 0.9); S.settings.joyY = cl(e.clientY / innerHeight, 0.2, 0.88); this.applyControls(); return;
+        const c = this.joyCenter(e.clientX / innerWidth, e.clientY / innerHeight);
+        S.settings.joyX = c.x / innerWidth; S.settings.joyY = c.y / innerHeight; this.applyControls(); return;
       }
       if (e.pointerId === pid) { ensure(); set(e); }
     });
@@ -291,7 +303,7 @@ export class UI {
       case 'nav-transfers': case 'nav-academy': case 'nav-stadium': case 'nav-online': audio.click(); return this.openPanel(a.slice(4));
       case 'close-panel': audio.back(); return this.closePanel();
       case 'tab-st-info': case 'tab-st-chron': case 'tab-st-sym': audio.click(); this.stTab = a.slice(7); return this.renderPanel();
-      case 'tab-squad': case 'tab-strikers': case 'tab-keepers': audio.click(); this.tab = a.slice(4); return this.renderPanel();
+      case 'tab-squad': case 'tab-strikers': case 'tab-keepers': audio.click(); this.tab = a.slice(4); if (this.tac) this.tac.reset(); return this.renderPanel();
       case 'acad-collect': return this.collectGraduate();
       case 'acad-boost': return this.boostAcademy();
       case 'close-reveal': audio.click(); this.el.reveal.hidden = true; return this.renderPanel();
@@ -301,11 +313,11 @@ export class UI {
       case 'result-menu': audio.click(); return g.toMenu();
       case 'result-next': audio.click(); return g.play();
       case 'result-retry': audio.click(); return g.play();
-      case 'joy-move': this.joyEdit = true; this.joyPause = !this.el.pause.hidden; this.el.pause.hidden = true; this.el.joy.classList.add('edit'); this.closeSettings(); this.root.querySelector('#joy-bar').hidden = false; this.applyControls(); return;
-      case 'joy-done': this.joyEdit = false; if (this.joyPause && g.sm.name === 'MATCH') this.el.pause.hidden = false; this.joyPause = false; this.el.joy.classList.remove('edit'); this.root.querySelector('#joy-bar').hidden = true; this.applyControls(); commit(); this.openSettings(); return;
+      case 'joy-move': this.joyPause = !this.el.pause.hidden; this.el.pause.hidden = true; this.closeSettings(); this.setJoyEdit(true); return;
+      case 'joy-done': { const p = this.joyPause; this.joyPause = false; this.setJoyEdit(false); commit(); return this.editDone(p); }
       case 'joy-reset': S.settings.joyX = S.settings.joyY = -1; this.applyControls(); commit(); return;
       case 'map-move': this.mapPause = !this.el.pause.hidden; this.el.pause.hidden = true; this.closeSettings(); audio.click(); return this.map.setEdit(true);
-      case 'map-done': this.map.setEdit(false); if (this.mapPause && g.sm.name === 'MATCH') this.el.pause.hidden = false; this.mapPause = false; audio.click(); return this.openSettings();
+      case 'map-done': { const p = this.mapPause; this.mapPause = false; this.map.setEdit(false); audio.click(); return this.editDone(p); }
       case 'map-reset': this.map.resetPlace(); audio.click(); return;
       case 'map-on': S.settings.mapOn = !S.settings.mapOn; commit(); this.applyControls(); audio.click(); return this.renderSettings();
       case 'map-opp': S.settings.mapOpp = !S.settings.mapOpp; commit(); audio.click(); return this.renderSettings();
@@ -318,8 +330,8 @@ export class UI {
       case 'set-music': S.settings.music = !S.settings.music; audio.applySettings(); commit(); return this.renderSettings();
       case 'set-shake': S.settings.camShake = !S.settings.camShake; commit(); audio.click(); return this.renderSettings();
       case 'set-haptics': S.settings.haptics = !S.settings.haptics; commit(); if (S.settings.haptics && navigator.vibrate) navigator.vibrate(30); return this.renderSettings();
-      case 'q-auto': case 'q-high': case 'q-low': S.settings.quality = a.slice(2); g.res = 1; g.applyPixelRatio(true); commit(); audio.click(); return this.renderSettings();
-      case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'ТОЧНО СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
+      case 'q-auto': case 'q-high': case 'q-low': S.settings.quality = a.slice(2); g.res = 1; g.applyPixelRatio(true); commit(); audio.click(); if ((a !== 'q-low') !== g.aa) this.toast('Згладжування зміниться після перезапуску гри'); return this.renderSettings();
+      case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'СПРАВДІ СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
       default:
         if (a.startsWith('tk-')) { const t = this.panel === 'online' ? this.online && this.online.tac : this.tac; return t && t.act(a); }
         if (a.startsWith('on-')) return this.online && this.online.act(a, el);
@@ -336,7 +348,27 @@ export class UI {
     }
   }
 
+  /** Обрана форма зливається з формою суперника: на цей матч гра бере іншу й каже про це. */
+  kitNote() {
+    const g = this.game; if (g.online && g.online.inMatch()) return;
+    const k = matchKit(matchSpec(S.fixture, S.season).club);
+    if (k !== myKit()) { const v = Object.values(KITS).find((x) => x.kit === k); this.toast('Форма як у суперника: цей матч у формі «' + v.name + '»'); }
+  }
+
+  setJoyEdit(on) {
+    this.joyEdit = on; this.el.joy.classList.toggle('edit', on);
+    this.root.querySelector('#joy-bar').hidden = !on; this.root.querySelector('#joy-scrim').hidden = !on;
+    this.applyControls();
+  }
+  /** Кінець перетягування джойстика чи мапи: у паузу, якщо прийшли з неї; Налаштування — лише над меню чи паузою, а не над матчем, що йде. */
+  editDone(fromPause) {
+    const g = this.game, paused = fromPause && g.sm.name === 'MATCH';
+    if (paused) this.el.pause.hidden = false;
+    if (paused || g.sm.name === 'MENU') this.openSettings();
+  }
+
   menuTap() {
+    if (this.joyEdit || this.map.editing) return;                                      // тягнуть джойстик чи мапу: тап і Enter матч не запускають
     const g = this.game; this.el.cta.classList.remove('punch'); void this.el.cta.offsetWidth; this.el.cta.classList.add('punch');
     if (g.sm.name !== 'MENU' || this.el.menu.hidden || !this.el.splash.hidden || !this.el.settings.hidden || !this.el.reveal.hidden) return;   // меню сховане: іде заставка
     if (this.panel) this.closePanel(true);                                             // локомотив видно й над панеллю: їде одразу
@@ -396,7 +428,12 @@ export class UI {
     };
     requestAnimationFrame(step);
   }
-  hideMenu() { this.el.menu.hidden = true; this.closePanel(true); }
+  hideMenu() {
+    this.el.menu.hidden = true; this.closePanel(true);
+    // матч почався без нас (суперник зайшов у кімнату), поки тягнули джойстик чи мапу: режим перетягування не лишаємо, інакше пауза не працюватиме
+    if (this.joyEdit) { this.joyPause = false; this.setJoyEdit(false); commit(); }
+    if (this.map.editing) { this.mapPause = false; this.map.setEdit(false); }
+  }
 
   leagueStrip() {
     const spec = matchSpec(S.fixture, S.season), lg = LEAGUES[spec.league];
@@ -466,6 +503,16 @@ export class UI {
         <div class="bd-n">${star ? `<b>★ ${star.name}</b> · ` : ''}${note || rv.style.tip}${rv.rec.met ? ` · зустрічі ${rv.rec.w}-${rv.rec.d}-${rv.rec.l}` : ''}${rv.revenge ? ' · <i>РЕВАНШ</i>' : ''}</div>
         <div class="bd-s"><div class="sem">${sig}</div><span>${label}</span></div>
         <div class="bd-f"><span>Приз</span><b>+${fmt(rew)}</b>${I.coin}</div>`;
+      this.fitFlaps();
+    }
+  }
+
+  /** Назва довша за рядок табло: клітинки разом із шрифтом зменшуються, щоб вона вміщалась уся. У схованому меню ширини нема: рахуємо при показі (refresh(true)). */
+  fitFlaps() {
+    for (const f of this.el.next.querySelectorAll('.flap')) {
+      f.style.removeProperty('--k');
+      let k = 1;
+      for (let n = 0; n < 3 && f.clientWidth > 0 && f.scrollWidth > f.clientWidth; n++) { k *= f.clientWidth / f.scrollWidth; f.style.setProperty('--k', k.toFixed(3)); }
     }
   }
 
@@ -496,9 +543,9 @@ export class UI {
 
   buyStadium() {
     const c = stadiumCost();
-    if (S.coins < c) return this.deny(this.el.stad);
+    if (S.coins < c) { if (this.panel) this.toast('Бракує ' + fmt(Math.ceil(c - S.coins)) + ' монет'); return this.deny(this.el.stad); }   // картка меню під панеллю не видна
     const before = stadiumTier();
-    S.coins -= c; S.up.stadium++; commit(); audio.buy(); this.pop(this.el.stad);
+    keepCash(() => { S.coins -= c; S.up.stadium++; }); commit(); audio.buy(); this.pop(this.el.stad);
     const after = stadiumTier();
     if (after !== before) { this.game.onStadiumUpgraded(); audio.horn(); this.toast('Новий ярус: ' + STADIUM_TIER_NAMES[after]); }
     else this.toast('Дохід +' + INCOME_STEP + '%: тепер +' + incomePct() + '%');
@@ -516,6 +563,9 @@ export class UI {
   /** Панель закрила весь екран: острів за нею не видно, тож малювати його нема потреби. */
   panelCovers() { return !!this.panel && this.el.panel.classList.contains('full') && LOW_SCREEN.matches; }
   closePanel(silent) {
+    if (this.tac) this.tac.reset();
+    if (this.online && this.online.tac) this.online.tac.reset();
+    if (this.panel === 'online' && this.online) this.online.s.unready();   // із закритою панеллю онлайн-матч не має початись сам
     this.panel = null; this._pv = null; this.el.panel.hidden = true; this.el.menu.classList.remove('panel-open', 'panel-full'); this.el.panel.classList.remove('full');
     this.el.nav.querySelectorAll('.nb').forEach((b, i) => b.classList.toggle('on', i === 0));
   }
@@ -531,9 +581,17 @@ export class UI {
     const box = this.el.panel.querySelector('.sheet');
     if (box && again) box.classList.add('still');
     if (box && again && this._ps === sub) box.classList.add('same');   // та сама вкладка перемальовується: вхідні анімації вмісту не повторюємо
+    if (p === 'stadium' && !(again && this._ps === sub)) this.showTier();
     if (p === 'online') this.online.afterRender();
     if (p === 'transfers' && this.tab === 'squad' && this.tac) this.tac.afterRender();
     this._pv = p; this._ps = sub;
+  }
+
+  /** Перелік ярусів довший за вікно: при відкритті показуємо поточний ярус, далі гравець гортає сам. */
+  showTier() {
+    const l = this.el.panel.querySelector('.tiers'); if (!l) return;
+    const c = l.querySelectorAll('li.ok'), li = c[c.length - 1];
+    if (li) l.scrollTop = li.offsetTop - l.offsetTop - (l.clientHeight - li.offsetHeight) / 2;
   }
 
   statBar(label, v) { return `<div class="stat"><span>${label}</span><i><u style="width:${Math.round(v * 100)}%"></u></i></div>`; }
@@ -558,8 +616,8 @@ export class UI {
       const v = e.stats[k], c = trainCost(v), can = S.coins >= c && v < 99;
       return `<div class="st ${pop === k ? 'pop' : ''}"><div class="st-t"><span>${STAT_NAMES[k]}</span><b>${v}</b></div><i><u style="width:${v}%"></u></i><button class="btn buy ${can ? 'can' : ''}" data-act="train:${i}:${k}" ${v >= 99 ? 'disabled' : ''}><b>+1 · ${fmt(c)}</b>${I.coin}</button><small>${STAT_HINT[k]}</small>${pop === k ? '<u class="on-plus">+1</u>' : ''}</div>`;
     }).join('');
-    const B = e.line === 'G' || isSub ? null : bestLine(e), LINE = { D: 'захист', M: 'півзахист', W: 'фланг', F: 'напад' };
-    const fit = B && B.ovr - o >= 2 ? `<p class="on-fit">Не на своїй лінії: у ${LINE[B.line]}і рейтинг був би ${B.ovr}</p>` : '';
+    const B = e.line === 'G' || isSub ? null : bestLine(e), LINE = { D: 'у захисті', M: 'у півзахисті', W: 'на фланзі', F: 'у нападі' };
+    const fit = B && B.ovr - o >= 2 ? `<p class="on-fit">Не на своїй лінії: ${LINE[B.line]} рейтинг був би ${B.ovr}</p>` : '';
     return `<div class="on-hd"><div class="on-hd-t"><p>№${e.num} · ${ROLE_UA[isSub ? (e.pos || e.role) : e.role]}${isSub ? ' · запасний' : ''} · рейтинг <b>${o}</b></p>${fit}
       <i class="on-bar"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></i><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small>
       <button class="btn alt on-scout" data-act="cust:${i}"><b>ВИГЛЯД</b></button></div></div><div class="st-grid">${tiles}</div>`;
@@ -571,7 +629,7 @@ export class UI {
       const TIER = { gold: '#e3b33a', silver: '#b4bcc4', bronze: '#b0793f' };
       const quiet = (fn) => (...x) => { this.holdPanel = true; try { return fn(...x); } finally { this.holdPanel = false; } };   // commit не перемальовує панель: фішки мають доїхати
       this.tac = new Tactics({
-        forms: CAREER_FORMS, deny: 'Воротаря можна поміняти лише на воротаря',
+        forms: CAREER_FORMS, deny: 'Воротаря можна поміняти лише на воротаря', denyFor: (i, j) => (i >= 11 && j >= 11 ? 'Обидва в запасі: обери гравця основи' : null),
         list: allPlayers, form: () => S.tactic, setForm: quiet(setTactic), ovr,
         swap: (i, j) => (i < 11 && j < 11 ? quiet(swapStarters)(i, j) : i < 11 ? swapPlayers(i, j - 11) : j < 11 ? swapPlayers(j, i - 11) : false),
         canSwap: () => true, col: (e) => TIER[tierOf(ovr(e))],
@@ -588,7 +646,7 @@ export class UI {
     const [, i, k] = a.split(':');
     this.tacPop = k;
     const c = trainStat(+i, k);
-    if (c === false) { this.tacPop = null; audio.deny(); const e = allPlayers()[+i]; this.toast(e && e.stats[k] >= 99 ? 'Навичка на максимумі' : 'Не вистачає монет'); return; }
+    if (c === false) { this.tacPop = null; audio.deny(); const e = allPlayers()[+i]; this.toast(e && e.stats[k] >= 99 ? 'Навичка на максимумі' : 'Бракує монет'); return; }
     audio.buy();
   }
 
@@ -620,7 +678,7 @@ export class UI {
       return `<div class="slot" style="--rc:${rarCol(p.rar).col}"><img src="${img}" alt=""/><b>${p.name}</b><em>№${p.num} · +${p.bonus}% дохід</em></div>`;
     }).join('');
     const act = ready ? `<button class="btn go big" data-act="acad-collect"><b>ЗАБРАТИ ВИПУСКНИКА</b></button>` : `<button class="btn buy ${S.tickets > 0 ? 'can' : ''}" data-act="acad-boost"><b>Прискорити: 1</b>${I.ticket}</button>`;
-    const left_ = `<div class="acad-l"><h3>${ready ? 'Випускник готовий!' : 'Наступний випускник'}</h3><div class="track"><div class="track-bar">${stns}</div><span class="train" style="--p:${Math.min(1, pr / A.need)}">${I.bolt}</span></div><p>${ready ? 'Юний вихованець чекає на місце в складі.' : 'Ще ' + left + ' очк. до випускника: перемога дає 2, будь-який матч 1.'}</p>${act}<p class="fine">Місця: ${S.academy.players.length}/${A.slots}. Кожен випускник дає % до доходу, а найкращий виходить на поле.</p></div>`;
+    const left_ = `<div class="acad-l"><h3>${ready ? 'Випускник готовий!' : 'Наступний випускник'}</h3><div class="track"><div class="track-bar">${stns}</div><span class="train" style="--p:${Math.min(1, pr / A.need)}">${I.bolt}</span></div><p>${ready ? 'Юний вихованець чекає на місце в складі.' : 'Ще ' + left + ' очк. до випускника: перемога дає 2, будь-який матч 1.'}</p>${act}<p class="fine">Місця: ${S.academy.players.length}/${A.slots}. Кожен випускник дає % до доходу. Сильніший за лівого флангового займає його місце в основі; у схемі без флангів — місце найслабшого.</p></div>`;
     return sheet('Академія Локомотива', `<div class="acad">${left_}<div class="slots">${slots}</div></div>`, 'wide');
   }
 
@@ -631,7 +689,7 @@ export class UI {
       <div class="kv"><span>Рівень стадіону</span><b>${lvl + 1}</b></div>
       <div class="kv"><span>Дохід з матчів</span><b>+${incomePct()}%</b></div>
       <div class="kv"><span>Каса за хвилину</span><b>${cashRate().toFixed(1)}</b></div>
-      <div class="kv"><span>Каса копичиться до</span><b>${CASH_CAP_MIN} хв</b></div>
+      <div class="kv"><span>Каса накопичується до</span><b>${CASH_CAP_MIN} хв</b></div>
       <div class="kv"><span>Кубки</span><b>${S.trophies}</b></div>
       <p>${nx !== null ? 'Наступний ярус на рівні ' + (nx + 1) + ': ' + STADIUM_TIER_NAMES[t + 1] + '.' : 'Золота арена зведена. Далі росте лише дохід.'}</p>
       <button class="btn buy ${S.coins >= stadiumCost() ? 'can' : ''}" data-act="up-stadium"><b>Покращити · ${fmt(stadiumCost())}</b>${I.coin}</button></div>`;
@@ -657,7 +715,7 @@ export class UI {
     const hon = HONOURS.map((h) => `<div class="kv"><span>${h.t}</span><b>${h.d}</b></div>`).join('');
     return `<div class="sym">
       <section><div class="sym-crest">${lokoCrest()}</div><h3>${CLUB.name}</h3><p>З ${CLUB.founded} року. Скорочено ${CLUB.short}, прізвисько «${CLUB.nick}». Власник: ${CLUB.owner}.</p>
-        <p class="note">Значок у грі стилізований під сигнальні прапорці, це не офіційний логотип клубу.</p>
+        <p class="note">На емблемі клубу сигнальні кольори залізниці.</p>
         <div class="flags"><i class="fl red"></i><span>червоний — стоп</span><i class="fl green"></i><span>зелений — вперед</span></div></section>
       <section><h3>Нагороди</h3>${hon}<h3>Стадіон «Локомотив»</h3>${kv}</section>
       <section><h3>Легенди клубу</h3><p>${LEGENDS.join(', ')}.</p><h3>Вихованці</h3><p>${ALUMNI.join(', ')}.</p></section></div>`;
@@ -668,7 +726,7 @@ export class UI {
     if (!c) return;
     const st = id[0] === 's', owned = st ? S.strikers : S.keepers;
     if (owned.includes(id)) return;
-    if (S.coins < c.price) { audio.deny(); this.toast('Не вистачає ' + fmt(c.price - S.coins) + ' монет'); return; }
+    if (S.coins < c.price) { audio.deny(); this.toast('Бракує ' + fmt(c.price - S.coins) + ' монет'); return; }
     S.coins -= c.price; owned.push(id); if (st) S.striker = id; else S.keeper = id;
     commit(); audio.buy(); this.toast(c.name + ' у складі!');
   }
@@ -682,12 +740,14 @@ export class UI {
     if (!S.academy.ready) return;
     const gr = rollGraduate(), A = ACADEMY;
     let note = '';
-    if (S.academy.players.length < A.slots) S.academy.players.push(gr);
-    else {
-      let wi = 0; S.academy.players.forEach((p, i) => { if (p.bonus < S.academy.players[wi].bonus) wi = i; });
-      if (S.academy.players[wi].bonus < gr.bonus) { S.academy.players[wi] = gr; note = 'замінив найслабшого'; }
-      else { const c = 80 * 3; S.coins += c; note = 'місць немає: +' + c + ' монет'; }
-    }
+    keepCash(() => {
+      if (S.academy.players.length < A.slots) S.academy.players.push(gr);
+      else {
+        let wi = 0; S.academy.players.forEach((p, i) => { if (p.bonus < S.academy.players[wi].bonus) wi = i; });
+        if (S.academy.players[wi].bonus < gr.bonus) { S.academy.players[wi] = gr; note = 'замінив найслабшого'; }
+        else { const c = 80 * 3; S.coins += c; note = 'місць немає: +' + c + ' монет'; }
+      }
+    });
     const signed = signGraduate(gr); if (signed) note = (note ? note + ' · ' : '') + 'вийшов у основний склад';
     S.academy.progress = 0; S.academy.ready = false;
     commit(); audio.win();
@@ -715,6 +775,7 @@ export class UI {
     const [k, v] = [a.slice(3, a.indexOf(':') < 0 ? a.length : a.indexOf(':')), a.indexOf(':') < 0 ? '' : a.slice(a.indexOf(':') + 1)];
     if (k === 'done') { audio.back(); return this.closeCustom(); }
     if (k === 'kit') { S.kitId = v; commit(); audio.click(); return this.renderCustom(); }
+    if (k === 'skin' || k === 'hair' || k === 'col' || k === 'beard') customizeLook(e);   // ім'я й номер на вигляд не впливають
     if (k === 'skin') e.skin = v;
     else if (k === 'hair') e.hair = v;
     else if (k === 'col') e.hairCol = v;
@@ -723,8 +784,7 @@ export class UI {
       const used = new Set(allPlayers().filter((p) => p !== e).map((p) => p.num));
       let n = e.num; for (let i = 0; i < 99; i++) { n = ((n - 1 + (v === '+' ? 1 : -1) + 99) % 99) + 1; if (!used.has(n)) break; }
       e.num = n;
-    } else if (k === 'reset') { e.custom = false; }
-    if (k !== 'reset') e.custom = true;
+    } else if (k === 'reset') resetLook(e);
     commit(); audio.click(); this.renderCustom();
   }
   renderCustom(open) {
@@ -733,14 +793,14 @@ export class UI {
     const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : myKit(), num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, beard: L.beard, gk, scale: 1.0 }, 'cu-' + e.id + e.num + lookSig(e));
     const sw = (arr, cur, act) => arr.map((c) => `<button class="sw ${c === cur ? 'on' : ''}" style="background:${c}" data-act="${act}:${c}" aria-label="${c}"></button>`).join('');
     const opt = (arr, cur, act, names) => arr.map((c, i) => `<button class="chip-b ${c === cur ? 'on' : ''}" data-act="${act}:${c}">${names ? names[i] : c}</button>`).join('');
-    const HN = { crop: 'Класика', buzz: 'Під нуль', slick: 'Зачіс', curly: 'Кучері', pony: 'Хвіст', long: 'Довге', mohawk: 'Мохавк', band: 'Пов’язка', bald: 'Лисий' };
+    const HN = { crop: 'Класика', buzz: 'Їжачок', slick: 'Зачесане', curly: 'Кучері', pony: 'Хвіст', long: 'Довге', mohawk: 'Ірокез', band: 'Пов’язка', bald: 'Лисий' };
     const kits = Object.entries(KITS).map(([id, v]) => `<button class="kit-b ${S.kitId === id ? 'on' : ''}" data-act="cu-kit:${id}"><i style="background:linear-gradient(90deg,${v.kit.main} 0 60%,${v.kit.second} 60% 100%)"></i><span>${v.name}</span></button>`).join('');
     redraw(this.el.custom, `<div class="card-box wide cu-box ${open ? '' : 'still'}">
       <header class="sheet-h"><h2>Вигляд · №${e.num}</h2><button class="sq btn-red" data-act="cu-done" aria-label="Готово">${I.check}</button></header>
       <div class="cu-wrap">
         <div class="cu-prev"><img src="${img}" alt=""/><input class="cu-name" data-cname maxlength="22" value="${esc(e.name)}" aria-label="Ім’я"/>
           <div class="cu-num"><button class="btn alt" data-act="cu-num:-"><b>−</b></button><span>№${e.num}</span><button class="btn alt" data-act="cu-num:+"><b>+</b></button></div>
-          <button class="btn alt" data-act="cu-reset"><b>ЗАЛИШИТИ ЗА ЗАМОВЧУВАННЯМ</b></button></div>
+          <button class="btn alt" data-act="cu-reset"><b>СКИНУТИ ВИГЛЯД</b></button></div>
         <div class="cu-opts scroller">
           <div class="cu-r"><small>Форма клубу</small><div class="kits">${kits}</div></div>
           <div class="cu-r"><small>Шкіра</small><div class="sws">${sw(ACADEMY.allSkins, L.skin, 'cu-skin')}</div></div>
@@ -772,8 +832,8 @@ export class UI {
       match: `<div class="tg q"><span>Час доби</span><div class="seg">${tdb('day', 'ДЕНЬ')}${tdb('dusk', 'ВЕЧІР')}${tdb('night', 'НІЧ')}${tdb('random', 'ВИПАДКОВО')}</div></div>
         <div class="tg q"><span>Погода</span><div class="seg">${wtb('clear', 'ЯСНО')}${wtb('cloudy', 'ХМАРНО')}${wtb('rain', 'ДОЩ')}${wtb('snow', 'СНІГ')}${wtb('fog', 'ТУМАН')}${wtb('random', 'ВИПАДКОВО')}</div></div>`,
       cam: `<div class="tg q"><span>Камера в матчі</span><div class="seg cam-views">${Object.entries(CAM_PRESETS).map(([k, v]) => `<button class="${(s.camMode || 'classic') === k ? 'on' : ''}" data-act="cam-${k}">${v.name}</button>`).join('')}</div><small class="cam-note">${(CAM_PRESETS[s.camMode] || CAM_PRESETS.classic).note}</small></div>
-        <div class="tg q joy-set"><div class="rng"><label>Відстань<output>${s.camDist}%</output></label><input type="range" min="70" max="140" step="5" value="${s.camDist}" data-range="camDist" aria-label="Відстань камери"/></div><div class="rng"><label>Нахил<output>${s.camTiltOff > 0 ? '+' : ''}${s.camTiltOff}°</output></label><input type="range" min="-15" max="20" step="1" value="${s.camTiltOff}" data-range="camTiltOff" data-unit="°" data-sign="1" aria-label="Нахил камери відносно пресету"/></div><div class="rng"><label>Слідкування за м'ячем<output>${s.camFollow}%</output></label><input type="range" min="50" max="220" step="10" value="${s.camFollow}" data-range="camFollow" aria-label="Швидкість слідкування камери"/></div></div>
-        ${row('set-shake', 'Тряска камери', s.camShake !== false)}`,
+        <div class="tg q joy-set"><div class="rng"><label>Відстань<output>${s.camDist}%</output></label><input type="range" min="70" max="140" step="5" value="${s.camDist}" data-range="camDist" aria-label="Відстань камери"/></div><div class="rng"><label>Нахил<output>${s.camTiltOff > 0 ? '+' : ''}${s.camTiltOff}°</output></label><input type="range" min="-15" max="20" step="1" value="${s.camTiltOff}" data-range="camTiltOff" data-unit="°" data-sign="1" aria-label="Нахил камери відносно вибраного вигляду"/></div><div class="rng"><label>Слідкування за м'ячем<output>${s.camFollow}%</output></label><input type="range" min="50" max="220" step="10" value="${s.camFollow}" data-range="camFollow" aria-label="Швидкість слідкування камери"/></div></div>
+        ${row('set-shake', 'Дрижання камери', s.camShake !== false)}`,
       map: `<div class="tg q map-top"><div class="map-prev"><canvas id="map-prev" aria-label="Зразок мінімапи"></canvas></div><div class="map-side"><span>Де стоїть на екрані</span><div class="map-plan" id="map-plan">${this.map.planHtml()}</div><button class="btn alt joy-mv" data-act="map-move"><b>ПЕРЕМІСТИТИ</b></button></div></div>
         ${row('map-on', 'Мінімапа в матчі', s.mapOn)}${row('map-opp', 'Суперники на мапі', s.mapOpp)}
         ${row('map-ball', 'Траєкторія м’яча', s.mapBall)}${row('map-run', 'Напрямок бігу своїх', s.mapRun)}
@@ -783,12 +843,15 @@ export class UI {
         <div class="tg q"><span>Джойстик</span><div class="seg">${hb('right', 'ПРАВОРУЧ')}${hb('left', 'ЛІВОРУЧ')}</div></div>
         <div class="tg q joy-set"><div class="rng"><label>Розмір джойстика<output>${s.joySize}%</output></label><input type="range" min="80" max="200" step="5" value="${s.joySize}" data-range="joySize" aria-label="Розмір джойстика"/></div><div class="rng"><label>Прозорість<output>${s.joyAlpha}%</output></label><input type="range" min="20" max="100" step="5" value="${s.joyAlpha}" data-range="joyAlpha" aria-label="Прозорість джойстика"/></div><button class="btn alt joy-mv" data-act="joy-move"><b>ПЕРЕМІСТИТИ</b></button><div class="joy-prev"><div class="joy-ring"><i class="joy-knob"></i></div></div></div>`,
     };
+    const nav0 = this.el.settings.querySelector('.st-tabs'), navY = nav0 ? nav0.scrollTop : 0;   // вкладки малюються заново щоразу: на низькому вікні їхній список лишається там, де був
     redraw(this.el.settings, `<div class="card-box wide st-box ${open ? '' : 'still'}">
       <header class="sheet-h"><h2>Налаштування</h2><button class="sq btn-red" data-act="close-settings" aria-label="Закрити">${I.close}</button></header>
       <div class="st-wrap">
         <nav class="st-tabs">${tabs.map(([k, t, ic]) => `<button class="${tab === k ? 'on' : ''}" data-act="set-tab:${k}"><i>${ic}</i><span>${t}</span></button>`).join('')}</nav>
         <div class="set-grid st-${tab} ${keep ? 'still' : ''}">${pages[tab]}</div>
       </div></div>`, keep);
+    const nav = this.el.settings.querySelector('.st-tabs'), over = nav.querySelector('.on').getBoundingClientRect().bottom - nav.getBoundingClientRect().bottom;
+    nav.scrollTop = Math.max(navY, over);                                              // обрана вкладка завжди видна
     this.map.bindPreview(tab === 'map' ? this.el.settings.querySelector('#map-prev') : null);
     if (tab === 'map') this.map.animatePlan(this.el.settings);
   }
@@ -796,6 +859,8 @@ export class UI {
   // ---------------------------------------------------------------- пауза, результат
   pause() {
     const g = this.game;
+    // святкування гола й повтор не обриваємо: пауза стане одразу після них (Match.afterGoal), щоб матч не пішов далі без гравця
+    if (g.sm.name === 'GOAL' && !(g.online && g.online.inMatch())) { g.match.pauseWanted = true; return; }
     if (g.sm.name !== 'MATCH' || this.joyEdit || this.map.editing || !g.match.isPlaying()) return;
     g.match.pause(); this.el.pause.hidden = false;
     // онлайн: гра не зупиняється (час спільний), пенальті немає, а вихід — це здача матчу
@@ -819,13 +884,13 @@ export class UI {
     if (r.tickets) extras.push(['mint', I.ticket, `+${r.tickets} ${r.tickets === 1 ? 'квиток' : 'квитки'}`]);
     if (r.academyReady) extras.push(['blue', I.team, 'Випускник академії чекає']);
     if (r.chapter) extras.push(['gold', I.trophy, `Нова сторінка хроніки: ${r.chapter}`]);
-    for (const lu of (r.levelUps || []).slice(0, 5)) extras.push(['blue', I.up, `${lu.name.split(' ')[0]} ${lu.lvl} рів.: ${STAT_NAMES[lu.key]} +1`]);
-    if (r.stats.saves) extras.push(['red', I.bolt, `Сейви воротаря: ${r.stats.saves}`]);
+    for (const lu of (r.levelUps || []).slice(0, 5)) extras.push(['blue', I.up, `${lu.name.split(' ').slice(-1)[0]} ${lu.lvl} рів.: ${STAT_NAMES[lu.key]} +1`]);
+    if (r.stats.saves) extras.push(['red', I.bolt, `Порятунки воротаря: ${r.stats.saves}`]);
     const next = FIXTURES[S.fixture];
     this.renderResult({
       outcome: r.outcome, title: win ? 'ПЕРЕМОГА!' : draw ? 'НІЧИЯ' : 'ПОРАЗКА', tag: spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of,
       me: { name: 'Локомотив', crest: lokoCrest() }, opp: { name: spec.club.name, crest: crest(spec.club.kit, spec.club.name.slice(0, 2)) },
-      score: [r.me, r.opp], pens: r.pens, scorers: r.scorers, chips: extras, fact: 'Знали? ' + randomFact(),
+      score: [r.me, r.opp], pens: r.pens, scorers: r.scorers, chips: extras, fact: 'Чи знаєш? ' + randomFact(),
       head: 'Каса матчу', lines: r.lines.map((l) => ({ label: l.label, value: l.value, coin: true })), total: r.total,
       buttons: [win ? ['go', 'result-next', `ДАЛІ: ${next.club.name}`, I.play] : ['go', 'result-retry', 'РЕВАНШ', I.play], ['alt', 'result-menu', 'В МЕНЮ']],
     });

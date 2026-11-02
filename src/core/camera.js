@@ -12,6 +12,8 @@ const HARD_X = 0.92, HARD_TOP = 0.86, HARD_BOT = 0.9;
 // від цих меж кадр м'яко, але швидко підтягується до м'яча (без стрибка) — задовго до жорсткої межі
 const SOFT_X = 0.8, SOFT_TOP = 0.72, SOFT_BOT = 0.8;
 const MAXP = 24;
+// кого шукає nearest (числом, а не функцією: без замикань у кадрі)
+const ANY = 0, FOE = 1, THEIR_GK = 2, GK = 3, MATE = 4;
 
 /** Пресет, що діє зараз: «АВТО» — вертикальна на портретному екрані, класична на широкому. */
 export function camPreset(id, asp) {
@@ -36,7 +38,7 @@ export function camInfoBlank() {
 }
 
 /**
- * Ігрова камера матчу — як у FIFA: сталий широкий план, що йде за м'ячем (поперек кадру — майже повністю, вглиб —
+ * Ігрова камера матчу — як у телетрансляції футболу: сталий широкий план, що йде за м'ячем (поперек кадру — майже повністю, вглиб —
  * частково, тож поле не «пливе» і на ньому легко орієнтуватись). Рух — критично загасана пружина зі швидкістю цілі:
  * камера йде разом із м'ячем без відставання, а ривки (відбір, рикошет) згладжує, без перельоту.
  *
@@ -65,10 +67,11 @@ export class CamDirector {
   add(x, z, h, t) { if (this.np >= MAXP) return; const q = this.p[this.np++]; q.x = x; q.z = z; q.h = h; q.t = t; }
 
   /** k найближчих до (x, z) гравців у радіусі r, що проходять фільтр (індекси, від найближчого). */
-  nearest(info, x, z, k, r, ok) {
+  nearest(info, x, z, k, r, kind, ci, own, c) {
     const out = this._near; out.length = 0;
     for (let i = 0; i < info.n; i++) {
-      const q = info.pl[i]; if (!ok(q, i)) continue;
+      const q = info.pl[i];
+      if (kind === FOE ? i === ci || q.side === own : kind === THEIR_GK ? !q.gk || q.side !== -own : kind === GK ? !q.gk : kind === MATE ? i === ci || q.side !== 1 || q.gk || q.x <= c.x - 6 : false) continue;
       const d = Math.hypot(q.x - x, q.z - z); if (d > r) continue;
       let j = out.length; out.push(i); q._d = d;
       while (j > 0 && info.pl[out[j - 1]]._d > d) { out[j] = out[j - 1]; j--; }
@@ -85,37 +88,40 @@ export class CamDirector {
     this.add(bx, bz, 0.5, 0);
     let ci = info.carrier;
     if (ci < 0) {   // м'яч біля ніг (ведення, прийом) — це теж власник
-      const nb = this.nearest(info, bx, bz, 1, 1.4, () => true); if (nb.length) ci = nb[0];
+      const nb = this.nearest(info, bx, bz, 1, 1.4, ANY); if (nb.length) ci = nb[0];
     }
     const c = ci >= 0 ? pl[ci] : null, own = c ? c.side : 0;
     this.own = own; this.cq = c;
     if (c) this.add(c.x, c.z, HEAD, 0);
     // хто тисне: найближчі суперники власника; біля вільного м'яча — хто до нього біжить
-    if (c) { for (const i of this.nearest(info, c.x, c.z, 2, 15, (q, k) => k !== ci && q.side !== own)) this.add(pl[i].x, pl[i].z, HEAD, 1); }
-    else { for (const i of this.nearest(info, bx, bz, 2, 11, () => true)) this.add(pl[i].x, pl[i].z, HEAD, 1); }
+    let ids = c ? this.nearest(info, c.x, c.z, 2, 15, FOE, ci, own) : this.nearest(info, bx, bz, 2, 11, ANY);
+    for (let j = 0; j < ids.length; j++) { const q = pl[ids[j]]; this.add(q.x, q.z, HEAD, 1); }
     if (info.receiver >= 0) { const q = pl[info.receiver]; this.add(q.x, q.z, HEAD, 1); }
     this.aimQ = null; if (info.aimOn) { this.add(info.ax, info.az, 0.5, 1); this.aimQ = this.p[this.np - 1]; }
     // ворота під загрозою: власник у зоні удару — ворота й воротар у кадрі; м'яч летить у створ — ворота обов'язково
     if (c && !c.gk && Math.abs(own * L - c.x) < 34) {
       this.add(own * L, 0, 2.4, 1);
-      for (const i of this.nearest(info, own * L, 0, 1, 12, (q) => q.gk && q.side === -own)) this.add(pl[i].x, pl[i].z, HEAD, 2);
+      ids = this.nearest(info, own * L, 0, 1, 12, THEIR_GK, ci, own);
+      for (let j = 0; j < ids.length; j++) { const q = pl[ids[j]]; this.add(q.x, q.z, HEAD, 2); }
     } else if (!c && Math.abs(info.bvx) > 10) {
       const gx = Math.sign(info.bvx) * L, t = (gx - bx) / info.bvx, zl = bz + info.bvz * t;
       if (t > 0 && t < 1.5 && Math.abs(zl) < G + 8) {
         this.add(gx, clamp(zl, -G, G), 2.4, 0);
-        for (const i of this.nearest(info, gx, 0, 1, 12, (q) => q.gk)) this.add(pl[i].x, pl[i].z, HEAD, 1);
+        ids = this.nearest(info, gx, 0, 1, 12, GK);
+        for (let j = 0; j < ids.length; j++) { const q = pl[ids[j]]; this.add(q.x, q.z, HEAD, 1); }
       }
     }
     // варіанти паса: партнери, що відкрились попереду (у тактичній — ширше, щоб читалась розстановка)
     if (own === 1 && pre.mates) {
-      for (const i of this.nearest(info, c.x, c.z, pre.mates, pre.mates > 2 ? 36 : 30, (q, k) => k !== ci && q.side === 1 && !q.gk && q.x > c.x - 6)) this.add(pl[i].x, pl[i].z, HEAD, 2);
+      ids = this.nearest(info, c.x, c.z, pre.mates, pre.mates > 2 ? 36 : 30, MATE, ci, own, c);
+      for (let j = 0; j < ids.length; j++) { const q = pl[ids[j]]; this.add(q.x, q.z, HEAD, 2); }
     }
   }
 
   /** Мінімальна відстань камери, на якій усі точки списку (і extra) в безпечній зоні при центрі (ta, tc). */
   need(ta, tc, list, extra) {
     let d = 0;
-    for (const q of list) d = Math.max(d, this.needOne(ta, tc, q));
+    for (let i = 0; i < list.length; i++) d = Math.max(d, this.needOne(ta, tc, list[i]));
     return extra ? Math.max(d, this.needOne(ta, tc, extra)) : d;
   }
   /**
@@ -131,8 +137,10 @@ export class CamDirector {
   solve(list, extra) {
     const sE = this.sE, cE = this.cE, hh = this.half;
     let amin = 1e9, amax = -1e9, cmax = -1e9, cmin = 1e9, ht = 0;
-    const one = (q) => { if (q.a < amin) amin = q.a; if (q.a > amax) amax = q.a; if (q.c > cmax) cmax = q.c; if (q.c < cmin) { cmin = q.c; ht = q.h; } };
-    for (const q of list) one(q); if (extra) one(extra);
+    for (let i = 0, n = list.length + (extra ? 1 : 0); i < n; i++) {
+      const q = i < list.length ? list[i] : extra;
+      if (q.a < amin) amin = q.a; if (q.a > amax) amax = q.a; if (q.c > cmax) cmax = q.c; if (q.c < cmin) { cmin = q.c; ht = q.h; }
+    }
     const Kb = sE / (BOT * hh) + cE, Kt = sE / (TOP * hh) - cE, Hh = ht * (cE / (TOP * hh) + sE);
     const r = this._r;
     r.ta = (amin + amax) / 2; r.tc = (Kb * cmax + Kt * cmin - Hh) / (Kb + Kt);
@@ -193,10 +201,8 @@ export class CamDirector {
     this.sE = Math.sin(this.el); this.cE = Math.cos(this.el);
     this.half = Math.tan(this.fov * DEG / 2); this.asp = o.asp; this.side = o.asp < 1 ? SIDE_P : SIDE;
     const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
-    const loc = (q) => { q.a = q.x * cy - q.z * sy; q.c = q.x * sy + q.z * cy; };
-    const toW = (a, c, out) => { out[0] = a * cy + c * sy; out[1] = -a * sy + c * cy; };
 
-    // базовий план — сталий, як у FIFA: уся ширина пресету поперек екрана й глибина поля вздовж; на вузькому
+    // базовий план — сталий, як у телетрансляції футболу: уся ширина пресету поперек екрана й глибина поля вздовж; на вузькому
     // (портретному) екрані ширина зменшується, інакше гравці стали б дрібними, як мурахи
     const mul = clamp((o.dist || 100) / 100, 0.6, 1.6);
     const wid = pre.width * clamp(o.asp / 1.6, pre.pmin || 0.55, 1) * mul;
@@ -224,11 +230,11 @@ export class CamDirector {
       // шар 2: запас попереду (за напрямком руху й атаки) і зсув до важливих гравців
       const lx = clamp(this.lvx * 0.25, -7, 7) + this.att * pre.lead * wid * 0.5, lz = clamp(this.lvz * 0.15, -4, 4);
       let ta = pa + lx * cy - lz * sy, tc = pc + lx * sy + lz * cy;
-      for (let i = 0; i < this.np; i++) loc(this.p[i]);
+      for (let i = 0; i < this.np; i++) { const q = this.p[i]; q.a = q.x * cy - q.z * sy; q.c = q.x * sy + q.z * cy; }
       const s0 = this.s0, s1 = this.s1; s0.length = 0; s1.length = 0;
       for (let i = 0; i < this.np; i++) if (this.p[i].t === 0) s0.push(this.p[i]);
       const dGrow = dBase * pre.grow;
-      for (const t of [1, 2]) {
+      for (let t = 1; t <= 2; t++) {
         for (let i = 0; i < this.np; i++) {
           const q = this.p[i]; if (q.t !== t) continue;
           if (this.solve(s0, q).d <= (t === 1 ? dGrow : dBase * 1.04)) s0.push(q);
@@ -241,7 +247,9 @@ export class CamDirector {
       const d = clamp(this.need(ta, tc, s0), dBase, dGrow);
       const B1 = this.bounds(d, cy, sy);
       ta = clamp(ta, Math.min(B1.aLo, pa), Math.max(B1.aHi, pa)); tc = clamp(tc, Math.min(B1.cLo, pc), Math.max(B1.cHi, pc));
-      toW(pa, pc, bt); toW(ta - pa, tc - pc, ot); toW(fa, fc, ff);
+      bt[0] = pa * cy + pc * sy; bt[1] = -pa * sy + pc * cy;
+      ot[0] = (ta - pa) * cy + (tc - pc) * sy; ot[1] = -(ta - pa) * sy + (tc - pc) * cy;
+      ff[0] = fa * cy + fc * sy; ff[1] = -fa * sy + fc * cy;
       dT = d;
       if (aiming) {
         // приціл рахується від екрана: кадр зупиняється (за мить, а не різко) і лише трохи відходить, щоб було видно,

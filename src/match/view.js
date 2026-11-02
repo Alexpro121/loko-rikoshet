@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { COL, KIT_LOKO, KIT_GK_LOKO, ACADEMY, FORMATIONS, PITCH } from '../config.js';
 import { S } from '../state/save.js';
 import { keeper } from '../state/economy.js';
-import { squadLook, myKit } from '../state/squad.js';
+import { squadLook, matchKit } from '../state/squad.js';
 import { buildPitch } from '../graphics/pitch.js';
 import { Stands } from '../graphics/stands.js';
 import { Particles } from '../graphics/particles.js';
@@ -17,6 +17,7 @@ import { buildSurround } from '../graphics/surround.js';
 
 const SKIN = ACADEMY.skins, HAIR = ACADEMY.hairs, HCOL = ACADEMY.hairCols;
 const SCALE = 0.82;
+const FOG_D = 60;                     // відстань камери, на яку розраховані межі густого туману (класичний кадр на широкому екрані)
 
 /** Усе, що малюється в матчі: арена, 22 гравці, м'яч, м'які тіні, частинки. */
 export class MatchView {
@@ -76,7 +77,6 @@ export class MatchView {
 
   look(kit, gk, who, num, scale = SCALE) { return { kit, num, skin: who.skin, hair: who.hair, hairCol: who.hairCol, beard: who.beard || 0, gk, scale }; }
 
-  /** Склади під матч: обличчя, номери й форма з персональних записів гравців (мій склад і суперник). */
   /** Час доби й погода: небо, туман, світло, прожектори, опади. */
   setEnv(time, weather) {
     const T = {
@@ -91,7 +91,7 @@ export class MatchView {
     else if (weather === 'rain') { grey(time === 'night' ? '#10151f' : '#7d8890', 0.75); si *= 0.35; h *= 0.95; near = 110; far = 280; tint = '#cfd9de'; }
     else if (weather === 'snow') { grey(time === 'night' ? '#2a3550' : '#e3eaee', 0.7); si *= 0.55; h *= 1.2; near = 90; far = 240; tint = '#e9f2ef'; }
     else if (weather === 'fog') { grey(time === 'night' ? '#1a2133' : '#c1c9cc', 0.85); si *= 0.5; near = 28; far = 135; }
-    this.scene.background = sky; this.scene.fog = new THREE.Fog(sky.getHex(), near, far);
+    this.scene.background = sky; this.scene.fog = new THREE.Fog(sky.getHex(), near, far); this.dense = weather === 'fog' ? [near, far] : null;
     this.hemi.color.set(t.hs); this.hemi.groundColor.set(t.hg); this.hemi.intensity = h;
     this.sun.color.set(t.sun); this.sun.intensity = si; this.sun.position.set(...t.pos);
     this.glow.visible = t.glow > 0;
@@ -99,7 +99,7 @@ export class MatchView {
     for (const sp of this.glow.children) { if (sp.isSprite) sp.material.opacity = t.glow * wf; else { sp.visible = time === 'night'; sp.material.opacity = 0.055 * wf * (weather === 'fog' || weather === 'rain' ? 1.8 : 1); } }
     const spotI = time === 'night' ? 0.8 : time === 'dusk' ? 0.3 : 0;
     // кожен прожектор — зайвий рахунок у кожному пікселі: на телефоні й низькій якості вночі два по діагоналі, яскравіші, а ввечері без них
-    const few = S.settings.quality === 'low' || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
+    const few = (this.few = S.settings.quality === 'low' || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches));
     this.spots.forEach((sl, i) => { sl.intensity = few ? spotI * 1.6 : spotI; sl.visible = spotI > 0 && (!few || (time === 'night' && i % 3 === 0)); });   // вимкнений прожектор не рахується у шейдері
     this.stars.visible = time === 'night' && (weather === 'clear' || weather === 'snow');
     this.weather.set(weather === 'rain' || weather === 'snow' ? weather : 'clear');
@@ -108,6 +108,21 @@ export class MatchView {
     if (this.pitch.grassMat) this.pitch.grassMat.color.set(weather === 'snow' ? '#e6efe9' : weather === 'rain' ? '#a9b8ac' : '#ffffff');
   }
 
+  /** Туман рахується від камери: далека камера (тактична, повзунок відстані) відсуває густий туман разом із собою, щоб гра не тонула в сірому. */
+  fitFog(d) {
+    const k = d > FOG_D ? d / FOG_D : 1, f = this.scene.fog;
+    f.near = this.dense[0] * k; f.far = this.dense[1] * k;
+  }
+
+  /** Набір прожекторів іншого часу доби, щоб скомпілювати його шейдери наперед; другий виклик повертає як було. */
+  swapSpots() {
+    if (this.spotsWas) { this.spots.forEach((sl, i) => { sl.visible = this.spotsWas[i]; }); this.spotsWas = null; return; }
+    this.spotsWas = this.spots.map((sl) => sl.visible);
+    const on = !this.spotsWas.includes(true);
+    this.spots.forEach((sl, i) => { sl.visible = on && (!this.few || i % 3 === 0); });
+  }
+
+  /** Склади під матч: обличчя, номери й форма з персональних записів гравців (мій склад і суперник). */
   setup(spec, myFormation, mySquad, oppSq) {
     const pick = (v, list) => (v === 'random' ? list[(Math.random() * list.length) | 0] : v);
     // онлайн: погода й час доби — як вибрав господар (spec.env), форма господарів — його онлайн-клубу (spec.home)
@@ -115,9 +130,9 @@ export class MatchView {
     else this.setEnv(pick(S.settings.timeOfDay, ['day', 'dusk', 'night']), pick(S.settings.weather, ['clear', 'clear', 'cloudy', 'rain', 'snow', 'fog']));
     const H = spec.home;
     this.mine[0].setLook(this.look(H ? H.gk : KIT_GK_LOKO, true, squadLook(mySquad[0]), mySquad[0].num || 1));
-    this.mine.forEach((p, i) => { if (i === 0) return; const e = mySquad[i], L = squadLook(e); p.setLook(this.look(H ? H.kit : myKit(), false, L, L.num)); });
+    this.mine.forEach((p, i) => { if (i === 0) return; const e = mySquad[i], L = squadLook(e); p.setLook(this.look(H ? H.kit : matchKit(spec.club), false, L, L.num)); });
     const c = spec.club;
-    this.stands.setOpponent(c); this.stands.particles = this.particles; this.pitch.boards.redraw(c); this.pitch.decals.setOpponent(c); this.pitch.decals.show(); this.tunnel.userData.carpet.visible = true;
+    this.stands.setHome(H || null); this.stands.setOpponent(c); this.stands.particles = this.particles; this.pitch.boards.redraw(c); this.pitch.decals.setOpponent(c); this.pitch.decals.show(); this.tunnel.userData.carpet.visible = true;
     this.opp[0].setLook(this.look(c.gk, true, oppSq[0], 1));
     this.opp.forEach((p, i) => { if (i === 0) return; const e = oppSq[i]; p.setLook(this.look(c.kit, false, e, e.num)); });
     this.particles.clear();

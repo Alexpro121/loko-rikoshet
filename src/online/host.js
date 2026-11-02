@@ -1,11 +1,12 @@
-// Господар онлайн-матчу: його гра — єдина правда. Він рахує фізику, ІІ і правила для обох команд, а гостю шле:
+// Господар онлайн-матчу: його гра — єдина правда. Він рахує фізику, ШІ і правила для обох команд, а гостю шле:
 //  · кадри поз 20 разів на секунду (codec.js, ненадійний канал);
 //  · події, які гість має побачити й почути так само: табло, звуки, бризки частинок, трибуни, салют (надійний канал).
 // Команди гостя (удар/пас його гравця, приціл, тап «пропустити») приходять сюди й виконуються в грі господаря.
 import { audio } from '../core/audio.js';
 import { encode, captureRef, PHASES, F } from './codec.js';
 
-const HUD_FWD = ['setScore', 'setTime', 'setProg', 'addedTime', 'scored', 'scoreCard', 'setSignal', 'goal', 'clearGoal', 'cine', 'setCard'];
+const HUD_FWD = ['setTime', 'setProg', 'addedTime', 'combo', 'scored', 'scoreCard', 'setSignal', 'goal', 'clearGoal', 'cine', 'setCard'];   // рахунок гість бере з кадру
+// новий звук: також SND_OK у guest.js, гість фільтрує своїм списком
 const SND_FWD = ['kick', 'wall', 'pass', 'save', 'whistle', 'horn', 'goal', 'concede', 'bell', 'rumble', 'slide', 'clap', 'thud', 'crowd', 'win', 'lose'];
 const FRAME_MS = 50;
 
@@ -13,6 +14,7 @@ export class HostLink {
   constructor(session, game) {
     this.s = session; this.game = game; this.net = session.net;
     this.seq = 0; this.nextSend = 0; this.orig = []; this.last = {}; this.goalOn = false; this.shot = 0; this.prevCam = null;
+    this.idle = false; this.heard = false;                // idle — гість не відповідає (згорнув гру, відійшов): його гравцями одразу грає ШІ, доки він не озветься
   }
 
   /** Підключити до матчу (після Match.start): перехоплюємо табло, звуки й ефекти, щоб віддзеркалити їх гостю. */
@@ -25,17 +27,20 @@ export class HostLink {
     for (const n of SND_FWD) hook(audio, n, (a) => this.ev(['snd', n, a]));
     hook(m.view.particles, 'burst', (a) => this.ev(['fx', a]));
     hook(m.view.stands, 'react', (a) => this.ev(['crowd', a[0], a[1] || null]));
+    hook(m.view.ball, 'squash', (a) => this.ev(['squash', a[0], a[1], a[2]]));
+    // поштовх камери лише в живій грі: на гол гість реагує сам (hud:goal), а кат-сцену бачить камерою господаря
+    hook(this.game, 'addTrauma', (a) => { if (this.game.sm.name === 'MATCH' && m.phase === 'play' && m.bs !== 'net') this.ev(['trauma', a[0]]); });
   }
   uninstall() { for (const [o, n, f] of this.orig.reverse()) o[n] = f; this.orig = []; }
   /** Поза спокою — гостю (надійно, одразу після «start»): кадри шлють лише зсунуті суглоби відносно неї. */
-  sendRef() { this.net.send({ t: 'ref', d: Array.from(this.ref, (v) => Math.round(v * 1e5) / 1e5) }); }
+  sendRef() { this.net.send({ t: 'ref', d: Array.from(this.ref, (v) => Math.round(v * 1e5) / 1e5), s: this.seq }); }
   /** Гість повернувся: події за час обриву пропали — шлемо стан табло, щоб не лишилось завислого (кіносмуга, картка, банер). */
   resync() {
     for (const n of ['setTime', 'setProg', 'addedTime', 'setSignal', 'setCard', 'cine']) if (this.last[n]) this.ev(['hud', n, JSON.parse(this.last[n])]);
     if (!this.goalOn) this.ev(['hud', 'clearGoal', []]);
   }
 
-  /** Табло: шлемо лише змінене (годинник оновлюється щокадру, а секунда змінюється раз на секунду). */
+  /** Табло: шлемо лише змінене (годинник оновлюється щокадру, а показує 20 секунд гри за секунду, тож це близько 20 подій на секунду). */
   hud(n, a) {
     if (n === 'setProg') a = [Math.round(a[0] * 200) / 200, a[1], a[2]];
     const k = JSON.stringify(a);
@@ -47,9 +52,18 @@ export class HostLink {
   /** ht — час господаря: гість застосує подію саме тоді, коли покаже кадр того ж моменту (звук удару — разом з ударом). */
   ev(e) { this.net.send({ t: 'ev', e, ht: performance.now() }); }
 
+  /** Нове володіння гостя: якщо він не відповідає, ШІ грає одразу, а не після чергових 14 с сповільнення. */
+  newPoss() { this.heard = false; return this.idle; }
+  /** Сплив час на удар: без жодного сигналу від гостя вважаємо, що він відійшов. Хто цілився, але не встиг, лишається при керуванні. */
+  timedOut() { if (!this.heard) this.idle = true; }
+  /** Гість озвався: керування повертається одразу, зокрема посеред володіння. */
+  wake() { const m = this.m; this.heard = true; if (this.idle) { this.idle = false; m.netAuto = false; m.netWaitT = 0; } }
+
   /** Команди гостя. */
   onMsg(msg) {
     const m = this.m; if (!m) return;
+    if (msg.t === 'vis') { if (msg.on) { this.idle = true; m.netAuto = true; } else this.wake(); return; }
+    this.wake();
     const fin = (v) => Number.isFinite(v);
     // напрямок — лише одиничний вектор: чужий клієнт не загонить фізику в NaN завеликими числами
     const dir = () => {
@@ -78,9 +92,11 @@ export class HostLink {
     if (m.slow) flags |= F.SLOW;
     if (m.remoteCtl()) { flags |= F.TURN; if (m.gkHoldNow()) flags |= F.GKWAIT; }
     if (m.kickoff) flags |= F.KICKOFF;
+    if (this.idle) flags |= F.AUTO;
     if (sm === 'GOAL') flags |= F.GOAL;
     if (sm === 'RESULT') flags |= F.RESULT;
     const ti = m.taker && m.bs === 'held' ? m.opp.indexOf(m.taker) : -1;
+    if (ti === 0 && m.taker.footBall) flags |= F.GKFOOT;
     let cam = null;
     if (g._ov) {                                   // кат-сцена: гість бачить ту саму камеру (кінокадри — один для обох)
       const c = g.matchCam;

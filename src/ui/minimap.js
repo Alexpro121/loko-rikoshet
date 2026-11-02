@@ -5,7 +5,7 @@ import { PITCH } from '../config.js';
 import { camPreset } from '../core/camera.js';
 import { vibrate } from '../core/audio.js';
 import { S, commit } from '../state/save.js';
-import { myKit } from '../state/squad.js';
+import { myKit, matchKit } from '../state/squad.js';
 import { DemoMatch } from './minimap-demo.js';
 
 const { L, W, G, GOAL_D } = PITCH;
@@ -25,6 +25,7 @@ const DRAW_T = 1 / 30, DRAW_T_LOW = 1 / 20;
 const SNAP_PX = 14;
 const NOTCH = [0, 0.5, 1];
 const DEF_POS = { x: 1, y: 0 };                         // правий верхній кут, одразу під кнопкою паузи
+const MIN_BAND = 60;                                    // мапа не менша за стільки пікселів: нижче її вже не прочитати
 const FADE = 0.3;                                       // м'яч під мапою: вона майже зникає, щоб не закривати гру
 
 const _v = new THREE.Vector3();
@@ -305,7 +306,7 @@ export class MapHud {
   setKits() {
     const sp = this.ui.hud.spec, live = this.ui.matchActive && sp;
     if (!live) { this.mm.setKits(kitHex(myKit(), '#d4202c'), '#2b6fd6'); return; }
-    this.mm.setKits(kitHex(sp.home ? sp.home.kit : myKit(), '#d4202c'), kitHex(sp.club && sp.club.kit, '#2b6fd6'));
+    this.mm.setKits(kitHex(sp.home ? sp.home.kit : matchKit(sp.club), '#d4202c'), kitHex(sp.club && sp.club.kit, '#2b6fd6'));
   }
 
   applyAlpha() {
@@ -330,14 +331,24 @@ export class MapHud {
     let long = Math.max(150, Math.min(46 * u, 320)) * st.mapSize / 100;
     long = Math.min(long, (vert ? safe.height : safe.width) * 0.62, (vert ? safe.width : safe.height) * 0.62 * ASPECT);
     long = Math.round(long);
-    const short = Math.round(long / ASPECT), w = vert ? short : long, h = vert ? long : short;
-    const l = safe.left + x * Math.max(0, safe.width - w);
+    let short = Math.round(long / ASPECT), w = vert ? short : long, h = vert ? long : short;
+    let l = safe.left + x * Math.max(0, safe.width - w);
     let t = safe.top + y * Math.max(0, safe.height - h), by = '';
     const gap = u * 1.2;
     const hit = (z) => z.width > 0 && l < z.right && l + w > z.left && t < z.bottom && t + h > z.top;
     // табло й пауза зверху, картка й джойстик знизу: мапа стає поруч, а не поверх них
     for (const k of ['bug', 'pause']) { const z = this.z[k].getBoundingClientRect(); if (hit(z)) { t = z.bottom + gap; by = k; } }
     for (const k of ['card', 'joy']) { const z = this.z[k].getBoundingClientRect(); if (hit(z)) { t = z.top - gap - h; by = k; } }
+    // обхід знизу повернув мапу на верхні зони: між ними менше місця, ніж її висота, тож вона зменшується до цієї смуги. Збережені розмір і місце не міняються
+    let top = -Infinity, bottom = safe.bottom;
+    for (const k of ['bug', 'pause']) { const z = this.z[k].getBoundingClientRect(); if (hit(z)) top = Math.max(top, z.bottom + gap); }
+    if (top > -Infinity) {
+      for (const k of ['card', 'joy']) { const z = this.z[k].getBoundingClientRect(); if (z.width > 0 && l < z.right && l + w > z.left) bottom = Math.min(bottom, z.top - gap); }
+      if (bottom - top >= MIN_BAND) {
+        h = Math.min(h, Math.round(bottom - top)); w = Math.round(vert ? h / ASPECT : h * ASPECT);
+        l = safe.left + x * Math.max(0, safe.width - w); t = top;
+      }
+    }
     t = Math.max(safe.top, Math.min(safe.bottom - h, t));
     return Object.assign(out || {}, { l, t, w, h, vert, by });
   }
@@ -378,7 +389,7 @@ export class MapHud {
     e.hidden = !this.ui.useJoy();
     const size = u * 32 * st.joySize / 100;
     s.width = s.height = size + 'px';
-    if (st.joyX >= 0 && st.joyY >= 0) { s.left = st.joyX * innerWidth - box.left - size / 2 + 'px'; s.top = st.joyY * innerHeight - box.top - size / 2 + 'px'; s.right = s.bottom = 'auto'; }
+    if (st.joyX >= 0 && st.joyY >= 0) { const c = this.ui.joyCenter(st.joyX, st.joyY); s.left = c.x - box.left - size / 2 + 'px'; s.top = c.y - box.top - size / 2 + 'px'; s.right = s.bottom = 'auto'; }
     else { const left = st.hand === 'left'; s.left = left ? u * 1.2 + 'px' : 'auto'; s.right = left ? 'auto' : u * 1.2 + 'px'; s.top = 'auto'; s.bottom = u * 1.2 + 'px'; }
   }
 
@@ -410,8 +421,13 @@ export class MapHud {
     if (!cv) { this.prevOn = false; return; }
     this.prev ??= new Minimap();
     this.prev.attach(cv); this.prev.setKits(kitHex(myKit(), '#d4202c'), '#2b6fd6');
-    this.prev.resize(cv.offsetWidth || 240, cv.offsetHeight || 150, false);
     this.prevOn = true;
+    this.fitPreview();
+  }
+  /** Зразок живе в розмітці сторінки: новий розмір вікна — новий буфер канви, інакше картинка розтягнута. */
+  fitPreview() {
+    if (!this.prevOn || !this.prev.cv.isConnected || this.ui.el.settings.hidden) return;
+    const cv = this.prev.cv; this.prev.resize(cv.offsetWidth || 240, cv.offsetHeight || 150, false);
   }
 
   place(x, y) { S.settings.mapX = x; S.settings.mapY = y; commit(); this.apply(); }

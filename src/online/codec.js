@@ -10,7 +10,7 @@ export const BALL = 8;                         // м'яч: позиція вид
 const PS = 400, QS = 32767;
 export const PHASES = ['idle', 'intro', 'play', 'break', 'end', 'pens', 'paused'];
 /** Біти прапорців кадру. */
-export const F = { SLOW: 1, TURN: 2, KICKOFF: 4, GKWAIT: 8, GOAL: 16, RESULT: 32 };
+export const F = { SLOW: 1, TURN: 2, KICKOFF: 4, GKWAIT: 8, GOAL: 16, RESULT: 32, GKFOOT: 64, AUTO: 128 };   // GKFOOT — воротар гостя з м'ячем у ногах; AUTO — гість не відповідав, ним грає ШІ
 
 /** Поза спокою всіх суглобів одразу після налаштування складу — однакова в обох гравців (той самий код і вигляд). */
 export function captureRef(view) {

@@ -6,7 +6,7 @@ import { sweepCircle } from './world.js';
 const MAXP = 520;
 const S = { x: 0, z: 0, y: 0, vx: 0, vy: 0, vz: 0, w: 0, r: PITCH.R, gb: 0 };
 
-/** Передбачення траєкторії тим самим кодом, що й реальна фізика (стіни, стовпи, прискорювачі). */
+/** Передбачення траєкторії тим самим кодом, що й реальна фізика (стіни, стовпи, поперечина), без впливу на стан гри. */
 export class AimPath {
   constructor(world) {
     this.world = world;
@@ -33,7 +33,7 @@ export class AimPath {
     for (let i = 0; i < 960 && n < MAXP - 1; i++) {
       const ax = S.x, az = S.z, ay = S.y;
       const hit = wd.integrate(S, h, null, false);
-      if (this.nc > 0 && i > 2) {                     // гравці безперервно, як у реальній фізиці: м'яч у першій точці дотику на шляху кроку
+      if (this.nc > 0) {                              // гравці безперервно, як у реальній фізиці: м'яч у першій точці дотику на шляху кроку
         let tm = 2;
         for (let k = 0; k < this.nc; k++) {
           const t = sweepCircle(ax, az, S.x, S.z, this.circles[k * 4], this.circles[k * 4 + 1], S.r + this.circles[k * 4 + 2]);
@@ -50,7 +50,7 @@ export class AimPath {
         if (bounces > maxBounces) break;
       } else if (i % 3 === 0 || S.gb) { this.x[n] = S.x; this.z[n] = S.z; this.y[n] = S.y; this.cum[n] = d; n++; }
       if (wd.goalSide(S)) { this.goal = true; break; }
-      if (this.nc > 0 && i > 2) {                     // гравці: відскок як у реальній фізиці
+      if (this.nc > 0) {                              // гравці: відскок як у реальній фізиці
         for (let k = 0; k < this.nc; k++) {
           const cx = this.circles[k * 4], cz = this.circles[k * 4 + 1], rr = S.r + this.circles[k * 4 + 2], ce = this.circles[k * 4 + 3];
           const dx = S.x - cx, dz = S.z - cz, d2 = dx * dx + dz * dz;

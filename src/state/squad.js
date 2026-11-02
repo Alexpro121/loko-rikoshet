@@ -1,14 +1,13 @@
 // Склад: реальний ROSTER, навички, рівні, заміни, тренування, склади суперників (oppSquad).
 import { S, commit } from './save.js';
-import { ACADEMY, FORMATIONS, KITS } from '../config.js';
+import { ACADEMY, FIXTURES, FORMATIONS, KITS, STAT_KEYS, GK_KEYS, LINE_OF, pickKit } from '../config.js';
 import { striker, keeper, keeperTier } from './economy.js';
 import { rng } from '../graphics/voxel.js';
 import { rivalOf, hashStr } from './rivals.js';
 
 /** Характеристики гравців: власні навички й інтелект, що справді впливають на гру й розвиваються. */
-export const STAT_KEYS = ['pace', 'shoot', 'pass', 'drib', 'tack', 'iq'];
-export const GK_KEYS = ['react', 'reach', 'hands', 'pass', 'iq'];
-export const STAT_NAMES = { pace: 'Швидкість', shoot: 'Удар', pass: 'Пас', drib: 'Дриблінг', tack: 'Відбір', iq: 'Інтелект', react: 'Реакція', reach: 'Дотяжка', hands: 'Ловля' };
+export { STAT_KEYS, GK_KEYS };
+export const STAT_NAMES = { pace: 'Швидкість', shoot: 'Удар', pass: 'Пас', drib: 'Ведення', tack: 'Відбір', iq: 'Інтелект', react: 'Реакція', reach: 'Досяжність', hands: 'Ловля' };
 export const STAT_HINT = {
   pace: 'біжить швидше', shoot: 'сильніший і точніший удар', pass: 'точніші передачі', drib: 'легше приймає й важче відібрати',
   tack: 'частіше відбирає й вибиває підкатом', iq: 'краще читає гру й обирає рішення', react: 'встигає стрибнути в куток', reach: 'довші руки й ширший стрибок', hands: 'ловить сильніші удари',
@@ -33,6 +32,8 @@ const WEIGHT = {
 /** Борода: 0 нема, 1 щетина, 2 вуса, 3 повна. */
 const pickBeard = (rnd) => { const r = rnd(); return r < 0.58 ? 0 : r < 0.76 ? 1 : r < 0.86 ? 2 : 3; };
 export const myKit = () => (KITS[S.kitId] || KITS.home).kit;
+/** Форма на матч із цим клубом: обрана гравцем, а якщо вона зливається з формою суперника, інша з комплектів. S.kitId не змінюється. */
+export const matchKit = (club) => pickKit(myKit(), club && club.kit, Object.values(KITS).map((k) => k.kit));
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 export function makeStats(line, base, rnd = Math.random, spread = 7) {
@@ -66,7 +67,7 @@ export function newEntry(role, idx, rnd, base, names = 'ua') {
 
 const GK_ROLE = { name: 'GK', line: 'G', num: 1 };
 
-/** Реальний склад ФК «Локомотив» Київ: [номер, прізвище та ім'я, природна позиція]. Номери без підтвердження (8, 11, 14) призначені умовно. */
+/** Реальний склад ФК «Локомотив» Київ: [номер, ім'я та прізвище, природна позиція]. Номери без підтвердження (8, 11, 14) призначені умовно. */
 export const ROSTER = [
   [1, 'Роман Льопка', 'GK'], [12, 'Арсен Беліменко', 'GK'], [71, 'Максим Карпенко', 'GK'],
   [3, 'Роман Савченко', 'LB'], [5, 'Микола Сираш', 'CB'], [18, 'Денис Гаркавенко', 'CB'], [32, 'Даніїл Романенко', 'CB'],
@@ -77,10 +78,6 @@ export const ROSTER = [
 ];
 /** Хто виходить у стартовому складі: слот розстановки 4-3-3 -> номер гравця. */
 const STARTERS = [1, 3, 5, 32, 19, 90, 6, 9, 10, 33, 11];
-const LINE_OF = { GK: 'G', LB: 'D', CB: 'D', RB: 'D', DM: 'M', CM: 'M', AM: 'M', LM: 'M', RM: 'M', LW: 'W', RW: 'W', ST: 'F' };
-/** Групи, між якими можна міняти гравців: воротарі, захисники, півзахисники, атака. */
-const GROUP = { G: 'G', D: 'D', M: 'M', W: 'A', F: 'A' };
-export const groupOf = (e) => GROUP[e.line] || 'M';
 
 function rosterEntry(r, idx, rnd, base, slot) {
   const [num, name, pos] = r;
@@ -117,12 +114,6 @@ export function ensureSquad() {
 
 /** Усі гравці клубу: спершу основа, потім запас. */
 export const allPlayers = () => [...S.squad, ...(S.bench || [])];
-
-/** Хто з основи може бути замінений гравцем із запасу (та сама група позицій). */
-export function swapTargets(benchEntry) {
-  const g = groupOf(benchEntry);
-  return S.squad.map((e, i) => [e, i]).filter(([e]) => groupOf(e) === g).map(([, i]) => i);
-}
 
 /** Міняє гравця з основи на запасного: новачок займає роль слота, замінений повертається на лаву зі своєю природною позицією. */
 export function swapPlayers(slot, benchIdx) {
@@ -163,12 +154,19 @@ export function bestLine(e) {
  * (техніка — пас і дриблінг, сила — відбір), а за кожну нашу перемогу над ними — реванш (rivals.js).
  */
 export function oppSquad(spec) {
-  const d = spec.fixtureIdx + spec.season * 13, h = hashStr(spec.club.name), rnd = rng(h % 1e6 + 13), dev = rng(h % 1e6 + 7919 * (spec.season + 1));
+  const d = spec.fixtureIdx + spec.season * FIXTURES.length, h = hashStr(spec.club.name), rnd = rng(h % 1e6 + 13), dev = rng(h % 1e6 + 7919 * (spec.season + 1));
   const rv = rivalOf(spec), bias = rv.style.bias || {};
   const base = clamp(16 + d * 2.8 + (spec.no - 1) * 0.6 + rv.revenge, 16, 92), names = spec.league >= 3 ? 'int' : 'ua';
   const roles = FORMATIONS[spec.formation];
   const sq = [newEntry(GK_ROLE, 0, rnd, base + 2, names)];
   roles.forEach((r, i) => sq.push(newEntry(r, i + 1, rnd, base, names)));
+  // ім'я випадкове й може повторитись: другому такому гравцеві наступне вільне прізвище. rnd тут не чіпаємо, інакше зміняться наявні склади
+  const seen = new Set(), LAST = names === 'int' ? LAST_INT : LAST_UA;
+  for (const e of sq) {
+    const sp = e.name.indexOf(' '), first = e.name.slice(0, sp);
+    for (let j = LAST.indexOf(e.name.slice(sp + 1)); seen.has(e.name);) { j = (j + 1) % LAST.length; e.name = first + ' ' + LAST[j]; }
+    seen.add(e.name);
+  }
   // зірка клубу — нападник/фланговий (за клубом), у деяких клубів — воротар
   const att = sq.map((e, i) => i).filter((i) => sq[i].line === 'F' || sq[i].line === 'W' || sq[i].role === 'AM');
   const star = h % 5 === 0 ? 0 : att[h % att.length] ?? 10;
@@ -191,17 +189,33 @@ export function skillOf(e, gkBonus = 0) {
 }
 export const gkBonus = () => keeperTier() * 0.05;
 
-/** Вигляд гравця: збережене обличчя; нападник-трансфер замінює зовнішність центрального нападника. */
+/** Вигляд гравця: збережене обличчя; воротар і нападник-трансфер замінюють зовнішність того, хто стоїть на їхньому місці. */
 /** Куплений нападник один, а у схемі їх буває двоє: його обличчя лише в першого. */
 const isLeadST = (e) => e.role === 'ST' && S.squad.find((x) => x.role === 'ST') === e;
+/** Куплений воротар стоїть у рамці: запасні воротарі лишаються зі своїми обличчями. */
+const isFrameGK = (e) => S.squad[0] === e;
 export function squadLook(e) {
   if (e.custom) return { skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, num: e.num };
-  if (e.role === 'GK') { const k = keeper(); return { skin: k.skin, hair: k.hair, hairCol: k.hairCol, beard: e.beard || 0, num: e.num }; }
+  if (isFrameGK(e)) { const k = keeper(); return { skin: k.skin, hair: k.hair, hairCol: k.hairCol, beard: e.beard || 0, num: e.num }; }
   if (isLeadST(e)) { const s = striker(); return { skin: s.skin, hair: s.hair, hairCol: s.hairCol, beard: e.beard || 0, num: e.num }; }
   return { skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, num: e.num };
 }
 /** Підпис вигляду для кешу портретів. */
-export const lookSig = (e) => [e.skin, e.hair, e.hairCol, e.beard || 0, e.custom ? 'c' : e.role === 'GK' ? keeper().id : isLeadST(e) ? striker().id : '', S.kitId || 'home'].join('');
+export const lookSig = (e) => [e.skin, e.hair, e.hairCol, e.beard || 0, e.custom ? 'c' : isFrameGK(e) ? keeper().id : isLeadST(e) ? striker().id : '', S.kitId || 'home'].join('');
+
+/** Перша правка вигляду: запис бере те, що гравець бачив (зокрема обличчя купленого), а власне обличчя лишається в orig для скидання. Старі записи з custom уже мають свій вигляд у полях і не змінюються. */
+export function customizeLook(e) {
+  if (e.custom) return;
+  const L = squadLook(e);
+  e.orig = { skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0 };
+  e.skin = L.skin; e.hair = L.hair; e.hairCol = L.hairCol; e.beard = L.beard; e.custom = true;
+}
+/** Скидає вигляд: orig, а для старих записів без нього початкове обличчя (реальний склад — за id, випускник — з академії). */
+export function resetLook(e) {
+  const o = e.orig || [...defaultSquad().squad, ...defaultSquad().bench].find((d) => d.id === e.id) || S.academy.players.find((p) => p.id === e.id);
+  if (o) { e.skin = o.skin; e.hair = o.hair; e.hairCol = o.hairCol; e.beard = o.beard || 0; }
+  e.custom = false; delete e.orig;
+}
 
 /** Досвід: підвищення рівня дає +1 до двох навичок, що найбільше пасують ролі. */
 export function gainXp(e, amount, events) {

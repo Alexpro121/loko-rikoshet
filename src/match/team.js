@@ -9,6 +9,7 @@ const smooth = (t) => t * t * (3 - 2 * t);
 const lerp = (a, b, t) => a + (b - a) * t;
 const angDiff = (a, b) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 const AVOID_R = 3.6;
+const GK_WIDE = 4;        // на скільки воротар зміщується за штангу, якщо косий удар перетинає його площину поза створом
 
 /**
  * Де буде м'яч через t с: та сама фізика, що в world.js (v' = −k·v − r, до зупинки), у межах поля.
@@ -62,7 +63,7 @@ export class Actor {
     // без м'яча (brain.js): робота й точка, кого тримає, рука вгору; trait — характер: один охочіше йде вперед, інший обережний
     this.job = JOB.SHAPE; this.jx = 0; this.jz = 0; this.jUntil = 0; this.mark = null; this.mkOld = null; this.callT = 0; this.callCool = 0; this.callArm = 1; this.passT = -9; this.trait = Math.random() - 0.5;
   }
-  place(x, z) { this.p.x = x; this.p.z = z; this.p.vx = this.p.vz = 0; this.sync(); }
+  place(x, z) { this.p.kSlide = 0; this.p.x = x; this.p.z = z; this.p.vx = this.p.vz = 0; this.sync(); }   // ковзання на колінах не переносимо на нове місце
   sync() { const b = this.body, p = this.p; b.x = p.x; b.z = p.z; b.vx = p.vx; b.vz = p.vz; }
   /** Плавний біг: прискорення, гальмування біля цілі, обхід перешкод. */
   move(tx, tz, speed, dt) {
@@ -110,7 +111,8 @@ export class Team {
     this.gk = actors[0]; this.gk.isGK = true;
     this.out = actors.slice(1);
     this.speed = 7.4;
-    this.press = 0.6; this.line = 0; this.gkSpeed = 7; this.gkTrack = 0.7; this.gkErr = 1;
+    this.press = 0.6; this.line = 0; this.gkSpeed = 7; this.gkErr = 1;
+    this.even = false;                                                    // онлайн: обидві сторони — люди, сторона −1 без окремих гілок кар'єри (match.js)
     this.brain = new TeamBrain(this); this.pressI = -1; this.coverI = -1; this.lastPress = -1;
     this.setFormation('433');
   }
@@ -126,10 +128,10 @@ export class Team {
     if (!owns) { this.brain.defSpot(a, b, out); return; }                // в обороні лінії спільні: блок тримається разом
     const r = a.role, side = this.side;
     const prog = smooth(clamp((b.x * side + L) / (2 * L), 0, 1));
-    const u = clamp(r.uDef + (r.uAtk - r.uDef) * prog + 0.05 + (side < 0 ? this.line : 0.02), 0.06, 0.93);
+    const u = clamp(r.uDef + (r.uAtk - r.uDef) * prog + 0.05 + (side < 0 && !this.even ? this.line : 0.02), 0.06, 0.93);
     const wid = (W - 3.6) * 0.98;
     out.x = -side * L + side * u * 2 * L;
-    out.z = clamp(r.v * wid + b.z * 0.28, -(W - 2.2), W - 2.2);
+    out.z = clamp(r.v * side * wid + b.z * 0.28, -(W - 2.2), W - 2.2);   // v — лівий чи правий бік команди, а не світовий z
   }
 
   /** Вектор обходу інших гравців (щоб не штовхатись і не тупцювати на місці). */
@@ -278,7 +280,7 @@ export class Team {
       if (a.stun > 0) chase = false;
 
       if (chase) {
-        if (contest && !a.receiver && side < 0 && c.owner === 1) {
+        if (contest && !a.receiver && (this.even || (side < 0 && c.owner === 1))) {
           // м'яч у гравця: найближчий не врізається в нього, а як справжній захисник — підбігає, за ~5 м гальмує й стає
           // в стійку на ~1.6 м між м'ячем і своїми воротами (з того боку, звідки прийшов); відбір — випад ногою (match.js)
           if (i === n1) {
@@ -384,6 +386,7 @@ export class Team {
 
   updateGK(dt, c, bs) {
     const g = this.gk, p = g.p, b = c.ball, side = this.side;
+    if (g.stun > 0) g.stun = Math.max(0, g.stun - dt);                   // воротаря, що грав ногою, теж відбирають (resolveTackle); польових відпускає цикл в update
     if (g.slideCool > 0) g.slideCool -= dt;
     if (g.frozen > 0) g.frozen -= dt;
     if (g.frozen > 0 || (p.downed && !g.dive)) { if (!(g.tkl > 0)) p.vx = p.vz = 0; return; }
@@ -404,24 +407,27 @@ export class Team {
     // уточнює, що ближче м'яч
     if (c.bs === 'roll' && toward > 2 && bs > 3 && c.plan && c.plan.len > 1) {   // і повільний м'яч здалеку теж: він докочується
       const cr = c.plan.cross(p.x, -side, this._gcr || (this._gcr = { t: 0, z: 0, y: 0 }));
+      // у створі чи мимо — за лінією воріт, а не за його площиною: на косій траєкторії z там і там різняться на кілька одиниць.
+      // Лінію x = ±L м'яч перетинає лише в сам створ (поза ним борт, над ним поперечина й огорожа), тож досить самого перетину.
+      // Повільний м'яч може й не докотитись: його читаємо, як і раніше, у площині воротаря
+      const cg = c.plan.cross(goalX, -side, this._gcg || (this._gcg = { t: 0, z: 0, y: 0 }));
       // м'яч пройде над ним (вийшов далеко, удар-парашут), але опуститься у ворота — відступає до лінії, а не стоїть
-      const cg = c.plan.cross(goalX + side * 0.4, -side, this._gcg || (this._gcg = { t: 0, z: 0, y: 0 }));
-      if (cr.t > 0 && cr.y > 2.3 && cg.t > 0 && Math.abs(cg.z) < G + 0.5 && cg.y < PITCH.GOAL_H + 0.3 && (p.x - goalX) * side > 1.2) {
-        shot = true; lob = true; tx = goalX + side * 1.0; tz = clamp(cg.z, -(G - 0.3), G - 0.3); speed = this.gkSpeed;
-      } else if (cr.t > 0 && Math.abs(cr.z) < G + 2.5 && cr.y < PITCH.GOAL_H + 0.5) {
+      if (cr.t > 0 && cr.y > 2.3 && cg.t > 0 && (p.x - goalX) * side > 1.2) {
+        shot = true; lob = true; tx = goalX + side * 1.4; tz = clamp(cg.z, -(G - 0.3), G - 0.3); speed = this.gkSpeed;
+      } else if (cr.t > 0 && (cg.t > 0 || (bs < 16 && Math.abs(cr.z) < G + 2.5)) && cr.y < PITCH.GOAL_H + 0.5) {
         shot = true;
         if (g.shotSeen !== c.shotId) { g.shotSeen = c.shotId; g.shotErr = (Math.random() * 2 - 1) * (0.15 + 0.3 * this.gkErr) * (1.2 - 0.6 * g.sk.iq); }
         const err = g.shotErr * clamp(cr.t / 0.8, 0, 1);
         // м'яч долетить не скоро — зміщується на лінію удару (з похибкою прочитання) приставним кроком або бігом;
         // лишилось менше ~0.55 с — бігти пізно: ставить ноги (стійка) і далі руки або стрибок (match.js)
         if (cr.t > 0.62) {                                               // стрибок — не пізніше ~0.55 с до м'яча: до того вже стоїть
-          tz = clamp(cr.z + err, -(G + 0.3), G + 0.3);
-          tx = goalX + side * clamp((p.x - goalX) * side, 1.2, 5);
+          tz = clamp(cr.z + err, -(G + GK_WIDE), G + GK_WIDE);            // у своїй площині м'яч може йти й поза створом: ближня штанга
+          tx = goalX + side * clamp((p.x - goalX) * side, 1.4, 5);
           speed = Math.abs(tz - p.z) < 1.6 ? Math.min(this.gkSpeed, 3.2) : this.gkSpeed;   // близько — приставним, далеко — бігом
         } else if (cr.t > 0.28 && Math.abs(cr.z + err - p.z) > 0.3) {
           // уже в стійці, але м'яч іде поруч — не стоїть, а підлаштовується дрібними приставними кроками до останньої мити
           // (тоді ловить чи бере на коліно, а не падає в останню мить на м'яч, що вже повз)
-          tz = clamp(cr.z + err, -(G + 0.3), G + 0.3); tx = p.x; speed = Math.min(this.gkSpeed, 3.4);
+          tz = clamp(cr.z + err, -(G + GK_WIDE), G + GK_WIDE); tx = p.x; speed = Math.min(this.gkSpeed, 3.4);
         } else { tx = p.x; tz = p.z; speed = this.gkSpeed; }
       }
     }
@@ -437,10 +443,10 @@ export class Team {
       // (раніше ставав за ~5 м від м'яча: на удар із 14 м вибігав на 9 м, і будь-який удар повз нього був голом)
       const base = clamp(1.2 + 0.15 * dist, 1.5, 4.5), outX = base + Math.max(0, dist - 4.5 - base) * smooth(clamp((11 - dist) / 3, 0, 1)), tl = Math.abs((goalX - b.x) / (bx || 1e-3));
       const t = Math.max(0, tl - outX / Math.max(0.2, Math.abs(bx)));
-      tx = goalX + side * clamp((b.x + bx * t - goalX) * side, 0.8, 12); tz = clamp(b.z + bz * t, -(G + 2), G + 2);
+      tx = goalX + side * clamp((b.x + bx * t - goalX) * side, 1.4, 12); tz = clamp(b.z + bz * t, -(G + 2), G + 2);   // ближче 1.3 м до лінії його не пускає межа поля: ціль там — тупцювання на місці
       speed = this.gkSpeed;
     }
-    if (!shot && c.bs === 'roll' && bs < 16 && toGoal < 20 && Math.abs(b.z) < 18) {   // вільний м'яч у штрафному — його
+    if (!shot && c.bs === 'roll' && bs < 16 && toGoal < PITCH.BOX_D && Math.abs(b.z) < PITCH.BOX_W) {   // вільний м'яч у штрафному — його
       let free = true;
       const opp = c.opps;
       for (let i = 1; i < opp.length; i++) { const q = opp[i].p; if ((q.x - b.x) * (q.x - b.x) + (q.z - b.z) * (q.z - b.z) < 22) { free = false; break; } }

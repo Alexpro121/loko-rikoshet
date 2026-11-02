@@ -1,5 +1,6 @@
 // Island: острів у меню: стадіон за ярусами прокачки, потяг, кубки, небо.
 import * as THREE from 'three';
+import { whenLogo } from './logo.js';
 import { VoxelBuilder, vcMat, lambert, rng, shade } from './voxel.js';
 import { locoMesh, wagonMesh, LOCO_LEN, WAGON_LEN, GAP } from './train.js';
 import { netTexture, netPlane, signTexture } from './textures.js';
@@ -134,7 +135,7 @@ export class Island {
   buildStadium() {
     const root = (this.stadium = new THREE.Group());
     this.group.add(root);
-    // 0: поле, ворота
+    // основа (завжди): поле, ворота
     const b = new VoxelBuilder();
     b.box(0, 0.3, 0, 14.8, 0.6, 10.6, '#2b3438');
     for (let i = 0; i < 8; i++) b.box(-5.6 + i * 1.6 + 0.8 - 0.8 + 0.0, 0.62, 0, 1.6, 0.06, 8.6, i % 2 ? '#34c84d' : '#2bb544');
@@ -150,15 +151,15 @@ export class Island {
     for (const sd of [-1, 1]) {
       const m = new THREE.Mesh(netPlane(2.9, 1.0, 0.3), netMat); m.position.set(sd * 7.1, 1.1, 0); m.rotation.y = Math.PI / 2; root.add(m);
     }
-    // яруси
+    // яруси: номер у коментарі — індекс у tierGroups і STADIUM_TIER_NAMES (config.js)
     const add = (fn, extra) => {
       const bb = new VoxelBuilder(); fn(bb);
       const g = new THREE.Group(); if (bb.n) g.add(bb.mesh()); if (extra) extra(g);
       g.visible = false; root.add(g); this.tierGroups.push(g);
     };
-    // 1: дальня трибуна + низька ближня
+    // 0: дальня трибуна + низька ближня
     add((bb) => { stand(bb, 0, -5.3, Math.PI, 13.6, 0, 5, 0.55, 0.85, 0.6); stand(bb, 0, 5.4, 0, 8, 0, 2, 0.5, 0.8, 0.6); });
-    // 2: бічні трибуни
+    // 1: бічні трибуни
     add((bb) => { stand(bb, 7.6, 0, Math.PI / 2, 8.6, 0, 5, 0.55, 0.85, 0.6); stand(bb, -7.6, 0, -Math.PI / 2, 8.6, 0, 5, 0.55, 0.85, 0.6); });
 
     // 2: тунель гравців і лавки запасних
@@ -209,21 +210,27 @@ export class Island {
       for (let i = 0; i < 7; i++) { bb.box(7.55, 0.85, -4.2 + i * 1.4, 0.1, 0.42, 1.3, cols[(i + 1) % 4]); bb.box(-7.55, 0.85, -4.2 + i * 1.4, 0.1, 0.42, 1.3, cols[(i + 3) % 4]); }
       for (const sx of [-1, 1]) { bb.box(sx * 6.4, 3.2, 6.5, 0.3, 4.6, 0.3, '#aeb6bb'); bb.box(sx * 6.4, 5.4, 6.5, 2.8, 1.6, 0.3, '#10161a'); bb.box(sx * 6.4, 5.4, 6.62, 2.5, 1.3, 0.05, '#35e07a'); bb.box(sx * 6.4, 5.4, 6.67, 1.4, 0.3, 0.04, '#ffffff'); }
     });
-    // 5: дах і табло
+    // 6: дах і табло
     add((bb) => {
       bb.box(0, 6.2, -8.2, 14.4, 0.3, 4.6, '#f4f4f2', 0, -0.18, 0); bb.box(0, 6.0, -10.3, 14.4, 0.6, 0.3, '#e11d2e');
       for (const sx of [-6.8, 6.8]) bb.box(sx, 3.1, -10.2, 0.35, 6.2, 0.35, '#aeb6bb');
       bb.box(0, 5.2, -10.0, 5.2, 1.5, 0.3, '#14201f'); bb.box(0, 5.2, -9.85, 4.8, 1.1, 0.06, '#35e07a');
       for (let i = 0; i < 4; i++) bb.box(-1.6 + i * 1.07, 5.2, -9.8, 0.7, 0.6, 0.06, i % 2 ? '#14201f' : '#fff');
     });
-    // 6: прапори
+    // 7: прапори
     add(() => {}, (g) => {
       const pole = new VoxelBuilder();
       const spots = [[-6.5, -9.2], [6.5, -9.2], [-8.8, 5.6], [8.8, 5.6], [0, -11.0], [-8.8, -4.5]];
+      const lc = document.createElement('canvas'); lc.width = lc.height = 128;
+      const lt = new THREE.CanvasTexture(lc); lt.colorSpace = THREE.SRGBColorSpace;
+      whenLogo((img) => { const h = 124, w = h * 166 / 180; lc.getContext('2d').drawImage(img, 64 - w / 2, 2, w, h); lt.needsUpdate = true; });
+      const lm = new THREE.MeshBasicMaterial({ map: lt, transparent: true, depthWrite: false }), lg = new THREE.PlaneGeometry(0.92, 0.92);
       spots.forEach(([x, z], i) => {
         pole.box(x, 4.2, z, 0.18, 8.4, 0.18, '#dfe3e6');
         const fb = new VoxelBuilder(); fb.box(0.8, 0, 0, 1.6, 0.5, 0.06, '#e11d2e'); fb.box(0.8, -0.5, 0, 1.6, 0.5, 0.06, '#12a150');
-        const fm = fb.mesh(vcMat(), { static: false }); const holder = new THREE.Group(); holder.position.set(x, 8.0, z); holder.add(fm); g.add(holder);
+        const fm = fb.mesh(vcMat(), { static: false }); const holder = new THREE.Group(); holder.position.set(x, 8.0, z); holder.add(fm);
+        for (const s of [1, -1]) { const e = new THREE.Mesh(lg, lm); e.position.set(0.8, -0.25, s * 0.05); if (s < 0) e.rotation.y = Math.PI; holder.add(e); }   // емблема з обох боків прапора
+        g.add(holder);
         this.flags.push({ holder, ph: i * 1.3 });
       });
       g.add(pole.mesh());
@@ -247,8 +254,8 @@ export class Island {
       for (const [x, z] of [[1, 17.6], [4, 17.2], [7, 17.6]]) { bb.box(x, 0.45, z, 0.1, 0.9, 0.1, '#c9ced1'); bb.box(x, 0.92, z, 0.8, 0.06, 0.8, '#f4f4f2'); bb.shape(new THREE.ConeGeometry(1.0, 0.5, 8), x, 1.9, z, ['#d4202c', '#f4f4f2', '#1f8f3f'][(x | 0) % 3], 0, 0, 0, 1, 1, 1); bb.box(x, 1.2, z, 0.06, 1.4, 0.06, '#59636a'); }
       for (const [x, z, s2] of [[-14, 22, 1], [12, 22.5, 1.1], [-2, 22.5, 0.9]]) { bb.box(x, 0.5 * s2, z, 0.5 * s2, s2, 0.5 * s2, '#6b4a2e'); bb.shape(new THREE.ConeGeometry(1, 2.4, 6), x, 2.0 * s2, z, '#2f8a56', 0, 0, 0, 1.3 * s2, 1.1 * s2, 1.3 * s2); }
     }, (g) => {
-      const sg = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), new THREE.MeshBasicMaterial({ map: signTexture('ЛОКО ШОП', '#d4202c') })); sg.position.set(-8, 3.55, 18.7); g.add(sg);
-      const sc = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.6), new THREE.MeshBasicMaterial({ map: signTexture('КАФЕ «ВПЕРЕД»', '#157a46') })); sc.position.set(4, 3.15, 18.97); g.add(sc);
+      const sg = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), new THREE.MeshBasicMaterial({ map: signTexture('КРАМНИЦЯ ЛОКО', '#d4202c') })); sg.position.set(-8, 3.55, 18.7); g.add(sg);
+      const sc = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.6), new THREE.MeshBasicMaterial({ map: signTexture('КАВ’ЯРНЯ «ВПЕРЕД»', '#157a46') })); sc.position.set(4, 3.15, 18.97); g.add(sc);
     });
     // 9: тренувальне поле
     add((bb) => {
@@ -269,7 +276,7 @@ export class Island {
       bb.shape(new THREE.CylinderGeometry(0.9, 0.5, 0.5, 8), -26.5, 6.5, 0, '#ffdd55');
       for (const [x, z, s2] of [[-27, -9, 1], [-27, 9, 1.1], [-23, 11, 0.9], [-23, -11, 1]]) { bb.box(x, 0.5 * s2, z, 0.5 * s2, s2, 0.5 * s2, '#6b4a2e'); bb.shape(new THREE.ConeGeometry(1, 2.4, 6), x, 2.0 * s2, z, '#2f8a56', 0, 0, 0, 1.3 * s2, 1.1 * s2, 1.3 * s2); }
     }, (g) => {
-      const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.7), new THREE.MeshBasicMaterial({ map: signTexture('ЗАЛ СЛАВИ ЛОКО', '#14201f', '#ffc61a') })); sg.position.set(-22.9, 3.6, 0); sg.rotation.y = Math.PI / 2; g.add(sg);
+      const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.7), new THREE.MeshBasicMaterial({ map: signTexture('ЗАЛА СЛАВИ ЛОКО', '#14201f', '#ffc61a') })); sg.position.set(-22.9, 3.6, 0); sg.rotation.y = Math.PI / 2; g.add(sg);
     });
     // 11: готель і офіс клубу
     add((bb) => {
@@ -288,7 +295,7 @@ export class Island {
       for (const bx of [4, 9]) { bb.box(bx, 0.95, 33, 4.2, 1.5, 1.4, '#d4202c'); bb.box(bx, 0.8, 33, 4.2, 0.6, 1.42, '#1f8f3f'); bb.box(bx, 1.45, 33, 3.6, 0.5, 1.44, '#15202a'); }
       for (const x of [-12, 0, 12]) { bb.box(x, 3, 33.8, 0.15, 6, 0.15, '#59636a'); bb.box(x, 6.1, 33.8, 1.2, 0.2, 0.5, '#fff6dc'); }
     });
-    // 7: золота арена
+    // 13: золота арена
     add((bb) => {
       bb.box(0, 6.55, -8.2, 14.8, 0.18, 4.8, '#ffc61a', 0, -0.18, 0);
       for (const sd of [-1, 1]) { bb.box(sd * 7.7, 2.6, 4.3, 0.5, 5.2, 0.5, '#ffc61a'); bb.shape(new THREE.SphereGeometry(0.55, 6, 5), sd * 7.7, 5.4, 4.3, '#ffe27a'); }
@@ -388,7 +395,7 @@ export class Island {
       if (want && !g.visible) {
         g.visible = true;
         if (animate && from >= 0) { g.scale.set(1, 0.001, 1); this.pops.push({ g, t: -order * 0.45, i }); this.dust(i); order++; } else g.scale.set(1, 1, 1);
-        if (i === 2) this.lampK = animate ? -1.2 : 3;
+        if (i === 3) this.lampK = animate ? -1.2 : 3;
       } else if (!want) g.visible = false;
     });
   }
@@ -406,15 +413,16 @@ export class Island {
     for (let k = 0; k < 40; k++) P.emit(14.5 + (Math.random() - 0.5) * 3, 5 + Math.random() * 3, -12.5 + (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 8, 5 + Math.random() * 5, (Math.random() - 0.5) * 8, 1.6, 0.4, ['#ffc61a', '#ffffff', '#e11d2e', '#12a150'][k & 3], 12, 0.4, 10);
   }
 
+  placeCar(m, s, o) { this.trackAt(s, o); m.position.set(o.x, 0.2, o.z); m.rotation.y = o.yaw; }
+
   update(dt, t) {
     this.t = t;
     this.extent += (this.extentTarget - this.extent) * Math.min(1, dt * 0.9);
     // потяг
     const spd = 5.2; this.trainS += spd * dt;
     const o = this._o || (this._o = { x: 0, z: 0, yaw: 0 }), sc = this.trainSc;
-    const place = (m, s) => { this.trackAt(s, o); m.position.set(o.x, 0.2, o.z); m.rotation.y = o.yaw; };
     const s1 = this.trainS - (LOCO_LEN / 2 + GAP + WAGON_LEN / 2) * sc;
-    place(this.loco, this.trainS); place(this.w1, s1); place(this.w2, s1 - (WAGON_LEN + GAP) * sc);
+    this.placeCar(this.loco, this.trainS, o); this.placeCar(this.w1, s1, o); this.placeCar(this.w2, s1 - (WAGON_LEN + GAP) * sc, o);
     // дим
     this.smokeT -= dt;
     if (this.smokeT <= 0 && this.particles) {
@@ -440,22 +448,22 @@ export class Island {
     // прожектори розгораються по черзі з мерехтінням; потім рівне сяйво
     if (this.lamps) {
       this.lampK += dt;
-      this.lamps.forEach((L, i) => {
-        const k = Math.max(0, Math.min(1, (this.lampK - i * 0.18) / 0.9)), fl = k < 1 ? (Math.random() < 0.35 ? 0.4 : 1) : 1, v = k * fl;
-        L.meshes.forEach((m, j) => { const vv = Math.max(0.12, v * (0.85 + 0.15 * Math.sin(t * 2 + j))); m.material.color.setRGB(1 * vv, 0.95 * vv, 0.75 * vv); });
+      for (let i = 0; i < this.lamps.length; i++) {
+        const L = this.lamps[i], k = Math.max(0, Math.min(1, (this.lampK - i * 0.18) / 0.9)), fl = k < 1 ? (Math.random() < 0.35 ? 0.4 : 1) : 1, v = k * fl;
+        for (let j = 0; j < L.meshes.length; j++) { const vv = Math.max(0.12, v * (0.85 + 0.15 * Math.sin(t * 2 + j))); L.meshes[j].material.color.setRGB(1 * vv, 0.95 * vv, 0.75 * vv); }
         L.sp.material.opacity = 0.85 * v; L.beam.material.opacity = 0.06 * v;
-      });
+      }
     }
     // семафор перемикається, годинник йде, птахи кружляють
     const ph = (t % 7) / 7; this.semG.visible = ph < 0.55; this.semR.visible = ph >= 0.55 && ph < 0.92;
     this.hand.rotation.z = -t * 0.3;
-    if (this.birds) for (const bd of this.birds) {
-      const a = t * 0.35 + bd.ph; bd.g.position.set(Math.cos(a) * bd.r, bd.h + Math.sin(t * 0.9 + bd.ph) * 0.6, Math.sin(a) * bd.r * 0.8); bd.g.rotation.y = -a;
+    if (this.birds) for (let i = 0; i < this.birds.length; i++) {
+      const bd = this.birds[i], a = t * 0.35 + bd.ph; bd.g.position.set(Math.cos(a) * bd.r, bd.h + Math.sin(t * 0.9 + bd.ph) * 0.6, Math.sin(a) * bd.r * 0.8); bd.g.rotation.y = -a;
       const f = Math.sin(t * 9 + bd.ph); bd.wl.rotation.z = f * 0.7; bd.wr.rotation.z = -f * 0.7;
     }
     for (let k = 0; k < this.flags.length; k++) this.flags[k].holder.rotation.y = Math.sin(t * 3.4 + this.flags[k].ph) * 0.45;
     // салют на золотому ярусі
-    if (this.curTier >= 6 && this.particles) {
+    if (this.curTier >= 13 && this.particles) {
       this.fwT -= dt;
       if (this.fwT <= 0) {
         this.fwT = 2.4 + Math.random() * 1.6;
