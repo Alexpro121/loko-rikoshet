@@ -33,7 +33,9 @@ GAME-LOKO/
 │   │   ├── audio.js                 AudioEngine: увесь звук і музика синтезуються WebAudio; vibrate
 │   │   ├── camera.js                CamDirector: ігрова камера за пресетами CAM_PRESETS
 │   │   ├── game.js                  Game: рендерер, стани, головний цикл, ввід, камера матчу, якість, втрата WebGL
-│   │   └── stateMachine.js          мінімальна стейт-машина станів гри
+│   │   ├── perf.js                  рівні деталізації DETAIL, перша оцінка телефона, пам'ять між запусками
+│   │   ├── stateMachine.js          мінімальна стейт-машина станів гри
+│   │   └── telegram.js              Telegram Mini App: SDK, повний екран, поворот, «назад», вібрація, запрошення, хмарна копія
 │   ├── graphics/                    3D-вигляд; логіки матчу тут немає
 │   │   ├── ball.js                  BallView: видимий м'яч
 │   │   ├── cinefx.js                CineFX: кінофокус у кат-сценах
@@ -98,7 +100,9 @@ GAME-LOKO/
 │   └── style.css                    усі стилі гри; використовує змінні --u і --fs-*
 ├── store/
 │   ├── PLAY_STORE.md                інструкція випуску в Google Play і тексти лістингу
-│   └── feature-graphic-1024x500.png графіка для сторінки в Google Play
+│   ├── TELEGRAM.md                  інструкція випуску в Telegram, список перевірки й тексти для BotFather
+│   ├── feature-graphic-1024x500.png графіка для сторінки в Google Play
+│   └── telegram-cover-640x360.png   обкладинка застосунку в Telegram
 ├── .gitignore                       ігнорує node_modules, dist, .claude, логи
 ├── AGENTS.md                        посилання на CLAUDE.md для інших агентів
 ├── AUDIT_REPORT.txt                 зведений аудит проєкту від 2026-11-02: знахідки, докази, обмеження

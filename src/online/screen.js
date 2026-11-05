@@ -10,6 +10,7 @@ import { OP, saveOP, resetOP, esc, plain, flagSvg, kitOf, gkKitOf, teamRating, t
 import { FLAG_COLS, FLAG_PATS, FLAG_EMB, FLAG_PLATES, FLAG_OVS, FLAG_EDGES, FLAG_STYLES, flagUri, emblemSvg, rollFlag } from './flag.js';
 import { Online } from './session.js';
 import { cleanCode } from './net.js';
+import { tgStartRoom, tgShareRoom } from '../core/telegram.js';
 
 const STYLE_UA = { any: 'Усі', classic: 'Класика', herald: 'Геральдика', modern: 'Сучасний', wild: 'Дикий' };
 const FE_TABS = { gen: 'Генератор', field: 'Поле', emblem: 'Знак', colors: 'Кольори', extra: 'Оздоба' };
@@ -50,14 +51,14 @@ export class OnlineScreen {
       const el = ui.panel === 'online' && ui.el.panel.querySelector('.on-ping'), n = this.s.net;
       if (el && n && n.rtt) el.textContent = 'пінг ' + Math.round(n.rtt) + ' мс';
     }, 2000);
-    const m = /[?&]room=([A-Za-z0-9]{5})/.exec(location.search);
-    this.invite = m ? cleanCode(m[1]) : null;
+    const m = /[?&]room=([A-Za-z0-9]{5})/.exec(location.search), tgRoom = tgStartRoom();
+    this.invite = m ? cleanCode(m[1]) : tgRoom ? cleanCode(tgRoom) : null;
   }
   /** Після заставки меню: якщо гра відкрита за посиланням-запрошенням — одразу в кімнату. */
   onMenu() {
     if (!this.invite) return;
     const code = this.invite; this.invite = null;
-    try { history.replaceState(null, '', location.pathname); } catch (_) { /* ignore */ }
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (_) { /* ignore */ }
     this.ui.openPanel('online'); this.tab = 'play'; this.s.join(code);
   }
 
@@ -332,6 +333,7 @@ export class OnlineScreen {
       case 'on-copy': this.copy(s.code, 'Код ' + s.code + ' скопійовано'); return;
       case 'on-share': {
         const url = location.origin + location.pathname + '?room=' + s.code;
+        if (tgShareRoom(s.code, url, 'Заходь у мою кімнату LOKO RUSH: ' + s.code)) return;
         if (navigator.share) navigator.share({ title: 'LOKO RUSH — онлайн-матч', text: 'Заходь у мою кімнату: ' + s.code, url }).catch(() => {});
         else this.copy(url, 'Посилання скопійовано');
         return;

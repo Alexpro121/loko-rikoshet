@@ -15,13 +15,13 @@
 
 - Експорти: PITCH:3, PHYS:20, COL:35, KIT_LOKO:42, KITS:44, KIT_GK_LOKO:49, KIT_CLASH:52, kitDist:55, pickKit:60, LEAGUES:74, STAT_KEYS:88, GK_KEYS:89, LINE_OF:90, FORMATIONS:95, FIXTURES:105, matchSpec:111, STRIKERS:134, shotSkill:144, KEEPERS:146, ACADEMY:154, STADIUM_TIERS:174, STADIUM_TIER_NAMES:175, SETTINGS_DEFAULT:177, CAM_PRESETS:189
 
-## src/core/audio.js (205 рядків)
+## src/core/audio.js (207 рядків)
 
 Увесь звук синтезується на льоту (WebAudio): жодних файлів, нуль завантаження.
 
-- Експорти: audio:201, vibrate:203
-- **AudioEngine** :4
-  constructor:5, unlock:17, applySettings:41, suspend:48, resume:50, live:55, tone:58, hiss:71, kick:85, wall:89, coin:97, pass:102, save:103, whistle:104, horn:114, goal:127, concede:132, bell:136, rumble:140, click:141, back:142, buy:143, deny:144, win:145, lose:146, slowmo:148, beat:152, slide:153, clap:154, thud:155, startCrowd:157, crowd:165, music:171, schedule:180
+- Експорти: audio:202, vibrate:204
+- **AudioEngine** :5
+  constructor:6, unlock:18, applySettings:42, suspend:49, resume:51, live:56, tone:59, hiss:72, kick:86, wall:90, coin:98, pass:103, save:104, whistle:105, horn:115, goal:128, concede:133, bell:137, rumble:141, click:142, back:143, buy:144, deny:145, win:146, lose:147, slowmo:149, beat:153, slide:154, clap:155, thud:156, startCrowd:158, crowd:166, music:172, schedule:181
 
 ## src/core/camera.js (312 рядків)
 
@@ -31,14 +31,21 @@ CamDirector: ігрова камера матчу за пресетами CAM_PR
 - **CamDirector** :50
   constructor:51, snap:65, add:67, nearest:70, collect:85, need:122, needOne:131, solve:137, bounds:152, update:174, keepIn:298
 
-## src/core/game.js (477 рядків)
+## src/core/game.js (532 рядків)
 
 Game: рендерер, сцена меню, стейт-машина MENU/MATCH/GOAL/RESULT, головний цикл, ввід, камера матчу, якість.
 
-- Експорти: gfxFail:25
-- Внутрішні функції: springStep:19
-- **Game** :35
-  constructor:36, cineFlat:82, ensureMatch:94, warmShaders:101, buildStates:114, play:154, toMenu:158, quitMatch:159, onStadiumUpgraded:161, resize:166, basePixelRatio:177, applyPixelRatio:186, governor:197, onGlLost:231, onGlRestored:238, onVisibility:244, updateMenuCam:251, computeMatchBase:265, snapCamera:266, addTrauma:268, fovKick:270, updateMatchCam:272, autoFocus:328, screenToGround:344, worldToScreen:355, acquireWake:362, floatWorld:371, bindInput:378, isFullscreen:424, enterFullscreen:425, toggleFullscreen:432, tick:438, onFrameError:446, step:455
+- Експорти: gfxFail:27
+- Внутрішні функції: springStep:21
+- **Game** :37
+  constructor:38, cineFlat:87, ensureMatch:99, warmShaders:106, buildStates:119, play:159, toMenu:163, quitMatch:164, onStadiumUpgraded:166, resize:171, basePixelRatio:182, applyPixelRatio:191, resMin:202, fixedLevel:205, setLevel:207, qualityChanged:214, levelDown:224, governor:239, onGlLost:282, onGlRestored:289, onVisibility:295, updateMenuCam:302, computeMatchBase:316, snapCamera:317, addTrauma:319, fovKick:321, updateMatchCam:323, autoFocus:379, screenToGround:395, worldToScreen:406, acquireWake:413, floatWorld:422, bindInput:429, isFullscreen:475, enterFullscreen:476, toggleFullscreen:484, tick:491, onFrameError:499, step:508
+
+## src/core/perf.js (39 рядків)
+
+Рівні деталізації під пристрій: що спрощувати, коли роздільність уже не рятує, перша оцінка телефона, пам'ять між запусками.
+
+- Експорти: DETAIL:9, MAX_LEVEL:15, loadPerf:28, savePerf:37
+- Внутрішні функції: guess:18
 
 ## src/core/stateMachine.js (17 рядків)
 
@@ -46,6 +53,13 @@ Game: рендерер, сцена меню, стейт-машина MENU/MATCH/
 
 - **StateMachine** :2
   constructor:3, add:5, go:7, update:16
+
+## src/core/telegram.js (236 рядків)
+
+Telegram Mini App: SDK лише всередині Telegram, повний екран, поворот, кнопка «назад», вібрація, запрошення, хмарна копія збереження.
+
+- Експорти: inTelegram:22, appHidden:24, initTelegram:32, tgReady:69, tgFullscreen:72, tgEnterFullscreen:73, tgToggleFullscreen:74, tgHaptic:108, tgStartRoom:119, tgShareRoom:128, bindTelegram:137, splitChunks:178, pullCloud:192, pushCloud:217
+- Внутрішні функції: launchedInTelegram:26, setup:49, lockLandscape:81, rotateHelp:87, sigOf:168
 
 ## src/graphics/ball.js (88 рядків)
 
@@ -99,14 +113,16 @@ buildPitch: газон, розмітка, борти, ворота й сітки
 - Експорти: OUTLINE:13, buildPitch:35
 - Внутрішні функції: lineSeg:15, insetPolygon:20
 
-## src/graphics/player.js (2730 рядків)
+## src/graphics/player.js (2811 рядків)
 
 Player: воксельна модель гравця, усі анімації (Player.animate), IK рук і ніг, пози воротаря.
 
 - Експорти: angDiff:21, GK_STRIKE:60, diveKin:144
-- Внутрішні функції: capQ:50, spring:88, oscS:104, accent:118, jumpPhase:119, atlasMat:163, printMat:173, hairBlock:288, headGeo:350, bodyGeo:372
-- **Player** :406
-  constructor:408, setLook:484, setExpr:503, setMode:513, kick:518, volley:527, backLeg:532, dropPose:545, cheer:547, react:559, sad:566, reach:580, engage:582, solveReach:588, poleIK:622, bodyGuard:645, impulse:700, jolt:704, gesture:710, tapBall:719, feint:727, ballHint:729, faceNow:731, control:736, receive:742, chest:748, header:750, block:751, hit:752, emote:757, beaten:762, tackle:770, stumble:777, downed:782, stagger:787, knock:796, dropRag:810, slideTackle:817, kneel:818, rest:820, bakeSlide:822, hug:824, gkDive:826, gkSmother:834, diveReset:836, setAim:837, startPDive:844, planDive:858, startPKick:893, jumpC:895, gkJump:897, saveSide:899, gkPunch:907, gkTip:909, gkFoot:911, gkStar:913, parry:918, ballAt:928, perceive:942, catchBall:960, catchMk:967, gkKnee:973, gkFall:975, throwBall:976, setThreat:977, fendAt:979, hipTurn:988, jostle:1015, rise:1018, animate:1048, groundGuard:2171, diveTakeoff:2193, armGuard:2221, hitbox:2297, handsIK:2330, kickIK:2568, tackleIK:2604, reachFoot:2616, plantFeet:2644, solveArms:2706
+- Внутрішні функції: capQ:50, spring:88, oscS:104, accent:118, jumpPhase:119, atlasMat:163, printMat:173, rigidMats:187, hairBlock:320, headGeo:382, bodyGeo:404
+- **RigidSkeleton** :201
+  update:202
+- **Player** :438
+  constructor:440, setLook:516, useSkin:540, skinGeo:554, setExpr:579, setMode:594, kick:599, volley:608, backLeg:613, dropPose:626, cheer:628, react:640, sad:647, reach:661, engage:663, solveReach:669, poleIK:703, bodyGuard:726, impulse:781, jolt:785, gesture:791, tapBall:800, feint:808, ballHint:810, faceNow:812, control:817, receive:823, chest:829, header:831, block:832, hit:833, emote:838, beaten:843, tackle:851, stumble:858, downed:863, stagger:868, knock:877, dropRag:891, slideTackle:898, kneel:899, rest:901, bakeSlide:903, hug:905, gkDive:907, gkSmother:915, diveReset:917, setAim:918, startPDive:925, planDive:939, startPKick:974, jumpC:976, gkJump:978, saveSide:980, gkPunch:988, gkTip:990, gkFoot:992, gkStar:994, parry:999, ballAt:1009, perceive:1023, catchBall:1041, catchMk:1048, gkKnee:1054, gkFall:1056, throwBall:1057, setThreat:1058, fendAt:1060, hipTurn:1069, jostle:1096, rise:1099, animate:1129, groundGuard:2252, diveTakeoff:2274, armGuard:2302, hitbox:2378, handsIK:2411, kickIK:2649, tackleIK:2685, reachFoot:2697, plantFeet:2725, solveArms:2787
 
 ## src/graphics/ragdoll.js (427 рядків)
 
@@ -117,20 +133,20 @@ Ragdoll: падіння гравця як система точок Верле; 
 - **Ragdoll** :52
   constructor:63, com:94, setDrive:102, frame:118, step:126, limitKnees:218, minDist:232, limitLegs:244, legLim:261, limitBody:274, closest:283, segSep:294, nudge:311, faceDown:314, apply:322
 
-## src/graphics/stands.js (371 рядків)
+## src/graphics/stands.js (395 рядків)
 
 Stands: трибуни й глядачі на InstancedMesh, реакції натовпу, банери, прапори, сектор гостей.
 
 - Внутрішні функції: drawAtlas:14, bannerAtlas:29, waveMat:43
 - **Stands** :59
-  constructor:60, buildBanners:161, buildFlags:184, buildAway:204, setOpponent:223, setHome:246, react:265, cheer:270, chantEnv:273, writeMatrices:279, update:321, runFlashes:359
+  constructor:60, buildBanners:168, buildFlags:191, buildAway:211, setOpponent:230, setHome:253, react:272, cheer:277, chantEnv:280, writeMatrices:286, push:330, setDetail:337, update:345, runFlashes:383
 
-## src/graphics/surround.js (123 рядків)
+## src/graphics/surround.js (129 рядків)
 
 buildSurround: усе поза трибунами матчу: земля, оточення, поїзд у кольорах Локо.
 
-- Експорти: buildSurround:50
-- Внутрішні функції: canvasTex:11, facadeTexture:19, windowsTexture:39
+- Експорти: buildSurround:51
+- Внутрішні функції: canvasTex:12, facadeTexture:20, windowsTexture:40
 
 ## src/graphics/textures.js (258 рядків)
 
@@ -159,12 +175,12 @@ VoxelBuilder: зливає куби в один меш із вершинними
 - **VoxelBuilder** :16
   constructor:17, geo:20, box:44, shape:52, build:59, mesh:71
 
-## src/graphics/weather.js (41 рядків)
+## src/graphics/weather.js (49 рядків)
 
 Weather: дощ і сніг на InstancedMesh.
 
 - **Weather** :9
-  constructor:10, set:23, update:28
+  constructor:10, setDensity:24, set:29, update:34
 
 ## src/lab/lab.css (34 рядків)
 
@@ -172,17 +188,17 @@ Weather: дощ і сніг на InstancedMesh.
 
 - Розділи: Стилі сторінки лабораторії (lab.html).:1
 
-## src/lab/lab.js (546 рядків)
+## src/lab/lab.js (547 рядків)
 
 Лабораторія гравця (lab.html): окрема сторінка для перевірки моделі, ходи й анімацій; window.lab у консолі.
 
-- Внутрішні функції: spawn:89, setWire:108, setJoints:117, start:131, divePrep:168, gkShot:178, stepBall:201, steer:235, tick:263, resize:347, setCam:363, renderCams:373, btn:381, row:382, select:383, range:388, swatches:393, check:398, renderPanel:404, test:463, actions:510
+- Внутрішні функції: spawn:89, setWire:109, setJoints:118, start:132, divePrep:169, gkShot:179, stepBall:202, steer:236, tick:264, resize:348, setCam:364, renderCams:374, btn:382, row:383, select:384, range:389, swatches:394, check:399, renderPanel:405, test:464, actions:511
 
-## src/main.js (32 рядків)
+## src/main.js (38 рядків)
 
 Точка входу основної гри: шрифти, склад, UI, Game, онлайн-екран, сервіс-воркер.
 
-- Внутрішні функції: boot:12
+- Внутрішні функції: boot:14
 
 ## src/match/brain.js (429 рядків)
 
@@ -208,26 +224,12 @@ TeamBrain: командне мислення ШІ. Читання гри, лін
 - Експорти: keepBallIn:19, dribbleStep:39
 - Внутрішні функції: offWall:8
 
-## src/match/match.js (3076 рядків)
+## src/match/match.js (3088 рядків)
 
 Match: уся логіка матчу: фази, ввід удару, м'яч, відбори, воротарі, голи, кат-сцени, нагороди. Огляд: docs/ARCHITECTURE.md.
 
 - **Match** :49
-  constructor:50, start:92, formation:152, kickFor:194, timeText:197, periodBound:203, gameMin:204, overMin:206, extraText:207, minuteLabel:213, stoppage:219, ballFlying:224, calmBall:226, whistlePeriod:234, setClockHud:235, halfText:241, gkWaitBlock:249, pointerDown:251, joyStart:266, joyMove:274, pointerMove:276, pointerUp:278, hideAim:292, cancelAim:293, kickErr:299, shotMul:300, updateAim:302, cutAimAtMates:370, onWall:386, onPost:397, onBody:408, creditSave:473, saveReact:479, controlScore:496, claimBall:519, tackleChance:539, addXp:541, showCard:544, bump:554, startTackle:566, updateTackles:582, resolveTackle:603, hasBall:636, looseBall:639, placeBallAt:654, trapMine:662, makeReady:678, trapOpp:693, clearReceivers:713, laneClear:716, passAim:722, choosePass:733, longTarget:766, passTo:783, recheckPass:799, kickYaw:814, carries:820, carry:827, kickApproach:852, kickReady:870, dribbleKick:880, kickFollow:894, doPass:907, launchFor:924, startShot:933, aimCounter:950, counterPath:956, takerThink:968, updateTaker:1001, matesTackle:1117, releaseCounter:1130, remoteCtl:1145, gkHoldNow:1147, remoteWaiting:1148, remoteAimPose:1151, remoteHold:1158, remoteKick:1173, remoteRelease:1183, pickOppReceiver:1200, ricochetGoal:1222, pickMyReceiver:1228, launchShot:1249, onGoal:1271, updateGoal:1320, afterGoal:1333, pendingPause:1341, update:1344, nextPeriod:1390, timeOver:1401, procLead:1417, procAt:1429, driveIntro:1444, laneStep:1533, postStep:1565, skipIntroPart:1599, crowdBox:1615, detour:1627, steerAround:1650, introSeparate:1670, setGaze:1688, endIntro:1689, introCam:1703, clearCine:1743, startPens:1754, camInfo:1762, camOverride:1773, markMoment:1787, storeClip:1793, takeMoments:1801, startHighlights:1805, playClips:1811, nextClip:1816, updateClip:1827, endClips:1840, replayCam:1846, skipCine:1857, startBreak:1866, updateBreak:1878, endBreak:1898, breakCam:1903, assignEndRoles:1918, endShake:1961, endCam:1995, clearSlow:2018, updateSlow:2021, checkTackles:2045, oppLunging:2060, lungePause:2063, tacklePatience:2066, tackleReady:2072, updateDanger:2082, tick:2094, resolvePlayers:2203, updateSlides:2258, startSlide:2301, onSlideContact:2311, keeperCollect:2335, facesBall:2356, inGloves:2370, gkReceive:2390, gkRush:2403, startSmother:2419, resolveSmother:2430, updateKeepers:2443, goalImportance:2587, setupCelebration:2608, celebView:2628, fanBurst:2644, updateCelebration:2650, fallbackPick:2766, updateHolder:2784, keeperBodies:2817, updateSolidity:2837, animatePlayers:2849, syncView:2862, netBulge:2921, floatAt:2937, pause:2940, resume:2941, isPlaying:2942, endCelebrate:2945, endTalk:2982, end:3005, exit:3066
-
-## src/match/match.js (3076 рядків)
-
-Match: уся логіка матчу: фази, ввід удару, м'яч, відбори, воротарі, голи, кат-сцени, нагороди. Огляд: docs/ARCHITECTURE.md.
-
-- **Match** :49
-  constructor:50, start:92, formation:152, kickFor:194, timeText:197, periodBound:203, gameMin:204, overMin:206, extraText:207, minuteLabel:213, stoppage:219, ballFlying:224, calmBall:226, whistlePeriod:234, setClockHud:235, halfText:241, gkWaitBlock:249, pointerDown:251, joyStart:266, joyMove:274, pointerMove:276, pointerUp:278, hideAim:292, cancelAim:293, kickErr:299, shotMul:300, updateAim:302, cutAimAtMates:370, onWall:386, onPost:397, onBody:408, creditSave:473, saveReact:479, controlScore:496, claimBall:519, tackleChance:539, addXp:541, showCard:544, bump:554, startTackle:566, updateTackles:582, resolveTackle:603, hasBall:636, looseBall:639, placeBallAt:654, trapMine:662, makeReady:678, trapOpp:693, clearReceivers:713, laneClear:716, passAim:722, choosePass:733, longTarget:766, passTo:783, recheckPass:799, kickYaw:814, carries:820, carry:827, kickApproach:852, kickReady:870, dribbleKick:880, kickFollow:894, doPass:907, launchFor:924, startShot:933, aimCounter:950, counterPath:956, takerThink:968, updateTaker:1001, matesTackle:1117, releaseCounter:1130, remoteCtl:1145, gkHoldNow:1147, remoteWaiting:1148, remoteAimPose:1151, remoteHold:1158, remoteKick:1173, remoteRelease:1183, pickOppReceiver:1200, ricochetGoal:1222, pickMyReceiver:1228, launchShot:1249, onGoal:1271, updateGoal:1320, afterGoal:1333, pendingPause:1341, update:1344, nextPeriod:1390, timeOver:1401, procLead:1417, procAt:1429, driveIntro:1444, laneStep:1533, postStep:1565, skipIntroPart:1599, crowdBox:1615, detour:1627, steerAround:1650, introSeparate:1670, setGaze:1688, endIntro:1689, introCam:1703, clearCine:1743, startPens:1754, camInfo:1762, camOverride:1773, markMoment:1787, storeClip:1793, takeMoments:1801, startHighlights:1805, playClips:1811, nextClip:1816, updateClip:1827, endClips:1840, replayCam:1846, skipCine:1857, startBreak:1866, updateBreak:1878, endBreak:1898, breakCam:1903, assignEndRoles:1918, endShake:1961, endCam:1995, clearSlow:2018, updateSlow:2021, checkTackles:2045, oppLunging:2060, lungePause:2063, tacklePatience:2066, tackleReady:2072, updateDanger:2082, tick:2094, resolvePlayers:2203, updateSlides:2258, startSlide:2301, onSlideContact:2311, keeperCollect:2335, facesBall:2356, inGloves:2370, gkReceive:2390, gkRush:2403, startSmother:2419, resolveSmother:2430, updateKeepers:2443, goalImportance:2587, setupCelebration:2608, celebView:2628, fanBurst:2644, updateCelebration:2650, fallbackPick:2766, updateHolder:2784, keeperBodies:2817, updateSolidity:2837, animatePlayers:2849, syncView:2862, netBulge:2921, floatAt:2937, pause:2940, resume:2941, isPlaying:2942, endCelebrate:2945, endTalk:2982, end:3005, exit:3066
-
-## src/match/match.js (3076 рядків)
-
-Match: уся логіка матчу: фази, ввід удару, м'яч, відбори, воротарі, голи, кат-сцени, нагороди. Огляд: docs/ARCHITECTURE.md.
-
-- **Match** :49
-  constructor:50, start:92, formation:152, kickFor:194, timeText:197, periodBound:203, gameMin:204, overMin:206, extraText:207, minuteLabel:213, stoppage:219, ballFlying:224, calmBall:226, whistlePeriod:234, setClockHud:235, halfText:241, gkWaitBlock:249, pointerDown:251, joyStart:266, joyMove:274, pointerMove:276, pointerUp:278, hideAim:292, cancelAim:293, kickErr:299, shotMul:300, updateAim:302, cutAimAtMates:370, onWall:386, onPost:397, onBody:408, creditSave:473, saveReact:479, controlScore:496, claimBall:519, tackleChance:539, addXp:541, showCard:544, bump:554, startTackle:566, updateTackles:582, resolveTackle:603, hasBall:636, looseBall:639, placeBallAt:654, trapMine:662, makeReady:678, trapOpp:693, clearReceivers:713, laneClear:716, passAim:722, choosePass:733, longTarget:766, passTo:783, recheckPass:799, kickYaw:814, carries:820, carry:827, kickApproach:852, kickReady:870, dribbleKick:880, kickFollow:894, doPass:907, launchFor:924, startShot:933, aimCounter:950, counterPath:956, takerThink:968, updateTaker:1001, matesTackle:1117, releaseCounter:1130, remoteCtl:1145, gkHoldNow:1147, remoteWaiting:1148, remoteAimPose:1151, remoteHold:1158, remoteKick:1173, remoteRelease:1183, pickOppReceiver:1200, ricochetGoal:1222, pickMyReceiver:1228, launchShot:1249, onGoal:1271, updateGoal:1320, afterGoal:1333, pendingPause:1341, update:1344, nextPeriod:1390, timeOver:1401, procLead:1417, procAt:1429, driveIntro:1444, laneStep:1533, postStep:1565, skipIntroPart:1599, crowdBox:1615, detour:1627, steerAround:1650, introSeparate:1670, setGaze:1688, endIntro:1689, introCam:1703, clearCine:1743, startPens:1754, camInfo:1762, camOverride:1773, markMoment:1787, storeClip:1793, takeMoments:1801, startHighlights:1805, playClips:1811, nextClip:1816, updateClip:1827, endClips:1840, replayCam:1846, skipCine:1857, startBreak:1866, updateBreak:1878, endBreak:1898, breakCam:1903, assignEndRoles:1918, endShake:1961, endCam:1995, clearSlow:2018, updateSlow:2021, checkTackles:2045, oppLunging:2060, lungePause:2063, tacklePatience:2066, tackleReady:2072, updateDanger:2082, tick:2094, resolvePlayers:2203, updateSlides:2258, startSlide:2301, onSlideContact:2311, keeperCollect:2335, facesBall:2356, inGloves:2370, gkReceive:2390, gkRush:2403, startSmother:2419, resolveSmother:2430, updateKeepers:2443, goalImportance:2587, setupCelebration:2608, celebView:2628, fanBurst:2644, updateCelebration:2650, fallbackPick:2766, updateHolder:2784, keeperBodies:2817, updateSolidity:2837, animatePlayers:2849, syncView:2862, netBulge:2921, floatAt:2937, pause:2940, resume:2941, isPlaying:2942, endCelebrate:2945, endTalk:2982, end:3005, exit:3066
+  constructor:50, start:92, formation:152, kickFor:194, timeText:197, periodBound:203, gameMin:204, overMin:206, extraText:207, minuteLabel:213, stoppage:219, ballFlying:224, calmBall:226, whistlePeriod:234, setClockHud:235, halfText:241, gkWaitBlock:249, pointerDown:251, joyStart:266, joyMove:274, pointerMove:276, pointerUp:278, hideAim:292, cancelAim:293, kickErr:299, shotMul:300, updateAim:302, cutAimAtMates:370, onWall:386, onPost:397, onBody:408, creditSave:473, saveReact:479, controlScore:496, claimBall:519, tackleChance:539, addXp:541, showCard:544, bump:554, startTackle:566, updateTackles:582, resolveTackle:603, hasBall:636, looseBall:639, placeBallAt:654, trapMine:662, makeReady:678, trapOpp:693, clearReceivers:713, laneClear:716, passAim:722, choosePass:733, longTarget:766, passTo:783, recheckPass:799, kickYaw:814, carries:820, carry:827, kickApproach:852, kickReady:870, dribbleKick:880, kickFollow:894, doPass:907, launchFor:924, startShot:933, aimCounter:950, counterPath:956, takerThink:968, updateTaker:1001, matesTackle:1117, releaseCounter:1130, remoteCtl:1145, gkHoldNow:1147, remoteWaiting:1148, remoteAimPose:1151, remoteHold:1158, remoteKick:1173, remoteRelease:1183, pickOppReceiver:1200, ricochetGoal:1222, pickMyReceiver:1228, launchShot:1249, onGoal:1271, updateGoal:1320, afterGoal:1333, pendingPause:1341, update:1344, nextPeriod:1390, timeOver:1401, procLead:1417, procAt:1429, driveIntro:1444, laneStep:1533, postStep:1565, skipIntroPart:1599, crowdBox:1615, detour:1627, steerAround:1650, introSeparate:1670, setGaze:1688, endIntro:1689, introCam:1703, clearCine:1743, startPens:1754, camInfo:1762, camOverride:1773, markMoment:1787, storeClip:1793, takeMoments:1801, startHighlights:1805, playClips:1811, nextClip:1816, updateClip:1827, endClips:1840, replayCam:1846, skipCine:1857, startBreak:1866, updateBreak:1878, endBreak:1898, breakCam:1903, assignEndRoles:1918, endShake:1961, endCam:1995, clearSlow:2018, updateSlow:2021, checkTackles:2045, oppLunging:2060, lungePause:2063, tacklePatience:2066, tackleReady:2072, updateDanger:2082, tick:2094, resolvePlayers:2203, updateSlides:2258, startSlide:2301, onSlideContact:2311, keeperCollect:2335, facesBall:2356, inGloves:2370, gkReceive:2390, gkRush:2403, startSmother:2419, resolveSmother:2430, updateKeepers:2443, goalImportance:2587, setupCelebration:2608, celebView:2628, fanBurst:2644, updateCelebration:2650, fallbackPick:2766, updateHolder:2784, keeperBodies:2817, updateSolidity:2837, animatePlayers:2849, syncView:2874, netBulge:2933, floatAt:2949, pause:2952, resume:2953, isPlaying:2954, endCelebrate:2957, endTalk:2994, end:3017, exit:3078
 
 ## src/match/penalty.js (457 рядків)
 
@@ -246,12 +248,12 @@ Actor (гравець у логіці) і Team (рух ШІ: хто на м'яч
 - **Team** :116
   constructor:117, setFormation:128, spot:135, avoid:146, laneClear:162, hasCover:174, update:184, updateGK:420
 
-## src/match/view.js (157 рядків)
+## src/match/view.js (160 рядків)
 
 MatchView: 3D-сцена матчу: 22 гравці, стадіон, м'яч, тіні, час доби й погода.
 
 - **MatchView** :23
-  constructor:24, look:78, setEnv:81, fitFog:112, swapSpots:118, setup:126, updateShadows:142
+  constructor:24, look:78, setEnv:81, setDetail:112, fitFog:115, swapSpots:121, setup:129, updateShadows:145
 
 ## src/match/walkout.js (211 рядків)
 
@@ -314,19 +316,19 @@ Walkout: декорації виходу команд: прапори, кили�
 - Експорти: esc:15, TRAITS:23, RARITY:36, ONLINE_FORMS:45, slotsOf:46, ONLINE_AIM:49, ONLINE_GK:50, newHero:54, newClub:69, OP:142, saveOP:143, markLive:145, clearLive:146, settleLive:147, resetOP:148, kitOf:154, awayKit:161, gkKitOf:167, shortOf:168, heroOvr:172, teamRating:173, trainPrice:174, SCOUT_PRICE:175, clubXpNeed:176, trainHero:178, setForm:185, swapHeroes:190, scoutHero:196, toWire:205, plain:216, fromWire:220, matchClub:242, applyResult:249
 - Внутрішні функції: repair:82, migrate:117, load:124
 
-## src/online/screen.js (376 рядків)
+## src/online/screen.js (378 рядків)
 
 Вкладка «Онлайн» у меню: свій онлайн-клуб (назва, прапор, рівень, рейтинг), герої з прокачкою і гра з людиною
 
-- **OnlineScreen** :29
-  constructor:30, onMenu:57, subKey:65, playState:66, html:68, clubCard:85, clubTiles:91, kitsHtml:96, clubHtml:100, feHtml:120, dice:121, thumb:122, feGen:123, feField:131, feEmblem:136, feColors:154, feExtra:161, rollCands:167, remember:168, patchFlag:170, patchFe:177, flagDone:187, syncSoon:190, look:193, afterRender:194, heroDetail:195, heroesHtml:207, revealHero:209, playHtml:218, stampOf:255, oppCard:257, patchOpp:262, input:274, setColor:295, act:296, copy:346, showResult:352
+- **OnlineScreen** :30
+  constructor:31, onMenu:58, subKey:66, playState:67, html:69, clubCard:86, clubTiles:92, kitsHtml:97, clubHtml:101, feHtml:121, dice:122, thumb:123, feGen:124, feField:132, feEmblem:137, feColors:155, feExtra:162, rollCands:168, remember:169, patchFlag:171, patchFe:178, flagDone:188, syncSoon:191, look:194, afterRender:195, heroDetail:196, heroesHtml:208, revealHero:210, playHtml:219, stampOf:256, oppCard:258, patchOpp:263, input:275, setColor:296, act:297, copy:348, showResult:354
 
-## src/online/session.js (283 рядків)
+## src/online/session.js (284 рядків)
 
 Онлайн-сесія: кімната за кодом → лобі (обидва бачать клуби одне одного й тиснуть «Готовий») → матч → результат
 
-- **Online** :20
-  constructor:21, role:32, inMatch:33, sendVis:34, onVis:36, busy:48, unready:50, refresh:51, setErr:52, create:55, join:62, why:69, bind:79, hello:103, sync:105, onMsg:107, setReady:150, buildSpec:159, me:170, startMatch:172, beginGuest:186, finish:200, guestEnd:212, leave:220, techLoss:230, stopMatch:236, oppLeft:243, dropped:256, rematch:262, toLobby:266, close:274
+- **Online** :21
+  constructor:22, role:33, inMatch:34, sendVis:35, onVis:37, busy:49, unready:51, refresh:52, setErr:53, create:56, join:63, why:70, bind:80, hello:104, sync:106, onMsg:108, setReady:151, buildSpec:160, me:171, startMatch:173, beginGuest:187, finish:201, guestEnd:213, leave:221, techLoss:231, stopMatch:237, oppLeft:244, dropped:257, rematch:263, toLobby:267, close:275
 
 ## src/physics/aim.js (123 рядків)
 
@@ -367,12 +369,12 @@ World: фізика м'яча з кроком 120 Гц: борти, штанги
 - Експорти: hashStr:14, STYLES:17, rivalOf:27, evolveSpec:38, recordMatch:64, scoutNote:80
 - Внутрішні функції: scoutKnow:55
 
-## src/state/save.js (150 рядків)
+## src/state/save.js (155 рядків)
 
 Збереження кар'єри: об'єкт S у localStorage, commit/flush, підписники. Нове поле додавай у defaults().
 
-- Експорти: S:120, subscribe:125, onSaveError:128, flush:130, commit:137, resetAll:142
-- Внутрішні функції: merge:30, cleanPlayer:51, cleanSquad:63, normalize:77, load:101
+- Експорти: S:121, subscribe:126, onSaveError:129, holdSave:132, flush:134, commit:142, resetAll:147
+- Внутрішні функції: merge:31, cleanPlayer:52, cleanSquad:64, normalize:78, load:102
 
 ## src/state/squad.js (264 рядків)
 
@@ -381,11 +383,11 @@ World: фізика м'яча з кроком 120 Гц: борти, штанги
 - Експорти: STAT_NAMES:10, STAT_HINT:11, keysFor:15, ROLE_UA:16, myKit:34, matchKit:36, makeStats:39, ovr:44, xpNeed:49, trainCost:50, tierOf:51, newEntry:57, ROSTER:71, defaultSquad:94, ensureSquad:102, allPlayers:116, swapPlayers:119, CAREER_FORMS:131, setTactic:137, swapStarters:139, bestLine:144, oppSquad:156, skillOf:183, gkBonus:190, squadLook:197, lookSig:204, customizeLook:207, resetLook:214, gainXp:221, trainStat:237, signGraduate:246, squadRating:264
 - Внутрішні функції: rosterEntry:82, relabelSquad:133
 
-## src/style.css (1760 рядків)
+## src/style.css (1769 рядків)
 
 Стилі основної гри; розділи перелічені в docs/CODE_MAP.md.
 
-- Розділи: Стилі основної гри; розділи перелічені в docs/CODE_MAP.md.:1 · кнопки:30 · сплеш:44 · панелі:56 · джойстик і мобільна зручність:103 · символіка клубу:132 · склад, картка гравця:146 · оверлеї:185 · результат:204 · HUD:222 · поверни пристрій:270 · анімації:275 · емблема-картинка заповнює свій контейнер:298 · інтро: нічна станція, паровоз, світлофор «стоп → вперед», печатка клубу:306 · потяг УЗ: заїжджає, зупиняється біля платформи, дає зелений і відправляється:370 · денний краєвид як у «404-потязі»: пагорби й хмари пливуть, колія біжить, потяг пружинить:390 · їде без зупинок: заїзд, хід, плавний розгін уперед:410 · потяг із прикладу Uiverse (rohit_4476), один в один:415 · розвернутий локомотив у клубних кольорах + 3 вагони:429 · потяг стоїть колесами на рейці: тінь, головка рейки, баласт:451 · світлофор керується потягом; фінал стартує за сигналом; чант:464 · поки їде потяг: стрічка фактів і логотипів клубу:488 · редактор вигляду:498 · серія пенальті:515 · адаптація вікон під низькі екрани (телефон у ландшафті): вміст прокручується, кнопка «закрити» завжди на місці:534 · табло як на телебаченні: компактна плашка зліва вгорі:557 · анімації табло:574 · картка гравця з м'ячем: компактніша:593 · підказка для iPhone: встановити на початковий екран:602 · головна: ЛОКО РАШ — швидкість, залізниця, лівреї УЗ:607 · назва: косі літери, «розріз» швидкості, шлейф:614 · кнопка:628 · діагональні смуги лівреї УЗ праворуч:638 · колія внизу: рейки, що біжать, і вогні поїзда:647 · налаштування джойстика: рядок не накладається на «На весь екран»:662 · верхній ряд:689 · маршрут ліги:699 · гаманець:720 · бічні: табличка клубу і табло:733 · низ: прокачка, вкладки, «ВПЕРЕД!»:795 · прокачка стадіону — кремова коса табличка:798 · вкладки — косі плитки лівреї, активна червона з кремовою рискою:816 · «ВПЕРЕД!» — та сама коса кнопка, що й на заставці, тільки більша:824 · поява меню:850 · вузькі екрани (4:3, 16:10) і низькі телефони:886 · текст не вилазить за межі блоків:900 · картки в панелях: нічого не стискається поверх сусіда, а що не влізло — гортається всередині картки:904 · джойстик: плавна поява, у катсценах прихований:931 · пауза:946 · налаштування:988 · низьке або вузьке вікно: Налаштування на всю висоту, а якщо вкладки однаково не вміщаються, вони прокручуються:1032 · табличка доданого часу — як LED-табло резервного судді:1122 · смужка автора гола під табло:1131 · велике табло рахунку: перерви й фінальний свисток:1145 · годинник: хвилина перекидається, секунди біжать рівно, смужка тайму; до розведення годинник стоїть (блимає двокрапка):1185 · онлайн: п'ята вкладка меню, онлайн-клуб, кімната за кодом:1203 · смуга зверху в кольорах клубу й косий штрих на тлі:1219 · вхідні анімації вмісту: лише при новій сторінці:1246 · кнопки в ліврею:1255 · полотно, що майорить:1266 · сцена під прапором: промені в кольорах клубу:1277 · лобі:1350 · клуб і редактор прапора:1375 · герої: тактичне поле, гравець на весь зріст, навички:1455 · низький екран (телефон лежачи): панель займає весь екран, меню за нею ховається:1539 · палець: більші цілі, без залиплого наведення, легші анімації:1550 · сяйво й промені за заголовком:1597 · конфеті:1606 · заголовок: літери падають згори з перельотом, потім по ньому пробігає відблиск:1619 · табло: два герби на косих плитах, рахунок «грюкає»:1636 · автори голів — під своєю командою:1658 · каса праворуч: плита з рейками-смугами, рядки виїжджають, суми дораховуються:1672 · кнопки — як у паузі:1699 · повторне малювання того самого вікна: вхідні анімації не повторюються:1719 · мінімапа матчу (ui/minimap.js):1722
+- Розділи: Стилі основної гри; розділи перелічені в docs/CODE_MAP.md.:1 · кнопки:35 · сплеш:49 · панелі:61 · джойстик і мобільна зручність:108 · символіка клубу:137 · склад, картка гравця:151 · оверлеї:190 · результат:209 · HUD:227 · поверни пристрій:275 · анімації:284 · емблема-картинка заповнює свій контейнер:307 · інтро: нічна станція, паровоз, світлофор «стоп → вперед», печатка клубу:315 · потяг УЗ: заїжджає, зупиняється біля платформи, дає зелений і відправляється:379 · денний краєвид як у «404-потязі»: пагорби й хмари пливуть, колія біжить, потяг пружинить:399 · їде без зупинок: заїзд, хід, плавний розгін уперед:419 · потяг із прикладу Uiverse (rohit_4476), один в один:424 · розвернутий локомотив у клубних кольорах + 3 вагони:438 · потяг стоїть колесами на рейці: тінь, головка рейки, баласт:460 · світлофор керується потягом; фінал стартує за сигналом; чант:473 · поки їде потяг: стрічка фактів і логотипів клубу:497 · редактор вигляду:507 · серія пенальті:524 · адаптація вікон під низькі екрани (телефон у ландшафті): вміст прокручується, кнопка «закрити» завжди на місці:543 · табло як на телебаченні: компактна плашка зліва вгорі:566 · анімації табло:583 · картка гравця з м'ячем: компактніша:602 · підказка для iPhone: встановити на початковий екран:611 · головна: ЛОКО РАШ — швидкість, залізниця, лівреї УЗ:616 · назва: косі літери, «розріз» швидкості, шлейф:623 · кнопка:637 · діагональні смуги лівреї УЗ праворуч:647 · колія внизу: рейки, що біжать, і вогні поїзда:656 · налаштування джойстика: рядок не накладається на «На весь екран»:671 · верхній ряд:698 · маршрут ліги:708 · гаманець:729 · бічні: табличка клубу і табло:742 · низ: прокачка, вкладки, «ВПЕРЕД!»:804 · прокачка стадіону — кремова коса табличка:807 · вкладки — косі плитки лівреї, активна червона з кремовою рискою:825 · «ВПЕРЕД!» — та сама коса кнопка, що й на заставці, тільки більша:833 · поява меню:859 · вузькі екрани (4:3, 16:10) і низькі телефони:895 · текст не вилазить за межі блоків:909 · картки в панелях: нічого не стискається поверх сусіда, а що не влізло — гортається всередині картки:913 · джойстик: плавна поява, у катсценах прихований:940 · пауза:955 · налаштування:997 · низьке або вузьке вікно: Налаштування на всю висоту, а якщо вкладки однаково не вміщаються, вони прокручуються:1041 · табличка доданого часу — як LED-табло резервного судді:1131 · смужка автора гола під табло:1140 · велике табло рахунку: перерви й фінальний свисток:1154 · годинник: хвилина перекидається, секунди біжать рівно, смужка тайму; до розведення годинник стоїть (блимає двокрапка):1194 · онлайн: п'ята вкладка меню, онлайн-клуб, кімната за кодом:1212 · смуга зверху в кольорах клубу й косий штрих на тлі:1228 · вхідні анімації вмісту: лише при новій сторінці:1255 · кнопки в ліврею:1264 · полотно, що майорить:1275 · сцена під прапором: промені в кольорах клубу:1286 · лобі:1359 · клуб і редактор прапора:1384 · герої: тактичне поле, гравець на весь зріст, навички:1464 · низький екран (телефон лежачи): панель займає весь екран, меню за нею ховається:1548 · палець: більші цілі, без залиплого наведення, легші анімації:1559 · сяйво й промені за заголовком:1606 · конфеті:1615 · заголовок: літери падають згори з перельотом, потім по ньому пробігає відблиск:1628 · табло: два герби на косих плитах, рахунок «грюкає»:1645 · автори голів — під своєю командою:1667 · каса праворуч: плита з рейками-смугами, рядки виїжджають, суми дораховуються:1681 · кнопки — як у паузі:1708 · повторне малювання того самого вікна: вхідні анімації не повторюються:1728 · мінімапа матчу (ui/minimap.js):1731
 
 ## src/ui/hud.js (208 рядків)
 
@@ -438,13 +440,13 @@ Tactics: екран складу для кар'єри й онлайн-клубу
 - **Tactics** :17
   constructor:18, reset:20, pos:21, token:26, formsHtml:30, popHtml:32, swapHtml:36, ttSig:41, ttHtml:42, html:46, afterRender:64, fill:71, patch:80, act:97
 
-## src/ui/ui.js (955 рядків)
+## src/ui/ui.js (963 рядків)
 
 UI: меню, панелі, пауза, налаштування, результат, джойстик. Кнопки: data-act -> UI.act.
 
-- Внутрішні функції: countTo:26, redraw:47
-- **UI** :53
-  constructor:54, onResize:162, key:173, isIOS:196, isStandalone:197, iosHint:198, useJoy:206, setMatchUi:210, applyControls:211, joyCenter:230, placeJoy:235, initJoy:240, act:288, kitNote:352, setJoyEdit:358, editDone:364, menuTap:370, toast:379, setSlow:384, flash:385, showMenu:391, tiltNav:402, rollFlaps:414, hideMenu:431, leagueStrip:438, refresh:453, menuCards:470, fitFlaps:511, clock:520, tickCash:525, claimCash:533, deny:541, pop:542, buyStadium:544, openPanel:555, panelCovers:564, closePanel:565, renderPanel:573, showTier:591, statBar:597, teamSheet:600, careerLook:612, careerDetail:613, squadHtml:626, train:645, transfersHtml:653, academyHtml:670, stadiumHtml:685, chronicleHtml:703, symbolsHtml:713, buy:724, equip:733, collectGraduate:739, boostAcademy:759, openCustom:769, closeCustom:772, customAct:773, renderCustom:790, openSettings:813, closeSettings:816, renderSettings:817, pause:860, showResult:876, renderResult:905, hideResult:954
+- Внутрішні функції: countTo:27, redraw:48
+- **UI** :54
+  constructor:55, onResize:163, key:174, goBack:190, canGoBack:199, isIOS:204, isStandalone:205, iosHint:206, useJoy:214, setMatchUi:218, applyControls:219, joyCenter:238, placeJoy:243, initJoy:248, act:296, kitNote:360, setJoyEdit:366, editDone:372, menuTap:378, toast:387, setSlow:392, flash:393, showMenu:399, tiltNav:410, rollFlaps:422, hideMenu:439, leagueStrip:446, refresh:461, menuCards:478, fitFlaps:519, clock:528, tickCash:533, claimCash:541, deny:549, pop:550, buyStadium:552, openPanel:563, panelCovers:572, closePanel:573, renderPanel:581, showTier:599, statBar:605, teamSheet:608, careerLook:620, careerDetail:621, squadHtml:634, train:653, transfersHtml:661, academyHtml:678, stadiumHtml:693, chronicleHtml:711, symbolsHtml:721, buy:732, equip:741, collectGraduate:747, boostAcademy:767, openCustom:777, closeCustom:780, customAct:781, renderCustom:798, openSettings:821, closeSettings:824, renderSettings:825, pause:868, showResult:884, renderResult:913, hideResult:962
 
 ## src/ui/vox.js (82 рядків)
 

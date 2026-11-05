@@ -1,5 +1,6 @@
 // Увесь звук синтезується на льоту (WebAudio): жодних файлів, нуль завантаження.
 import { S } from '../state/save.js';
+import { tgHaptic } from './telegram.js';
 
 class AudioEngine {
   constructor() {
@@ -201,5 +202,6 @@ class AudioEngine {
 export const audio = new AudioEngine();
 
 export function vibrate(ms) {
-  if (S.settings.haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } }
+  if (!S.settings.haptics || tgHaptic(ms)) return;
+  if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } }
 }

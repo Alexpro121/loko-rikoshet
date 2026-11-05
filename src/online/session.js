@@ -5,6 +5,7 @@
 // чекає 30 с, гравцем гостя тим часом грає ШІ. Не повернувся: поразка тому, у кого зник зв'язок (dropped). Фінальний свисток під час обриву повторюється (lastEnd).
 import { S } from '../state/save.js';
 import { audio } from '../core/audio.js';
+import { appHidden } from '../core/telegram.js';
 import { Net, PROTO, cleanCode } from './net.js';
 import { HostLink } from './host.js';
 import { GuestMatch } from './guest.js';
@@ -31,14 +32,14 @@ export class Online {
   }
   get role() { return this.net ? this.net.role : null; }
   inMatch() { return this.state === 'match'; }
-  sendVis() { if (this.net && this.net.open && this.state === 'match') this.net.send({ t: 'vis', on: document.hidden === true ? 1 : 0 }); }
+  sendVis() { if (this.net && this.net.open && this.state === 'match') this.net.send({ t: 'vis', on: appHidden() ? 1 : 0 }); }
   /** Згорнув гру в матчі понад AWAY_MS: це вихід. Таймер може не спрацювати (телефон приспав вкладку), тож перевіряємо ще й при поверненні. */
   onVis() {
     this.sendVis(); clearTimeout(this.awayT);
     if (this.state !== 'match') { this.hiddenAt = 0; return; }
-    if (document.hidden) {
+    if (appHidden()) {
       this.hiddenAt = Date.now();
-      this.awayT = setTimeout(() => { if (document.hidden && this.state === 'match') this.leave(); }, AWAY_MS);
+      this.awayT = setTimeout(() => { if (appHidden() && this.state === 'match') this.leave(); }, AWAY_MS);
       return;
     }
     const away = this.hiddenAt ? Date.now() - this.hiddenAt : 0; this.hiddenAt = 0;

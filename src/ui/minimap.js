@@ -161,7 +161,7 @@ export class Minimap {
 
   tick(dt, m, game) {
     this.acc += dt;
-    if (this.acc < (S.settings.quality === 'low' ? DRAW_T_LOW : DRAW_T)) return;
+    if (this.acc < (game && game.level === 0 || S.settings.quality === 'low' ? DRAW_T_LOW : DRAW_T)) return;
     const el = this.acc; this.acc = 0;
     if (m) {
       this.read(m, game);

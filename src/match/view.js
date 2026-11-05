@@ -53,7 +53,7 @@ export class MatchView {
     sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
     this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, fog: false, transparent: true, opacity: 0.9 })); this.stars.visible = false; scene.add(this.stars);
 
-    const mk = (kit, gk, i) => new Player({ kit, num: i + 1, skin: SKIN[i % 4], hair: HAIR[i % 5], hairCol: HCOL[i % 6], gk, scale: SCALE });
+    const mk = (kit, gk, i) => new Player({ kit, num: i + 1, skin: SKIN[i % 4], hair: HAIR[i % 5], hairCol: HCOL[i % 6], gk, scale: SCALE }).useSkin();
     this.mine = Array.from({ length: 11 }, (_, i) => mk(i === 0 ? KIT_GK_LOKO : KIT_LOKO, i === 0, i));
     this.opp = Array.from({ length: 11 }, (_, i) => mk(i === 0 ? KIT_GK_LOKO : KIT_LOKO, i === 0, i + 3));
     this.players = [...this.mine, ...this.opp];
@@ -107,6 +107,9 @@ export class MatchView {
     // газон світліє під снігом, а в дощ трохи темніє
     if (this.pitch.grassMat) this.pitch.grassMat.color.set(weather === 'snow' ? '#e6efe9' : weather === 'rain' ? '#a9b8ac' : '#ffffff');
   }
+
+  /** Рівень деталізації пристрою (DETAIL у src/core/perf.js): натовп, погода, полотнища. Викликає Game. */
+  setDetail(d) { this.stands.setDetail(d); this.weather.setDensity(d.weather); }
 
   /** Туман рахується від камери: далека камера (тактична, повзунок відстані) відсуває густий туман разом із собою, щоб гра не тонула в сірому. */
   fitFog(d) {

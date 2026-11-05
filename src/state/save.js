@@ -1,5 +1,6 @@
 // Збереження кар'єри: об'єкт S у localStorage, commit/flush, підписники. Нове поле додавай у defaults().
 import { SETTINGS_DEFAULT, FIXTURES, ACADEMY, FORMATIONS, STAT_KEYS, GK_KEYS, LINE_OF } from '../config.js';
+import { appHidden } from '../core/telegram.js';
 
 const KEY = 'loko-rikoshet-save-v1';
 
@@ -120,15 +121,19 @@ function load() {
 export const S = load();
 
 const listeners = new Set();
-let timer = 0, saveFailed = false, onFail = null;
+let timer = 0, saveFailed = false, onFail = null, held = false;
 
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
 /** Сховище не приймає запис (квота, приватний режим): гравець має про це знати; один раз, доки запис не запрацює знову. */
 export function onSaveError(fn) { onFail = fn; if (saveFailed) fn(); }
 
+/** Сторінка от-от перезавантажиться з новими даними в localStorage: старий S уже не можна записувати поверх них. */
+export function holdSave() { held = true; clearTimeout(timer); timer = 0; }
+
 export function flush() {
   clearTimeout(timer); timer = 0;
+  if (held) return;
   try { localStorage.setItem(KEY, JSON.stringify(S)); saveFailed = false; }
   catch (e) { if (!saveFailed) { saveFailed = true; if (onFail) onFail(); } }
 }
@@ -147,4 +152,4 @@ export function resetAll() {
 }
 
 addEventListener('pagehide', flush);
-addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+addEventListener('visibilitychange', () => { if (appHidden()) flush(); });

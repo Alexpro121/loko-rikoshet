@@ -2848,14 +2848,26 @@ export class Match {
   /** Анімація гравців. У живій грі ті, кого камера зараз не бачить, рахуються ~30 разів на секунду (час не губиться, лише збирається). */
   animatePlayers(dt) {
     const cam = this.game.matchCam, lod = dt > 0 && this.phase === 'play' && !this.link && !this.rp && !this.hl;
+    const lv = this.game.level, thin = lod && (lv === 0 || lv === 1), bx = this.ball.x, bz = this.ball.z;   // слабкий пристрій: далекі від м'яча теж рідше
     if (lod) _fr.setFromProjectionMatrix(_pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
     for (let i = 0; i < this.actors.length; i++) {
       const a = this.actors[i], p = a.p;
       if (lod && !a.isGK && a !== this.holder && a !== this.taker && !a.receiver && !a.manual && !a.sliding && !a.dive && !p.downed && !p.rag) {
         _sp.center.set(p.x, 1, p.z);
-        if (!_fr.intersectsSphere(_sp)) { p.lodT = (p.lodT || 0) + dt; if (p.lodT < 0.03) continue; const d = p.lodT; p.lodT = 0; p.animate(d); continue; }
-      }
-      const d = dt + (p.lodT || 0); p.lodT = 0; p.animate(d);
+        const far = thin && Math.abs(p.x - bx) + Math.abs(p.z - bz) > 14;
+        p.lite = far;
+        if (far || !_fr.intersectsSphere(_sp)) {
+          p.lodT = (p.lodT || 0) + dt;
+          // пропущений кадр: кінцівки стоять, але тіло їде далі, інакше камера покаже ривки
+          if (p.lodT < 0.03) {
+            const mx = p.x - p.lodX, mz = p.z - p.lodZ; p.lodX = p.x; p.lodZ = p.z;
+            if (mx * mx + mz * mz < 1) { p.root.position.x += mx; p.root.position.z += mz; }   // більший стрибок це стара мітка (після виходу команд), а не рух
+            continue;
+          }
+          const d = p.lodT; p.lodT = 0; p.animate(d); p.lodX = p.x; p.lodZ = p.z; continue;
+        }
+      } else p.lite = false;
+      const d = dt + (p.lodT || 0); p.lodT = 0; p.animate(d); p.lodX = p.x; p.lodZ = p.z;
     }
   }
 

@@ -112,7 +112,10 @@
 | Логіка кадрування | `CamDirector.update` у `src/core/camera.js`, `camInfo` |
 | Камера кат-сцен | `camOverride`, `introCam`, `replayCam`, `breakCam`, `endCam` |
 | Тряска й зум | `Game.addTrauma`, `Game.fovKick` |
-| Роздільність і продуктивність | `Game.basePixelRatio`, `Game.governor` |
+| Роздільність і продуктивність | `Game.basePixelRatio`, `Game.governor`, `Game.levelDown` |
+| Що спрощується на слабкому пристрої, перша оцінка | `DETAIL`, `guess` у `src/core/perf.js`, `MatchView.setDetail` |
+| Обмеження 120 Гц на телефоні | початок `Game.step` |
+| Злита модель гравця | `RIG`, `Player.useSkin`, `Player.skinGeo` у `src/graphics/player.js`; перевірка: `lab.html?skin` |
 
 ## Кат-сцени
 
@@ -190,5 +193,10 @@
 | Офлайн-кеш | `public/sw.js` |
 | Назва, іконки PWA | `public/manifest.webmanifest`, `index.html` |
 | Google Play | `store/PLAY_STORE.md`, `twa-manifest.json`, `public/.well-known/assetlinks.json` |
+| Випуск у Telegram, посилання на бота | `store/TELEGRAM.md`, `BOT_LINK` у `src/core/telegram.js` |
+| Поведінка в Telegram: повний екран, поворот, підказка в портреті | `setup`, `lockLandscape`, `rotateHelp` у `src/core/telegram.js` |
+| Кнопка «назад» Telegram, підтвердження виходу | `bindTelegram` у `src/core/telegram.js`, `UI.goBack`, `UI.canGoBack` |
+| Хмарна копія збереження | `pullCloud`, `pushCloud`, `CLOUD_KEYS` у `src/core/telegram.js` |
+| Відступи від вирізу екрана й кнопок Telegram | `--safe-*`, `--pad-*` у `src/style.css` |
 | Офлайн-кеш, прийняття релізу | `adopt`, `shell`, `fits` у `public/sw.js` |
 | Частота кадрів у паузі, помилка в кадрі | `still` у `Game.step`, `Game.onFrameError` у `src/core/game.js` |

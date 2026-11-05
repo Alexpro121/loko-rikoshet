@@ -17,7 +17,13 @@ export class Weather {
     for (let i = 0; i < this.n; i++) { this.x[i] = (Math.random() * 2 - 1) * X; this.y[i] = Math.random() * Y; this.z[i] = (Math.random() * 2 - 1) * Z; this.k[i] = Math.random() * 6.28; }
     _m.compose(_p.set(0, 0, 0), _qRain, _s);
     for (let i = 0; i < this.n; i++) this.rain.setMatrixAt(i, _m);
-    this.type = 'clear';
+    this.type = 'clear'; this.live = this.n;
+  }
+
+  /** Частка крапель під рівень деталізації пристрою. */
+  setDensity(k) {
+    this.live = Math.max(1, Math.round(this.n * k));
+    this.rain.count = this.snow.count = this.live;
   }
 
   set(type) {
@@ -29,13 +35,15 @@ export class Weather {
     const rain = this.type === 'rain', snow = this.type === 'snow';
     if (!rain && !snow) return;
     const mesh = rain ? this.rain : this.snow, a = mesh.instanceMatrix.array, vy = rain ? 40 : 3.2, vx = rain ? -4 : 0, t = performance.now() * 0.001;
-    for (let i = 0; i < this.n; i++) {
+    const n = this.live;
+    for (let i = 0; i < n; i++) {
       this.y[i] -= vy * dt * (rain ? 1 : 0.7 + (i % 5) * 0.12);
       this.x[i] += (vx + (snow ? Math.sin(t * 0.9 + this.k[i]) * 1.1 : 0)) * dt;
       if (this.y[i] < 0) { this.y[i] = Y; this.x[i] = (Math.random() * 2 - 1) * X; this.z[i] = (Math.random() * 2 - 1) * Z; }
       if (this.x[i] < -X) this.x[i] += 2 * X;
       const o = i * 16; a[o + 12] = this.x[i]; a[o + 13] = this.y[i]; a[o + 14] = this.z[i];   // поворот сталий, міняється лише позиція
     }
+    if (n < this.n) mesh.instanceMatrix.addUpdateRange(0, n * 16);
     mesh.instanceMatrix.needsUpdate = true;
   }
 }

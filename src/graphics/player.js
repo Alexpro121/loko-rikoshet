@@ -175,6 +175,38 @@ function printMat() {
   return _print;
 }
 
+// ---------------------------------------------------------------- один меш на гравця
+// У матчі 17 частин на 22 гравців давали 374 виклики малювання: на телефоні саме вони з'їдали кадр. Злитий гравець це один
+// SkinnedMesh із двома групами (тканина й друк): кожна вершина належить рівно одному суглобу, тож шейдер бере одну матрицю.
+/** Частина моделі → суглоб, що її несе. torso, chestM, hips лишаються у дереві: їх масштабує стиск тулуба й читає bodyGuard. */
+const RIG = [['torso', 'torso'], ['chestM', 'chestM'], ['head', 'neck'], ['hips', 'hips'], ['thighLm', 'legL'], ['thighRm', 'legR'], ['shinLm', 'shinL'], ['shinRm', 'shinR'],
+  ['footLm', 'footL'], ['footRm', 'footR'], ['upperLm', 'armL'], ['upperRm', 'armR'], ['foreLm', 'foreL'], ['foreRm', 'foreR'], ['handLm', 'handL'], ['handRm', 'handR']];
+const CHEST_BONE = 1;                                           // printM лежить точно на chestM
+const _noBind = new THREE.Matrix4(), _noInv = RIG.map(() => _noBind);
+let _rigid = null;
+function rigidMats() {
+  if (_rigid) return _rigid;
+  const patch = (m) => {
+    m.onBeforeCompile = (s) => {
+      s.vertexShader = s.vertexShader.replace('#include <skinbase_vertex>', 'mat4 boneMatX = getBoneMatrix(skinIndex.x);')
+        .replace('#include <skinnormal_vertex>', '')            // flatShading бере нормаль із похідних, вершинна не потрібна
+        .replace('#include <skinning_vertex>', 'transformed = (boneMatX * vec4(transformed, 1.0)).xyz;');
+    };
+    m.customProgramCacheKey = () => 'rigid';
+    return m;
+  };
+  return (_rigid = [patch(atlasMat().clone()), patch(printMat().clone())]);
+}
+/** Кістки вже у світових координатах, обернених матриць немає: матриці лише копіюються. */
+class RigidSkeleton extends THREE.Skeleton {
+  update() {
+    const b = this.bones, m = this.boneMatrices;
+    for (let i = 0; i < b.length; i++) m.set(b[i].matrixWorld.elements, i * 16);
+    if (this.boneTexture) this.boneTexture.needsUpdate = true;
+  }
+}
+const noMatrixUpdate = () => {};
+
 const cache = new Map();
 const cached = (key, make) => { let g = cache.get(key); if (!g) { g = make(); cache.set(key, g); } return g; };
 const FACE_UV = [[0, 1], [1, 1], [0, 0], [1, 0]];
@@ -452,7 +484,7 @@ export class Player {
     this.armL.position.set(-SHOULDER_X, SHOULDER_Y - CHEST, 0); this.armR.position.set(SHOULDER_X, SHOULDER_Y - CHEST, 0);
     this.foreL.position.y = -UPPER; this.foreR.position.y = -UPPER;
 
-    this.x = 0; this.z = 0; this.vx = 0; this.vz = 0;
+    this.x = 0; this.z = 0; this.vx = 0; this.vz = 0; this.lite = false; this.lodX = 0; this.lodZ = 0;
     this.yaw = 0; this.bodyYaw = 0;
     this.phase = Math.random() * 6; this.mode = 'idle'; this.modeT = 0; this.modeD = 0; this.power = 0;
     this.diveDir = 0; this.diveKind = 0; this.expr = 'neutral'; this.exprT = 0;
@@ -498,6 +530,50 @@ export class Player {
     this.handLm.geometry = handGeo(!!gk, skin, -1); this.handRm.geometry = handGeo(!!gk, skin, 1);
     this.root.scale.setScalar(look.scale || 0.82);
     this.expr = 'neutral'; this.exprT = 0;
+    if (this.skin) { const old = this.skin.geometry; this.skin.geometry = this.skinGeo(); old.dispose(); }
+  }
+
+  /**
+   * Зливає частини в один меш для матчу. Суглоби й уся логіка лишаються ті самі; лабораторія й портрети ведуть окремі частини.
+   * Виймає 13 порожніх вузлів із дерева: примусові updateMatrixWorld у IK щокадру перераховують їх кілька разів на гравця.
+   */
+  useSkin() {
+    if (this.skin) return this;
+    for (const [part, bone] of RIG) if (part !== bone) this[part].removeFromParent();
+    this.printM.removeFromParent();
+    this.torso.visible = this.chestM.visible = this.hips.visible = false;
+    this.skin = new THREE.SkinnedMesh(this.skinGeo(), rigidMats());
+    // матриця меша лишається одиничною: кістка сама несе світову позицію, тож тут не треба обертати матрицю щокадру
+    this.skin.bindMode = THREE.DetachedBindMode; this.skin.updateMatrixWorld = noMatrixUpdate;
+    this.skin.bind(new RigidSkeleton(RIG.map((r) => this[r[1]]), _noInv), _noBind);
+    this.skin.frustumCulled = false; this.skin.boundingSphere = new THREE.Sphere();
+    this.root.add(this.skin);
+    return this;
+  }
+
+  skinGeo() {
+    const parts = [];
+    RIG.forEach((r, bone) => parts.push(this[r[0]].geometry, bone));
+    parts.push(this.printM.geometry, CHEST_BONE);
+    let nv = 0, ni = 0;
+    for (let i = 0; i < parts.length; i += 2) { nv += parts[i].attributes.position.count; ni += parts[i].index.count; }
+    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), bone = new Uint8Array(nv), idx = new Uint16Array(ni);
+    let v = 0, n = 0, base = 0;
+    for (let i = 0; i < parts.length; i += 2) {
+      const g = parts[i], a = g.attributes, c = a.position.count, ix = g.index.array;
+      pos.set(a.position.array, v * 3); nor.set(a.normal.array, v * 3); col.set(a.color.array, v * 3); uv.set(a.uv.array, v * 2); bone.fill(parts[i + 1], v, v + c);
+      for (let k = 0; k < ix.length; k++) idx[n + k] = ix[k] + v;
+      if (g === this.head.geometry) this.skinFace = v + g.userData.faceStart;
+      v += c; n += ix.length;
+      if (i === parts.length - 4) base = n;                     // усе до останньої частини це тканина, далі друк
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    out.setAttribute('color', new THREE.BufferAttribute(col, 3)); out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    out.setAttribute('skinIndex', new THREE.BufferAttribute(bone, 1));
+    out.setIndex(new THREE.BufferAttribute(idx, 1));
+    out.addGroup(0, base, 0); out.addGroup(base, n - base, 1);
+    return out;
   }
 
   setExpr(e, hold = 0) {
@@ -507,6 +583,11 @@ export class Player {
     const uv = this.head.geometry.attributes.uv, s = this.head.geometry.userData.faceStart, r = faceCell(e, (this.look && this.look.beard) || 0);
     for (let k = 0; k < 4; k++) uv.setXY(s + k, r[0] + FACE_UV[k][0] * (r[2] - r[0]), r[1] + FACE_UV[k][1] * (r[3] - r[1]));
     uv.needsUpdate = true;
+    if (this.skin) {
+      const u = this.skin.geometry.attributes.uv;
+      for (let k = 0; k < 4; k++) u.setXY(this.skinFace + k, uv.getX(s + k), uv.getY(s + k));
+      u.needsUpdate = true;
+    }
   }
 
   // ---------------------------------------------------------------- події (кожна запускається один раз)
@@ -2157,7 +2238,7 @@ export class Player {
       if (this.rag && (dive ? !diving : this.mode !== 'stumble')) this.rag = null;   // гра перервала падіння (розстановка тощо)
     }
     this.solveReach();
-    if (!this.rag && !(this.look.gk && GK_MODES.has(this.mode))) this.bodyGuard(dt);
+    if (!this.lite && !this.rag && !(this.look.gk && GK_MODES.has(this.mode))) this.bodyGuard(dt);   // lite: далеко від м'яча, цього не видно
     // жодна частина тіла не під газоном: у скриптових позах (підкат, випад, стрибок, політ і падіння, підйом) тіло
     // піднімається на глибину провалу. У ході ноги й так на траві
     // перехід у ходу теж під контролем (поза ще не хода), а накопичений підйом згасає (~0.2 с), а не зникає за кадр

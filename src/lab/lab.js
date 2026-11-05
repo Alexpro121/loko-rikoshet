@@ -96,6 +96,7 @@ function spawn() {
     : [{}];
   looks.forEach((o, i) => {
     const p = new Player(lookOf(o));
+    if (/[?&]skin/.test(location.search)) p.useSkin();   // lab.html?skin: злита модель, як у матчі
     p.lx = S.squad ? (i - (looks.length - 1) / 2) * 1.6 : 0;
     p.x = follow.x + Math.cos(cmd.heading) * p.lx; p.z = follow.z - Math.sin(cmd.heading) * p.lx; p.yaw = p.bodyYaw = cmd.heading;
     p.root.traverse((m) => { if (m.isMesh) { m.castShadow = true; } });

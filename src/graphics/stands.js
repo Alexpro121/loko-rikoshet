@@ -118,8 +118,15 @@ export class Stands {
     }
     this.group.add(b.mesh());
 
+    // місця в випадковому порядку: менший count проріджує всі трибуни рівномірно, а не вимикає цілий сектор
+    const shuffle = rng(97);
+    for (let i = sides.length - 1; i > 0; i--) {
+      const j = (shuffle() * (i + 1)) | 0;
+      for (let k = 0; k < 6; k++) { const q = fans[i * 6 + k]; fans[i * 6 + k] = fans[j * 6 + k]; fans[j * 6 + k] = q; }
+      const q = sides[i]; sides[i] = sides[j]; sides[j] = q;
+    }
     const n = fans.length / 6;
-    this.n = n;
+    this.n = n; this.live = n; this.every = 1; this.lastT = 0;
     const noBottom = (geo) => { const ix = geo.index.array, keep = []; for (let f = 0; f < ix.length; f += 3) { if (f < 18 || f >= 24) keep.push(ix[f], ix[f + 1], ix[f + 2]); } geo.setIndex(keep); return geo; };   // BoxGeometry: грані +x,-x,+y,-y,+z,-z по 6 індексів; -y (18..23) ніколи не видно з камери зверху
     const mk = (geo) => new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ flatShading: true }), n);
     this.body = mk(noBottom(new THREE.BoxGeometry(0.72, 0.84, 0.56)));
@@ -277,8 +284,9 @@ export class Stands {
 
   /** light: спокійний фон — рухаються лише тулуби й голови; руки та шарфи лежать згорнутими. */
   writeMatrices(t, light) {
+    this.lastT = t;
     const rx = this.rx, mb = this.body.instanceMatrix.array, mh = this.head.instanceMatrix.array, ma = this.arms.instanceMatrix.array, msc = this.scarf.instanceMatrix.array;
-    const n = this.n, ch = this.chant || 0, beat = t * 4.6;
+    const n = this.live, ch = this.chant || 0, beat = t * 4.6;
     let env = 0, ty = '', mine = true;
     if (rx) { ty = rx.type; mine = rx.mine; const q = rx.t / rx.dur; env = Math.min(1, rx.t * 7) * (1 - q * q * (3 - 2 * q)); }
     for (let i = 0; i < n; i++) {
@@ -314,8 +322,24 @@ export class Stands {
       msc[o] = cr * ss; msc[o + 1] = sr * ss; msc[o + 2] = 0; msc[o + 3] = 0; msc[o + 4] = -sr * ss; msc[o + 5] = cr * ss; msc[o + 6] = 0; msc[o + 7] = 0;
       msc[o + 8] = 0; msc[o + 9] = 0; msc[o + 10] = ss; msc[o + 11] = 0; msc[o + 12] = this.bx[i] + 0.43; msc[o + 13] = ty2; msc[o + 14] = this.bz[i]; msc[o + 15] = 1;
     }
-    this.body.instanceMatrix.needsUpdate = true; this.head.instanceMatrix.needsUpdate = true;
-    if (!light) { this.arms.instanceMatrix.needsUpdate = true; this.scarf.instanceMatrix.needsUpdate = true; }
+    this.push(this.body, n); this.push(this.head, n);
+    if (!light) { this.push(this.arms, n * 2); this.push(this.scarf, n); }
+  }
+
+  /** Вантажимо на GPU лише живих глядачів: буфер усіх 12 тисяч важить понад 700 КБ. */
+  push(mesh, count) {
+    const a = mesh.instanceMatrix;
+    if (count < mesh.instanceMatrix.count) a.addUpdateRange(0, count * 16);
+    a.needsUpdate = true;
+  }
+
+  /** Рівень деталізації: частка глядачів, частота їхнього оновлення, полотнища (src/core/perf.js). */
+  setDetail(d) {
+    this.live = Math.max(1, Math.round(this.n * d.crowd)); this.every = d.crowdEvery;
+    this.body.count = this.head.count = this.scarf.count = this.live; this.arms.count = this.live * 2;
+    for (let i = 0; i < this.banners.length; i++) this.banners[i].m.visible = d.banners;
+    for (let i = 0; i < this.flags.length; i++) this.flags[i].gr.visible = d.banners;
+    this.writeMatrices(this.lastT);
   }
 
   update(dt, t) {
@@ -337,13 +361,13 @@ export class Stands {
     this.frame++;
     if (rx) {
       rx.t += dt;
-      this.writeMatrices(t);
+      if (this.frame % this.every === 0) this.writeMatrices(t);
       if (rx.type === 'flash') this.runFlashes(dt);
       this.wasActive = true;
       if (rx.t >= rx.dur) { this.rx = null; this.writeMatrices(t); this.flash.count = 0; }
-    } else if (ch > 0.01) { if ((this.frame & 1) === 0) this.writeMatrices(t); this.wasActive = true; }
+    } else if (ch > 0.01) { if (this.frame % (this.every * 2) === 0) this.writeMatrices(t); this.wasActive = true; }
     else if (this.wasActive) { this.wasActive = false; this.writeMatrices(t); }
-    else if ((this.frame & 7) === 0) this.writeMatrices(t, true);
+    else if (this.frame % (this.every * 8) === 0) this.writeMatrices(t, true);
     // димові шашки в домашньому секторі під час співів
     if (ch > 0.5 && this.particles && this.flagSmoke) {
       this.smokeT = (this.smokeT || 0) - dt;
@@ -361,7 +385,7 @@ export class Stands {
     this.flash.count = this.flashN;
     for (let i = 0; i < this.flashN; i++) {
       this.flashT[i] -= dt;
-      if (this.flashT[i] <= 0 && Math.random() < dt * 2.6) { this.flashT[i] = 0.09; this.flashI[i] = (Math.random() * this.n) | 0; }
+      if (this.flashT[i] <= 0 && Math.random() < dt * 2.6) { this.flashT[i] = 0.09; this.flashI[i] = (Math.random() * this.live) | 0; }
       const on = this.flashT[i] > 0, f = this.flashI[i];
       tmp.set(this.bx[f], this.by[f] + 1.2, this.bz[f]); sc.setScalar(on ? 1 : 0.0001);
       dm.compose(tmp, q, sc); this.flash.setMatrixAt(i, dm);

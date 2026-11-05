@@ -3,6 +3,7 @@ import { S, commit, resetAll, subscribe, onSaveError } from '../state/save.js';
 import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_TIER_NAMES, KIT_LOKO, KIT_GK_LOKO, KITS, matchSpec, CAM_PRESETS } from '../config.js';
 import { stadiumCost, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, keepCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
 import { audio, vibrate } from '../core/audio.js';
+import { appHidden, inTelegram } from '../core/telegram.js';
 import { I, crest, lokoCrest } from './icons.js';
 import { VOX } from './vox.js';
 import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact } from '../club.js';
@@ -180,21 +181,28 @@ export class UI {
     }
     const g = this.game;
     // e.code: P і F працюють у будь-якій розкладці; спершу закривається верхнє вікно, а вже потім пауза чи панель
-    if (e.key === 'Escape' || e.code === 'KeyP') {
-      if (this.joyEdit) this.act('joy-done');
-      else if (this.map.editing) this.act('map-done');
-      else if (!this.el.reveal.hidden) this.act('close-reveal');
-      else if (!this.el.settings.hidden) this.closeSettings();
-      else if (!this.el.custom.hidden) this.closeCustom();
-      else if (g.sm.name === 'MATCH') { if (!this.el.pause.hidden) this.act('resume'); else this.pause(); }
-      else if (this.panel) this.closePanel();
-    } else if (e.code === 'KeyF') g.toggleFullscreen();
+    if (e.key === 'Escape' || e.code === 'KeyP') this.goBack();
+    else if (e.code === 'KeyF') g.toggleFullscreen();
     else if ((e.key === ' ' || e.key === 'Enter') && e.target.tagName !== 'BUTTON' && g.sm.name === 'MENU' && !this.panel && this.el.splash.hidden && this.el.settings.hidden) this.menuTap();   // на сфокусованій кнопці ці клавіші тиснуть її саму
+  }
+
+  /** Крок «назад»: Esc на клавіатурі й кнопка «назад» у Telegram. Спершу закривається верхнє вікно, а вже потім пауза чи панель. */
+  goBack() {
+    if (this.joyEdit) this.act('joy-done');
+    else if (this.map.editing) this.act('map-done');
+    else if (!this.el.reveal.hidden) this.act('close-reveal');
+    else if (!this.el.settings.hidden) this.closeSettings();
+    else if (!this.el.custom.hidden) this.closeCustom();
+    else if (this.game.sm.name === 'MATCH') { if (!this.el.pause.hidden) this.act('resume'); else this.pause(); }
+    else if (this.panel) this.closePanel();
+  }
+  canGoBack() {
+    return !!(this.joyEdit || this.map.editing || !this.el.reveal.hidden || !this.el.settings.hidden || !this.el.custom.hidden || this.game.sm.name === 'MATCH' || this.panel);
   }
 
   /** iPhone не вміє fullscreen API: пропонуємо встановити гру на початковий екран (тоді вона відкривається без рядка Safari). */
   isIOS() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
-  isStandalone() { return !!navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches); }
+  isStandalone() { return inTelegram() || !!navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches); }
   iosHint(force) {
     const el = this.el.splash && this.el.splash.querySelector('#ios-hint'); if (!el) return;
     let seen = false; try { seen = localStorage.getItem('loko-ios-hint') === '1'; } catch (_) { /* ignore */ }
@@ -280,7 +288,7 @@ export class UI {
     el.addEventListener('pointercancel', (e) => { if (e.pointerId === pid) release(false); });
     el.addEventListener('lostpointercapture', (e) => { if (e.pointerId === pid) release(false); });
     addEventListener('blur', () => release(false));
-    document.addEventListener('visibilitychange', () => { if (document.hidden) release(false); });
+    document.addEventListener('visibilitychange', () => { if (appHidden()) release(false); });
     this.joyRelease = release;
   }
 
@@ -329,8 +337,8 @@ export class UI {
       case 'set-sfx': S.settings.sfx = !S.settings.sfx; audio.applySettings(); audio.click(); commit(); return this.renderSettings();
       case 'set-music': S.settings.music = !S.settings.music; audio.applySettings(); commit(); return this.renderSettings();
       case 'set-shake': S.settings.camShake = !S.settings.camShake; commit(); audio.click(); return this.renderSettings();
-      case 'set-haptics': S.settings.haptics = !S.settings.haptics; commit(); if (S.settings.haptics && navigator.vibrate) navigator.vibrate(30); return this.renderSettings();
-      case 'q-auto': case 'q-high': case 'q-low': S.settings.quality = a.slice(2); g.res = 1; g.applyPixelRatio(true); commit(); audio.click(); if ((a !== 'q-low') !== g.aa) this.toast('Згладжування зміниться після перезапуску гри'); return this.renderSettings();
+      case 'set-haptics': S.settings.haptics = !S.settings.haptics; commit(); vibrate(30); return this.renderSettings();
+      case 'q-auto': case 'q-high': case 'q-low': S.settings.quality = a.slice(2); g.res = 1; g.qualityChanged(); commit(); audio.click(); if ((a !== 'q-low') !== g.aa) this.toast('Згладжування зміниться після перезапуску гри'); return this.renderSettings();
       case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'СПРАВДІ СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
       default:
         if (a.startsWith('tk-')) { const t = this.panel === 'online' ? this.online && this.online.tac : this.tac; return t && t.act(a); }

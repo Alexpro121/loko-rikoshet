@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { ANISO } from './textures.js';
 import { PITCH } from '../config.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { VoxelBuilder, rng, vcMat } from './voxel.js';
 import { whenLogo, logoReady, logoImg } from './logo.js';
 
@@ -89,14 +90,19 @@ export function buildSurround() {
   const train = tb.mesh(vcMat(), { static: false }); train.frustumCulled = false; group.add(train);
 
   // багатоповерхівки за залізницею (текстура вікон + різні кольори)
-  const wt = windowsTexture(), cols = ['#d9d4c8', '#c7d1d6', '#e0c9bd', '#cfd6c4', '#b9c0c8', '#e4dccb'];
+  // злиті в два меші (36 викликів малювання → 2): повтор текстури запечено в UV, колір у вершини
+  const wt = windowsTexture(), cols = ['#d9d4c8', '#c7d1d6', '#e0c9bd', '#cfd6c4', '#b9c0c8', '#e4dccb'], houses = [], roofs = [], tint = new THREE.Color();
   for (let i = 0; i < 18; i++) {
     const w = 14 + rnd() * 10, h = 20 + rnd() * 26, d = 12 + rnd() * 6, x = -190 + i * 22 + (rnd() - 0.5) * 8, z = -112 - rnd() * 18;
-    const t = wt.clone(); t.needsUpdate = true; t.repeat.set(Math.round(w / 3.2), Math.round(h / 5));
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ map: t, color: cols[i % cols.length] }));
-    m.position.set(x, h / 2 - 0.5, z); group.add(m);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.6, d + 0.6), new THREE.MeshLambertMaterial({ color: '#4a5258' })); roof.position.set(x, h - 0.2, z); group.add(roof);
+    const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, ru = Math.round(w / 3.2), rv = Math.round(h / 5), rgb = new Float32Array(uv.count * 3);
+    for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * ru, uv.getY(k) * rv);
+    tint.set(cols[i % cols.length]); for (let k = 0; k < uv.count; k++) rgb.set([tint.r, tint.g, tint.b], k * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+    houses.push(g.translate(x, h / 2 - 0.5, z));
+    roofs.push(new THREE.BoxGeometry(w + 0.6, 0.6, d + 0.6).translate(x, h - 0.2, z));
   }
+  group.add(new THREE.Mesh(mergeGeometries(houses), new THREE.MeshLambertMaterial({ map: wt, vertexColors: true })));
+  group.add(new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ color: '#4a5258' })));
 
   // дерева вздовж насипу
   const tg = new THREE.ConeGeometry(2.2, 6, 6), trunk = new THREE.CylinderGeometry(0.3, 0.4, 2, 5);

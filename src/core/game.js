@@ -10,6 +10,8 @@ import { Particles } from '../graphics/particles.js';
 import { Match } from '../match/match.js';
 import { CineFX } from '../graphics/cinefx.js';
 import { CamDirector, camInfoBlank } from './camera.js';
+import { appHidden, inTelegram, tgFullscreen, tgEnterFullscreen, tgToggleFullscreen } from './telegram.js';
+import { DETAIL, MAX_LEVEL, loadPerf, savePerf } from './perf.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const _v = new THREE.Vector3();
@@ -39,9 +41,12 @@ export class Game {
     this.aa = S.settings.quality !== 'low';                  // згладжування контексту незмінне: нова «якість» діє на нього лише після перезапуску
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.aa, powerPreference: 'high-performance', stencil: false, alpha: false });
     this.renderer.setClearColor(COL.skyMenu, 1);
+    if (!(import.meta.env && import.meta.env.DEV)) this.renderer.debug.checkShaderErrors = false;   // перевірка логів шейдера щоразу чекає драйвер: зайвий фриз у грі
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.1;
     this.coarse = coarse;
-    this.res = coarse ? 0.85 : 1; this.ema = 16; this.evalT = 0; this.goodRuns = 0; this.pr = 0;
+    const pf = loadPerf(coarse);
+    this.res = pf.res; this.savedLevel = pf.level; this.level = this.fixedLevel() ?? pf.level; this.ema = 16; this.evalT = 0; this.goodRuns = 0; this.pr = 0;
+    this.lvBase = 0; this.lvTop = 0; this.lvMiss = 0; this.lvDone = false; this.lvDoneAt = 0; this.lvMax = MAX_LEVEL;
     this.slowT = 1; this.govBase = 0; this.govRes = 1; this.govStuck = false; this.govProbe = 0; this.upNeed = 3;
     this.trauma = 0; this.fov = 0; this.time = 0;
     this.w = 1; this.h = 1;
@@ -91,7 +96,7 @@ export class Game {
   }
 
   /** Звичайний матч (і сцена матчу, яку позичає онлайн-гість). */
-  ensureMatch() { if (!this.solo) { this.solo = new Match(this); this.match = this.solo; this.computeMatchBase(); } if (!this.match) this.match = this.solo; return this.solo; }
+  ensureMatch() { if (!this.solo) { this.solo = new Match(this); this.match = this.solo; this.computeMatchBase(); this.solo.view.setDetail(DETAIL[this.level]); } if (!this.match) this.match = this.solo; return this.solo; }
 
   /**
    * Шейдери наперед, лише де компіляція не стоїть у кадрі (KHR_parallel_shader_compile): програми збираються паралельно, а не
@@ -177,7 +182,7 @@ export class Game {
   basePixelRatio() {
     const q = S.settings.quality, dpr = window.devicePixelRatio || 1;
     if (q === 'low') return Math.min(dpr, 1);
-    const pr = Math.min(dpr, 2);
+    const pr = Math.min(dpr, this.coarse ? 3 : 2);             // телефони з щільністю 3 теж отримують повну чіткість, якщо тягнуть
     if (q === 'high') return pr;
     // авто: планшети й великі екрани не малюємо більше за ~1080p (телефон) і ~1440p (ПК): різниці майже не видно, а GPU вдвічі легше
     return Math.min(pr, Math.max(1, Math.sqrt((this.coarse ? 2.2e6 : 4.2e6) / (this.w * this.h))));
@@ -193,7 +198,44 @@ export class Game {
     this.canvas.style.width = this.w + 'px'; this.canvas.style.height = this.h + 'px';
   }
 
-  /** Динамічна роздільність: тримаємо ~60 fps, не чіпаючи картинку без потреби. */
+  /** Найменша частка роздільності: не менше ~1.1 пікселя на точку екрана, на телефоні з щільністю 3 це 0.37, а не 0.7. */
+  resMin() { return Math.min(0.7, Math.max(0.35, 1.1 / this.basePixelRatio())); }
+
+  /** Рівень, який задає сам гравець у налаштуваннях; null: «Авто», рівень веде governor. */
+  fixedLevel() { const q = S.settings.quality; return q === 'high' ? MAX_LEVEL : q === 'low' ? 1 : null; }
+
+  setLevel(l) {
+    if (l === this.level) return;
+    this.level = l;
+    if (this.solo) this.solo.view.setDetail(DETAIL[l]);
+  }
+
+  /** Гравець змінив якість у налаштуваннях. */
+  qualityChanged() {
+    this.lvDone = false; this.lvMax = MAX_LEVEL; this.lvBase = 0; this.lvMiss = 0; this.govStuck = false; this.govBase = 0; this.govProbe = 0;
+    this.setLevel(this.fixedLevel() ?? this.savedLevel);
+    this.applyPixelRatio(true);
+  }
+
+  /**
+   * Роздільність не допомогла або вже на межі: упираємось у процесор чи кількість об'єктів, тож спрощуємо сцену. Якщо два кроки
+   * поспіль нічого не дали, це не навантаження, а обмеження екрана (економія енергії 30 Гц): повертаємо все як було.
+   */
+  levelDown() {
+    if (this.lvDone) {
+      // кадр після здачі ще помітно подовжився: це вже справжнє навантаження (перегрів), пробуємо знижувати знову
+      if (this.ema > this.lvDoneAt * 1.25) { this.lvDone = false; this.govStuck = false; this.govBase = 0; this.lvBase = 0; this.lvMiss = 0; }
+      return;
+    }
+    if (this.lvBase) {
+      if (this.ema > this.lvBase * 0.93) { if (++this.lvMiss >= 2) { this.setLevel(this.lvTop); this.lvMax = this.lvTop; this.lvDone = true; this.lvDoneAt = this.ema; this.lvBase = 0; return; } }
+      else { this.lvMiss = 0; this.lvMax = this.level; savePerf(this.level, this.res); }
+    } else this.lvTop = this.level;
+    if (this.level > 0) { this.lvBase = this.ema; this.setLevel(this.level - 1); }
+    else { this.lvDone = true; this.lvDoneAt = this.ema; }
+  }
+
+  /** Динамічна роздільність і рівень деталізації: тримаємо ~60 fps, не чіпаючи картинку без потреби. */
   governor(dt) {
     // поодинокий фриз (збірка сцени, GC) — не навантаження: у середнє не йде
     const slow = dt > 0.05, lone = slow && this.slowT > 0.5;
@@ -208,23 +250,32 @@ export class Game {
         const worse = this.ema > this.govProbe * 1.2; this.govProbe = 0;
         if (worse) { this.govBase = this.ema; this.govStuck = false; this.res = 0.7; this.goodRuns = 0; this.applyPixelRatio(false); return; }
       }
-      if (this.govStuck) return;
-      if (this.res > 0.7) {
+      if (this.govStuck) return this.levelDown();
+      const floor = this.resMin();
+      if (this.res > floor + 1e-3) {
         if (!this.govBase) { this.govBase = this.ema; this.govRes = this.res; this.upNeed = Math.min(96, this.upNeed * 2); }   // кожен новий спад — обережніше піднімаємо назад
-        this.res = Math.max(0.7, this.res - 0.1); this.goodRuns = 0; this.applyPixelRatio(false);
+        this.res = Math.max(floor, this.res - 0.1); this.goodRuns = 0; this.applyPixelRatio(false); savePerf(this.level, this.res);
       } else if (!this.govBase) {
-        // уже на 0.7 після минулого спаду, і кадр різко подовжився (увімкнувся режим економії 30 Гц): наступна оцінка перевірить, чи допомагає роздільність
-        if (this.ema > 26) this.govBase = this.ema;
+        // уже на межі після минулого спаду, і кадр різко подовжився (увімкнувся режим економії 30 Гц): наступна оцінка перевірить, чи допомагає роздільність
+        if (this.ema > 26) this.govBase = this.ema; else this.levelDown();
       } else if (this.ema > this.govBase * 0.9) {
         // роздільність не допомогла: упираємось не в GPU (режим економії 30 Гц, процесор) — повертаємо чітку картинку
         this.res = this.govRes; this.govStuck = true; this.govProbe = this.ema; this.goodRuns = 0; this.applyPixelRatio(false);
-      }
+      } else this.levelDown();                                  // роздільність допомогла, але її вже нема куди знижувати
       return;
     }
-    this.govStuck = false; this.govBase = 0; this.govProbe = 0;
+    if (this.lvBase) { this.lvMax = this.level; savePerf(this.level, this.res); }   // цього рівня вистачило: вище в цій сесії не піднімаємось, щоб не гойдатись
+    this.govStuck = false; this.govBase = 0; this.govProbe = 0; this.lvBase = 0; this.lvMiss = 0;
     // рівні 60 Гц дають ~16.7 мс: поріг вище за них, інакше на таких екранах роздільність не верталась би ніколи
-    if (this.ema < 17.6 && this.res < 1) { if (++this.goodRuns >= this.upNeed) { this.res = Math.min(1, this.res + 0.06); this.goodRuns = 0; this.applyPixelRatio(false); } }
-    else this.goodRuns = 0;
+    // запас є: спершу чіткість, далі деталі. Так телефон використовує всю потужність, а доведена межа запам'ятовується вище
+    if (this.ema < 17.6 && (this.res < 1 || this.level < this.lvMax)) {
+      if (++this.goodRuns >= this.upNeed) {
+        this.goodRuns = 0;
+        if (this.res < 1) { this.res = Math.min(1, this.res + 0.06); this.applyPixelRatio(false); }
+        else { this.setLevel(this.level + 1); this.upNeed = Math.min(96, this.upNeed * 2); }
+        savePerf(this.level, this.res);
+      }
+    } else this.goodRuns = 0;
   }
 
   /** Контекст WebGL загублено: зупиняємо гру й звук; якщо не повернувся за кілька секунд — кажемо гравцю, що робити. */
@@ -238,12 +289,12 @@ export class Game {
   onGlRestored() {
     this.lost = false; clearTimeout(this.lostT); this.last = performance.now(); this.warmed = 0;
     const f = !this.dead && document.getElementById('gfx-fail'); if (f) f.remove();
-    if (!document.hidden) audio.resume();
+    if (!appHidden()) audio.resume();
   }
 
   onVisibility() {
     // онлайн-матч не стає на паузу (час спільний) — меню паузи не вискакує
-    if (document.hidden) { audio.suspend(); if (this.match && this.match.isPlaying() && !(this.online && this.online.inMatch())) this.ui.pause(); }
+    if (appHidden()) { audio.suspend(); if (this.match && this.match.isPlaying() && !(this.online && this.online.inMatch())) this.ui.pause(); }
     else { if (!this.lost) audio.resume(); this.last = performance.now(); if (this.ui.started) this.acquireWake(); }
   }
 
@@ -310,7 +361,7 @@ export class Game {
       }
       cam.position.copy(this._ov.p); cam.lookAt(this._ov.l);
       // кінорежим: фокус там, куди дивиться камера (на героях кадру); aperture — з кадру (0 — без розмиття)
-      if (ov.dof > 0 && S.settings.quality !== 'low') {
+      if (ov.dof > 0 && this.level >= 2) {
         // автофокус, як у камери: на найближчій людині біля центру кадру (хто в кадрі головний), а не на точці, куди
         // «дивиться» камера (там часто порожньо — і різко не було нічого). Фокус переводиться плавно, на склейці — одразу
         const f = this.autoFocus(cam, m, o.p.distanceTo(o.l));
@@ -381,7 +432,7 @@ export class Game {
     // палець на джойстику цілиться сам: дотики по полю його приціл не завершують і не скасовують
     const joyAim = () => this.ui.joyActive && this.match && this.match.joyMode;
     // iOS після дзвінка чи блокування не дає відновити звук без жесту: пробуємо на кожному дотику
-    for (const t of ['pointerdown', 'touchend', 'click']) addEventListener(t, () => { if (!this.lost && !document.hidden) audio.resume(); }, { capture: true, passive: true });
+    for (const t of ['pointerdown', 'touchend', 'click']) addEventListener(t, () => { if (!this.lost && !appHidden()) audio.resume(); }, { capture: true, passive: true });
     c.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;   // приціл і тап — лише лівою кнопкою
       if (pid !== -1 && this.match && !this.ui.joyActive) this.match.cancelAim();   // попередній жест загубився: починаємо спочатку (приціл джойстиком не чіпаємо)
@@ -421,8 +472,9 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- повний екран
-  isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  isFullscreen() { return inTelegram() ? tgFullscreen() : !!(document.fullscreenElement || document.webkitFullscreenElement); }
   async enterFullscreen() {
+    if (inTelegram()) return tgEnterFullscreen();   // вебв'ю Telegram не дає браузерного fullscreen
     const el = document.documentElement;
     try {
       if (!this.isFullscreen()) { const f = el.requestFullscreen || el.webkitRequestFullscreen; if (f) await f.call(el, { navigationUI: 'hide' }); }
@@ -430,6 +482,7 @@ export class Game {
     try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); } catch (_) { /* потребує fullscreen */ }
   }
   toggleFullscreen() {
+    if (inTelegram()) return tgToggleFullscreen();
     if (this.isFullscreen()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
     else this.enterFullscreen();
   }
@@ -453,6 +506,8 @@ export class Game {
   }
 
   step(now) {
+    // телефон із екраном 120 Гц: 60 рівних кадрів замість вдвічі більшої роботи й перегріву за кілька хвилин. 90 Гц тут не ріжеться: у них 11 мс
+    if (this.coarse && S.settings.quality !== 'high' && now - this.last < 10.5) return;
     const calm = this.sm.name === 'MENU' && (this.ui.panel || !this.ui.started);   // острів під панеллю чи заставкою: ~30 кадрів достатньо
     if (calm && now - this.last < 30) return;
     if (calm && this.ui.panelCovers()) { this.last = now; return; }

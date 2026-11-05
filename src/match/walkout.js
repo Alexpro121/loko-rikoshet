@@ -88,7 +88,7 @@ class PoleFlag {
 
 /** Волонтер (прапороносець): гравець-модель у жилеті; власна м'яка тінь. */
 function bearer(i, view, shadowMat) {
-  const p = new Player({ kit: VEST, num: 0, skin: ACADEMY.skins[i % 4], hair: ACADEMY.hairs[(i + 2) % 5], hairCol: ACADEMY.hairCols[i % 6], gk: false, scale: 0.78 });
+  const p = new Player({ kit: VEST, num: 0, skin: ACADEMY.skins[i % 4], hair: ACADEMY.hairs[(i + 2) % 5], hairCol: ACADEMY.hairCols[i % 6], gk: false, scale: 0.78 }).useSkin();
   p.gaze = true;
   const sh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.5).rotateX(-Math.PI / 2), shadowMat); sh.renderOrder = 2;
   return { p, sh, x: 0, z: 0, yaw: 0, px: 0, pz: 0 };
