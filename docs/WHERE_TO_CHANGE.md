@@ -81,7 +81,8 @@
 | Падіння | `Player.knock`, `src/graphics/ragdoll.js` |
 | Руки й ноги дістають ціль | `solveReach`, `handsIK`, `plantFeet`, `solveArms` |
 | Стрибок воротаря | `gkDive`, `planDive`, `diveKin`; накриття грудьми вперед: `gkSmother`, `diveFwd`, `FWD_K`; ривки рук: `capQ` у `handsIK`, `armGuard` |
-| Блок коліном і гомілкою воротаря | вибір у `updateKeepers` (поріг `catchLimit`), відскік `legDeflect` у `src/match/match.js`; поза `gkShin`, `shinIK`, `SHIN_*` у `src/graphics/player.js` |
+| Блок коліном і гомілкою воротаря | вибір у `updateKeepers` (поріг `catchLimit`), відскік `legDeflect` у `src/match/match.js`; поза `gkShin`, `shinIK`, `SHIN_*` у `src/graphics/player.js`; удар ногою `gkFoot` веде той самий `shinIK` (`FOOT_F`) |
+| Воротар не встиг зреагувати на удар | `lateReflex`, `lateReflexAt` (виклик в `onGoal`), спільний старт стрибка `launchDive` у `src/match/match.js` |
 | Стрибок воротаря вгору за часом прильоту | `gkJump(T)`, виклики в `src/match/match.js` і `src/match/penalty.js` |
 | Обличчя, зачіски, номери | конструктор `Player`, `setLook`, `playerAtlas` у `src/graphics/textures.js` |
 | Вибір вигляду в редакторі | `allHairs`, `allSkins` в `ACADEMY`; `renderCustom` в `src/ui/ui.js` |

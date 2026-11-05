@@ -453,7 +453,7 @@ export class Match {
       }
     }
     if (a.isGK) {
-      const shotAt = this.shotBy === -a.side, legBlock = a.p.mode === 'gkshin' && speed > 5;                // удар суперника, а не свій пас чи вільний м'яч
+      const shotAt = this.shotBy === -a.side, legBlock = (a.p.mode === 'gkshin' || a.p.mode === 'gkfoot') && speed > 5;                // удар суперника, а не свій пас чи вільний м'яч
       this.saveReact(a);
       if (shotAt) { audio.save(); this.creditSave(a); }
       a.p.parry(); audio.thud(); if (speed > 18) this.view.stands.react('gasp');
@@ -1298,6 +1298,10 @@ export class Match {
     this.bs = 'net'; this.owner = 0;                               // м'яч летить далі — у пружну сітку, відскакує й падає
     this.nextKick = mine ? -1 : 1;                                 // з центру розводить та команда, якій забили
     this.goalMine = mine; this.goalT = 0; this.goalTime = this.time; this.rp = null;
+    { // воротар не встиг зреагувати на цей удар: однаково кидається вслід м'ячу, а вже потім засмучується (sad чекає кінця дії)
+      const g = mine ? this.opp[0] : this.mine[0];
+      if (g.decided !== this.shotId && !g.dive && !g.manual && g.frozen <= 0 && !g.p.downed && Math.abs(this.ball.z) < G) this.lateReflexAt(g, this.ball.z, this.ball.y, 0.1);
+    }
     this.ui.hud.cine(true);
     this.hideAim(); this.ui.hud.warn(null); this.ui.hud.setCard(null);
     if (this.holder) this.holder.manual = false;
@@ -2507,7 +2511,8 @@ export class Match {
       // де й на якій висоті м'яч перетне лінію воротаря — з прогнозу польоту (дуга, підкрутка, відскоки)
       // лінія рішення — площина, де воротар зараз стоїть (він міг вийти на 5–9 м), а не лінія воріт позаду нього
       const line = g.p.x, cr = this.plan.cross(line, -side, this._cr), eta = cr.t;
-      if (eta < 0.06) continue;
+      // удар швидший за реакцію: м'яч уже біля нього чи за ним. Живий воротар однаково рухається із запізненням, а не стоїть стовпом
+      if (eta < 0.06) { this.lateReflex(g); continue; }
       // у створі чи мимо — за лінією воріт (на косому ударі z у його площині й на лінії різняться на кілька одиниць); стрибок
       // і зміщення цілять туди, де м'яч перетне його площину. Лінію x = ±L м'яч перетинає лише в сам створ: мимо чи над ним
       // воротар не стрибає й не парирує. Повільний м'яч може й не докотитись — його читаємо, як раніше, у площині воротаря
@@ -2600,15 +2605,40 @@ export class Match {
         // м'яч, що скаче по газону, у мить перетину може бути на верхівці відскоку — але поруч він торкається трави: такий
         // теж низом (тіло на газоні перекриває і відскок), а не «середнім» стрибком над ним
         const kind = predY > 1.3 ? 0 : predY > 0.6 && !lowBall ? 1 : 2;
-        g.dive = { t: 0, dur: 0.9, z0: g.p.z, dist: 0, kind };
         // стрибок за фізикою: воротар відштовхується так, щоб руки встигли туди, де м'яч перетне його лінію; сила ніг — за навичкою.
         // Не встигає (задалеко, запізно) — летить, скільки дозволяють ноги, як справжній
         // летить уздовж лінії, тож і площина тіла вздовж неї: до м'яча корпус довертається лише на ~11°, і не миттю, а на відштовхуванні
-        const st0 = side > 0 ? Math.PI / 2 : -Math.PI / 2, yb = Math.atan2(b.x - g.p.x, b.z - g.p.z), dy0 = Math.atan2(Math.sin(yb - st0), Math.cos(yb - st0));
-        g.manual = true; g.p.yaw = st0 + clamp(dy0, -0.2, 0.2); g.p.gkDive(dir, kind, { x: line, y: PITCH.BALL_VIS + predY, z: predZ }, eta, vLeg + 0.5 * carry);
+        this.launchDive(g, dir, kind, { x: line, y: PITCH.BALL_VIS + predY, z: predZ }, eta, vLeg + 0.5 * carry);
         audio.slide(); this.floatAt(g.p.x, g.p.z, 'СТРИБОК!', side > 0 ? 'good' : 'warn');
       }
     }
+  }
+
+  /** Стрибок воротаря: тіло летить уздовж лінії воріт, до м'яча корпус довертається лише на ~11° (на відштовхуванні). */
+  launchDive(g, dir, kind, at, eta, vmax) {
+    const b = this.ball, st0 = g.side > 0 ? Math.PI / 2 : -Math.PI / 2, yb = Math.atan2(b.x - g.p.x, b.z - g.p.z), dy0 = Math.atan2(Math.sin(yb - st0), Math.cos(yb - st0));
+    g.dive = { t: 0, dur: 0.9, z0: g.p.z, dist: 0, kind };
+    g.manual = true; g.p.yaw = st0 + clamp(dy0, -0.2, 0.2); g.p.gkDive(dir, kind, at, eta, vmax);
+  }
+
+  /**
+   * Запізнився: удар зблизька долетів швидше за реакцію. Раз на удар воротар однаково рухається туди, де м'яч перетне лінію воріт:
+   * низом поруч ногою (блок коліном чи стопою), далі стрибком. Здебільшого м'яч уже повз, але інколи нога чи рука ще встигає.
+   * М'яч, що йде мимо чи над поперечиною, не чіпає. Гол, забитий ще до кінця реакції, теж дає цей рух (onGoal): воротар кидається вже вслід.
+   */
+  lateReflex(g) {
+    if (g.decided === this.shotId) return;
+    const cg = this.plan.cross(-g.side * L, -g.side, this._cg);
+    if (!(cg.t > 0) || Math.abs(cg.z) > G + 0.3 || cg.y > PITCH.GOAL_H) return;
+    this.lateReflexAt(g, cg.z, cg.y, Math.max(0.1, cg.t));
+  }
+
+  /** Рух запізнілого воротаря до точки на лінії воріт (z, висота м'яча y), T — за скільки с туди. */
+  lateReflexAt(g, z, y, T) {
+    const lateral = z - g.p.z, lat = Math.abs(lateral), at = { x: g.p.x, y: PITCH.BALL_VIS + y, z };
+    g.decided = this.shotId; g.decType = 'late'; g.p.vx = g.p.vz = 0;
+    if (y < 0.6 && lat < 1.3) { g.frozen = Math.max(g.frozen, T + 0.45); if (lat < 0.7) g.p.gkShin(at, T); else g.p.gkFoot(at, T); return; }
+    this.launchDive(g, Math.sign(lateral) || 1, y > 1.3 ? 0 : y > 0.6 ? 1 : 2, at, T, 6.8 + 2.2 * g.sk.reach + 2 * g.kReach);
   }
 
   /**
