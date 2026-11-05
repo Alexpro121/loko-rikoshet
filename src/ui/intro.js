@@ -1,223 +1,378 @@
-// playIntro: заставка запуску: станція, потяг, світлофор (DOM/CSS).
+// playIntro: заставка запуску: офіційний герб «Локомотива» Київ; з тунелю в червоному трикутнику виїжджає локомотив і стає на своє місце (SVG, WAAPI).
 import { audio } from '../core/audio.js';
-import { lokoCrest } from './icons.js';
-import { S } from '../state/save.js';
+import CREST from '../../public/loko-logo.svg?raw';
 
-/** Голос: «Хто ми?» низько, «ЛОКО!» голосно (мовний синтез браузера, якщо є). */
-function say(text, pitch, rate, vol) {
-  try {
-    if (!S.settings.sfx || !window.speechSynthesis) return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'uk-UA'; u.pitch = pitch; u.rate = rate; u.volume = vol;
-    const v = speechSynthesis.getVoices().find((x) => /^uk/i.test(x.lang));
-    if (v) u.voice = v;
-    speechSynthesis.speak(u);
-  } catch (e) { /* без голосу */ }
+// ---------- деталі герба з офіційного SVG ----------
+const RED = '#E31119', GRN = '#67B430', INK = '#05110c';
+const P = [...CREST.matchAll(/<path d="([^"]+)" fill="[^"]+"\/>/g)].map((m) => m[1]);
+const CLIP = (CREST.match(/<clipPath id="clip0_294_871">\s*([\s\S]*?)<\/clipPath>/) || ['', ''])[1].trim();
+const LETTERS = [11, 12, 13, 14, 15, 16, 17, 18, 19], KYIV = [7, 8, 9, 10], LOCO = [3, 2, 6, 4, 5];
+const BODY = [3], SKIRT = [6, 4, 5], PLOUGH = [2];             // кузов на ресорах; рама зі спідницею, буфером і «1919»; передній плуг із решіткою
+const f = (n, d = 2) => +n.toFixed(d);
+const add = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k];
+
+// Перспектива самого логотипу: лінії даху, смуг і низу локомотива сходяться в нижній лівій нозі «А».
+const VP = [21.3, 127];
+// Тунель. Лівий край зіву: внутрішній край лівої червоної смуги з її вигином; правий: внутрішній край правої смуги до землі (y = 127.19).
+const PA = [56.23, 116.95], PB = [82.65, 71.24], PQ = [88.89, 82.04], PG = [114.95, 127.19];
+const N = [0.866, -0.5];                                       // нормаль правого краю назовні, на світло
+const TUN = 'M122.65 1.94L82.65 71.24L56.23 116.95C52.57 123.29 45.8 127.19 38.48 127.19L38.48 230L330 230L330 1.94Z';
+const A2 = add(PB, N, 7), G2 = [f(A2[0] + (127.19 - A2[1]) * 0.57735), 127.19];
+const ARCH = `M56.23 116.95L82.65 71.24L${f(A2[0])} ${f(A2[1])}L${G2[0]} ${G2[1]}L38.48 127.19C45.8 127.19 52.57 123.29 56.23 116.95Z`;
+const D0 = add(PQ, N, -2.5), D1 = add(PQ, N, 3.5);            // темрява м'яко сходить біля правого краю
+const RIBS = [0.95, 0.89, 0.83, 0.77, 0.71, 0.65, 0.6];      // кільця обробки тунелю: копії зіву ближче до точки сходу
+const rib = (k) => { const p = (q) => [f(VP[0] + k * (q[0] - VP[0])), f(VP[1] + k * (q[1] - VP[1]))]; const [a, b, c] = [p(PA), p(PB), p(PG)]; return `M${a[0]} ${a[1]}L${b[0]} ${b[1]}L${c[0]} ${c[1]}`; };
+const LAMP = [116.9, 78.8];                                    // фара: кільце в контурі корпусу
+const MARK = [[111.1, 98.7], [133.4, 98.7]];                   // габаритні вогні
+const WHEELS = [48, 70, 92, 124, 144];                         // де під рамою колеса торкаються рейки (y = 127)
+// промінь фари: конус уздовж променя від точки сходу через фару, тобто прямо на глядача
+const AX = (() => { const d = [LAMP[0] - VP[0], LAMP[1] - VP[1]], l = Math.hypot(d[0], d[1]); return [d[0] / l, d[1] / l]; })();
+const PX = [-AX[1], AX[0]];
+const cone = (len, half) => { const e = add(LAMP, AX, len), w = Math.tan(half * Math.PI / 180) * len, a = add(e, PX, w), b = add(e, PX, -w); return `M${LAMP[0]} ${LAMP[1]}L${f(a[0])} ${f(a[1])}L${f(b[0])} ${f(b[1])}Z`; };
+const BEAM_END = add(LAMP, AX, 150), GLOW_AT = add(LAMP, AX, 30);
+const CAB = P[3] ? P[3].split(/(?=M)/).find((s) => s.startsWith('M106.95 84.77')) : '';   // лобове скло: у тунелі в кабіні горить світло
+const STACK = [96, 83.4];                                     // вихлоп на даху за кабіною
+const NOSE = [[119, 76], [130, 86], [138, 98], [142, 110], [149, 125]];   // передній край: з нього зриває дим тунелю
+// Повний червоний трикутник: праві ноги обох шевронів продовжено до основи; зріз заходить на 0,8 в офіційну частину, щоб не було шва.
+const atBase = (p) => f(p[0] + (127.19 - p[1]) * 0.57735);
+const EXT = [
+  `M88.49 81.35L97.89 75.92L${atBase([98.29, 76.61])} 127.19L${atBase([88.89, 82.04])} 127.19Z`,
+  `M105.37 71.66C108.71 69.94 112.36 68.89 116.12 68.57L${atBase([116.52, 69.26])} 127.19L${atBase([105.77, 72.35])} 127.19Z`,
+];
+// Натрієві лампи на правій стіні тунелю; напрям у глибину, уздовж якого відступає темрява, коли тунель розчиняється.
+const WALLK = [0.95, 0.86, 0.77, 0.69, 0.61, 0.54];
+const DIRV = (() => { const d = [104 - VP[0], 100 - VP[1]], l = Math.hypot(d[0], d[1]); return [d[0] / l, d[1] / l]; })();
+const WALL = WALLK.map((k) => {
+  const b = [VP[0] + k * (PB[0] - VP[0]), VP[1] + k * (PB[1] - VP[1])], c = [VP[0] + k * (PG[0] - VP[0]), VP[1] + k * (PG[1] - VP[1])];
+  const x = b[0] + 0.38 * (c[0] - b[0]) - 1.3 * k, y = b[1] + 0.38 * (c[1] - b[1]);
+  const ang = Math.atan2(y - VP[1], x - VP[0]) * 180 / Math.PI, p = (x - VP[0]) * DIRV[0] + (y - VP[1]) * DIRV[1];
+  return { x: f(x), y: f(y), k, ang: f(ang, 1), p: f(p, 1), gx: f(c[0] - 2.5 * k), fog: f(0.45 + 0.55 * (k - 0.54) / 0.41) };
+});
+const LAMPS_Z = [...WALLK.map((k) => f(1 / k, 3)), 2.1, 2.55, 3, 3.45, 3.9, 4.35, 4.8, 5.25, 5.7, 6.15];
+
+// ---------- розмітка: один векторний SVG, усі id й класи з префіксом li-, щоб не зачепити стилі гри ----------
+const paths = (ids, fill) => ids.map((i) => `<path d="${P[i]}"${fill ? ` fill="${fill}"` : ''}/>`).join('');
+const sprites = (n, kind, cls) => Array.from({ length: n }, () => `<image class="sp ${cls}" data-k="${kind}" x="-12" y="-12" width="24" height="24" preserveAspectRatio="none" opacity="0"/>`).join('');
+// локомотив однією будовою: перспектива (pg) > рама на візках (pc) > [спідниця, плуг (pp), кузов: крен (pr) > ресори (pb)]
+const loco = (fill, extra = '') => `<g class="pg"><g class="pc">${fill ? `<use href="#skirtShape" fill="${fill}"/>` : ''}<g class="pp">${fill ? `<use href="#ploughShape" fill="${fill}"/>` : ''}</g><g class="pr"><g class="pb">${fill ? `<use href="#bodyShape" fill="${fill}"/>` : ''}${extra}</g></g></g></g>`;
+const scoped = (html) => html.replace(/\bid="([^"]+)"/g, 'id="li-$1"').replace(/url\(#([^)]+)\)/g, 'url(#li-$1)').replace(/href="#([^"]+)"/g, 'href="#li-$1"')
+  .replace(/class="([^"]+)"/g, (_, c) => `class="${c.split(/\s+/).map((t) => 'li-' + t).join(' ')}"`);
+const sel = (s) => s.replace(/([.#])([\w-]+)/g, '$1li-$2');
+
+function scene() {
+  return scoped(`<div class="stage" aria-label="Герб ФК Локомотив Київ" role="img">
+  <svg class="floor" viewBox="-60 0 286 60" preserveAspectRatio="xMidYMin meet" aria-hidden="true"><defs><linearGradient id="fl" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${INK}" stop-opacity=".55"/><stop offset=".55" stop-color="${INK}"/></linearGradient></defs><g opacity=".14"><use href="#crest-mark" transform="translate(0 180) scale(1 -1)"/></g><rect x="-60" y="0" width="286" height="60" fill="url(#fl)"/></svg>
+  <svg class="art" viewBox="0 0 166 180" aria-hidden="true">
+    <defs>
+      <clipPath id="cc">${CLIP}</clipPath>
+      <clipPath id="pl"><path d="${P[0]}"/></clipPath>
+      <clipPath id="tun"><path d="${TUN}"/></clipPath>
+      <clipPath id="arch"><path d="${ARCH}"/></clipPath>
+      <clipPath id="coneC"><path d="${cone(150, 19)}"/></clipPath>
+      <clipPath id="locoClip">${paths([3, 6, 4, 5, 2])}</clipPath>
+      <radialGradient id="tunG" gradientUnits="userSpaceOnUse" cx="106" cy="118" r="62"><stop offset="0" stop-color="#2b3731"/><stop offset=".35" stop-color="#121c17"/><stop offset="1" stop-color="#030806"/></radialGradient>
+      <linearGradient id="archF" gradientUnits="userSpaceOnUse" x1="${f(D0[0])}" y1="${f(D0[1])}" x2="${f(D1[0])}" y2="${f(D1[1])}"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+      <mask id="archM" maskUnits="userSpaceOnUse" x="0" y="0" width="166" height="180"><rect width="166" height="180" fill="url(#archF)"/></mask>
+      <linearGradient id="beamG" gradientUnits="userSpaceOnUse" x1="${LAMP[0]}" y1="${LAMP[1]}" x2="${f(BEAM_END[0])}" y2="${f(BEAM_END[1])}"><stop offset="0" stop-color="#fff2c8" stop-opacity=".62"/><stop offset=".3" stop-color="#ffe9b0" stop-opacity=".26"/><stop offset="1" stop-color="#ffe9b0" stop-opacity="0"/></linearGradient>
+      <radialGradient id="wallG"><stop offset="0" stop-color="#ffe3a1" stop-opacity=".38"/><stop offset=".5" stop-color="#d9b877" stop-opacity=".14"/><stop offset="1" stop-color="#d9b877" stop-opacity="0"/></radialGradient>
+      <linearGradient id="glintG"><stop offset="0" stop-color="#ffe7a8" stop-opacity="0"/><stop offset=".55" stop-color="#fff2cc" stop-opacity=".9"/><stop offset="1" stop-color="#ffe7a8" stop-opacity=".2"/></linearGradient>
+      <radialGradient id="haloS"><stop offset="0" stop-color="#ffd59a" stop-opacity=".9"/><stop offset=".18" stop-color="#ffab4a" stop-opacity=".45"/><stop offset=".55" stop-color="#ff9530" stop-opacity=".12"/><stop offset="1" stop-color="#ff9530" stop-opacity="0"/></radialGradient>
+      <radialGradient id="poolS"><stop offset="0" stop-color="#ffb860" stop-opacity=".42"/><stop offset=".6" stop-color="#e88a2c" stop-opacity=".12"/><stop offset="1" stop-color="#e88a2c" stop-opacity="0"/></radialGradient>
+      <linearGradient id="railS"><stop offset="0" stop-color="#ffc06a" stop-opacity="0"/><stop offset=".5" stop-color="#ffd590" stop-opacity=".85"/><stop offset="1" stop-color="#ffc06a" stop-opacity="0"/></linearGradient>
+      <linearGradient id="disG" gradientUnits="userSpaceOnUse" x1="-34" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+      <mask id="disM" maskUnits="userSpaceOnUse" x="-80" y="-40" width="330" height="260"><g id="disF"><rect x="-420" y="-160" width="420" height="320" fill="url(#disG)"/>${Array.from({ length: 8 }, (_, i) => `<image class="sp" data-k="steam" x="-12" y="-12" width="24" height="24" preserveAspectRatio="none" transform="translate(${-10 + (i % 3) * 4} ${-62 + i * 15}) scale(${(1.7 + (i % 3) * 0.35).toFixed(2)})"/>`).join('')}</g></mask>
+      <linearGradient id="sweepG"><stop offset="0" stop-color="#ffc36a" stop-opacity="0"/><stop offset=".5" stop-color="#ffd38a" stop-opacity=".9"/><stop offset="1" stop-color="#ffc36a" stop-opacity="0"/></linearGradient>
+      <radialGradient id="poolG"><stop offset="0" stop-color="#fff0c6" stop-opacity=".85"/><stop offset=".5" stop-color="#ffe0a0" stop-opacity=".3"/><stop offset="1" stop-color="#ffe0a0" stop-opacity="0"/></radialGradient>
+      <radialGradient id="bloomG"><stop offset="0" stop-color="#fff7de" stop-opacity=".4"/><stop offset=".4" stop-color="#ffeec4" stop-opacity=".12"/><stop offset="1" stop-color="#ffeec4" stop-opacity="0"/></radialGradient>
+      <radialGradient id="ambG"><stop offset="0" stop-color="#ffd08a"/><stop offset=".3" stop-color="#ff9f3d" stop-opacity=".75"/><stop offset="1" stop-color="#ff8a24" stop-opacity="0"/></radialGradient>
+      <radialGradient id="glow"><stop offset="0" stop-color="#fffbe6"/><stop offset=".28" stop-color="#fff3b8" stop-opacity=".85"/><stop offset="1" stop-color="#fff3b8" stop-opacity="0"/></radialGradient>
+      <linearGradient id="streak"><stop offset="0" stop-color="#fff6cf" stop-opacity="0"/><stop offset=".5" stop-color="#fffdf0" stop-opacity=".95"/><stop offset="1" stop-color="#fff6cf" stop-opacity="0"/></linearGradient>
+      <linearGradient id="streakV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6cf" stop-opacity="0"/><stop offset=".5" stop-color="#fffdf0" stop-opacity=".8"/><stop offset="1" stop-color="#fff6cf" stop-opacity="0"/></linearGradient>
+      <linearGradient id="beam" x1="0" x2="1"><stop offset="0" stop-color="#fff6cf" stop-opacity=".55"/><stop offset="1" stop-color="#fff6cf" stop-opacity="0"/></linearGradient>
+      <mask id="ink"><path d="${P[1]}" fill="#fff"/>${paths([...LOCO, ...LETTERS, ...KYIV], '#fff')}</mask>
+      <g id="bodyShape">${paths(BODY)}</g>
+      <g id="skirtShape">${paths(SKIRT)}</g>
+      <g id="ploughShape">${paths(PLOUGH)}</g>
+      <g id="crest-mark"><path d="${P[0]}" fill="#fff" opacity=".9"/><path d="${P[1]}" fill="${RED}"/>${paths(LOCO, GRN)}</g>
+    </defs>
+    <g id="root"><g id="shake">
+      <g clip-path="url(#cc)"><path d="${P[0]}" fill="#fff"/></g>
+      <g clip-path="url(#arch)"><g mask="url(#disM)"><g id="tdark" opacity="0" mask="url(#archM)">
+        <rect x="30" y="60" width="100" height="70" fill="url(#tunG)"/>
+        <g fill="none" stroke="#cfd6d2" stroke-width=".55" stroke-linejoin="round">${RIBS.map((k) => `<path class="rb" d="${rib(k)}" opacity="0"/>`).join('')}</g>
+        <g>${WALL.map((w) => `<g class="wl" data-p="${w.p}" opacity="${w.fog}"><ellipse cx="${w.x}" cy="${w.y}" rx="${f(15 * w.k)}" ry="${f(4.6 * w.k)}" transform="rotate(${w.ang} ${w.x} ${w.y})" fill="url(#poolS)"/><ellipse cx="${w.gx}" cy="126.85" rx="${f(7 * w.k)}" ry=".34" fill="url(#railS)"/><circle cx="${w.x}" cy="${w.y}" r="${f(9.5 * w.k)}" fill="url(#haloS)"/><circle cx="${w.x}" cy="${w.y}" r="${f(2.3 * w.k)}" fill="#ffd9a0" opacity=".45"/><ellipse cx="${w.x}" cy="${w.y}" rx="${f(1.4 * w.k)}" ry="${f(0.6 * w.k)}" transform="rotate(${f(w.ang + 90, 1)} ${w.x} ${w.y})" fill="#fff4dc"/></g>`).join('')}</g>
+        <circle id="apg" cx="66" cy="114" r="30" fill="url(#wallG)" opacity="0"/>
+        <line id="glint" x1="40" y1="126.85" x2="${PG[0]}" y2="126.85" stroke="url(#glintG)" stroke-width=".5" opacity="0"/>
+        <g id="beamT" opacity="0"><g class="pg"><g class="pc"><g class="pr"><g class="pb">
+          <circle cx="${f(GLOW_AT[0])}" cy="${f(GLOW_AT[1])}" r="46" fill="url(#wallG)"/>
+          <ellipse cx="196" cy="126.4" rx="38" ry="2.2" fill="url(#poolG)"/>
+          <path d="${cone(165, 25)}" fill="url(#beamG)" opacity=".45"/>
+          <path d="${cone(150, 12)}" fill="url(#beamG)" opacity=".8"/>
+          <path d="${cone(135, 4.5)}" fill="url(#beamG)"/>
+          <g clip-path="url(#coneC)">${sprites(6, 'lit', 'lh')}</g>
+        </g></g></g></g></g>
+      </g></g>
+      <g>${sprites(9, 'smoke', 'ms')}</g></g>
+      <g id="railsG"><g id="railExt" fill="${RED}">${EXT.map((d) => `<path d="${d}"/>`).join('')}</g><path d="${P[1]}" fill="${RED}"/></g>
+      <g clip-path="url(#pl)"><g clip-path="url(#tun)">
+        ${loco(GRN)}
+        ${loco('', `<g clip-path="url(#locoClip)">${LAMPS_Z.map(() => '<rect class="sw" x="-18" y="60" width="18" height="72" fill="url(#sweepG)" opacity="0"/>').join('')}</g><path class="cab" d="${CAB}" fill="#ffd27a" opacity="0"/>${MARK.map(([x, y]) => `<circle class="mk" cx="${x}" cy="${y}" r="3.4" fill="url(#glow)" opacity="0"/>`).join('')}<circle id="lampRun" cx="${LAMP[0]}" cy="${LAMP[1]}" r="5.5" fill="url(#glow)" opacity="0"/>`)}
+        <g id="flare" opacity="0"><circle r="30" fill="url(#bloomG)"/><circle r="15" fill="url(#glow)"/><circle id="amber" r="12" fill="url(#ambG)" opacity="0"/><ellipse rx="48" ry="1.15" fill="url(#streak)"/><ellipse rx=".9" ry="10" fill="url(#streakV)"/></g>
+        <g>${Array.from({ length: 26 }, (_, i) => `<line class="sk" x1="0" y1="0" x2="${-(1.6 + (i % 3) * 0.9)}" y2="${f(-0.3 - (i % 2) * 0.4)}" stroke="${i % 3 ? '#ffc23d' : '#ff7a1a'}" stroke-width="${i % 2 ? 0.8 : 1.2}" stroke-linecap="round" opacity="0"/>`).join('')}</g>
+      </g></g>
+      <g clip-path="url(#tun)"><g>${sprites(12, 'smoke', 'bw')}</g><g>${sprites(22, 'smoke', 'ex')}</g></g>
+      <g clip-path="url(#pl)">${paths(LETTERS, RED)}</g>${paths(KYIV, RED)}
+      <g pointer-events="none">
+        <g>${sprites(18, 'steam', 'sb')}</g>
+        <g mask="url(#ink)"><rect id="sheen" x="-30" y="-20" width="18" height="230" fill="#fff" opacity=".55" transform="skewX(-22)"/></g>
+        <path id="beamP" d="M${LAMP[0]} ${LAMP[1]}L166 50L166 72Z" fill="url(#beam)" opacity="0"/>
+      </g>
+    </g></g>
+  </svg>
+</div>`);
 }
 
-/** Потяг у стилі клубного автобуса й УЗ: червоний корпус, зелені шеврони, білий фірмовий пояс, силует носорога. Рухається вправо, кабіна праворуч. */
-const rhino = (x, y, k) => `<g transform="translate(${x} ${y}) scale(${k})"><path fill="#15191c" d="M0 78 C-4 50 10 22 40 14 C58 8 74 12 88 24 L112 6 L104 34 C120 42 122 62 108 76 C100 86 86 88 76 82 C70 94 52 96 44 86 C34 92 12 94 0 78Z"/><path fill="#d6282f" d="M30 40 C46 30 66 32 78 44 C70 52 52 56 38 54Z"/><path fill="#15191c" d="M38 36 L70 40 L60 48Z"/><circle cx="62" cy="43" r="3.2" fill="#46e06a"/><path fill="none" stroke="#15191c" stroke-width="5" d="M6 70 C16 84 34 90 52 82"/></g>`;
-const RED = '#d6282f', DRED = '#a81c24', GRN = '#3fae3c';
-let _gs = 3;
-const gr = () => { _gs = (_gs * 1103515245 + 12345) & 0x7fffffff; return _gs / 0x7fffffff; };
-const glass = (x, y, w, h) => {
-  let pax = '';
-  const n = gr() < 0.3 ? 0 : gr() < 0.55 ? 1 : 2;
-  for (let k = 0; k < n; k++) { const px = x + w * (n === 1 ? 0.5 : 0.3 + k * 0.4) + (gr() - 0.5) * 3; pax += `<circle cx="${px.toFixed(1)}" cy="${y + h - 9.5}" r="3.1" fill="#0d1419"/><path d="M${(px - 4.6).toFixed(1)} ${y + h - 1} q0 -6 4.6 -6 q4.6 0 4.6 6z" fill="#0d1419"/>`; }
-  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2.5" fill="#f1cf7a"/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2.5" fill="#1a2a35" opacity=".62"/>${pax}<polygon points="${x + 2},${y + h - 2} ${x + w * 0.45},${y + 2} ${x + w * 0.7},${y + 2} ${x + w * 0.25},${y + h - 2}" fill="#bcd6e3" opacity=".3"/><rect x="${x}" y="${y}" width="${w}" height="4" rx="2" fill="#000" opacity=".3"/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2.5" fill="none" stroke="#2b343a" stroke-width="1.6"/>`;
-};
-const wheel = (cx) => `<g><circle cx="${cx}" cy="133" r="11.5" fill="#15181b"/><circle cx="${cx}" cy="133" r="8" fill="#c3cacf"/><g class="in-wh"><path d="M${cx} 126v14M${cx - 7} 133h14M${cx - 5} 128l10 10M${cx + 5} 128l-10 10" stroke="#59636a" stroke-width="1.6"/></g><circle cx="${cx}" cy="133" r="2.6" fill="#f2c230"/></g>`;
-const bogie = (cx) => `<g><rect x="${cx - 34}" y="116" width="68" height="8" rx="3" fill="#2a2f33"/><rect x="${cx - 26}" y="111" width="52" height="6" fill="#3a4248"/>${[-17, 17].map((d) => `<rect x="${cx + d - 5}" y="121" width="10" height="7" rx="2" fill="#23272b"/>`).join('')}${wheel(cx - 17)}${wheel(cx + 17)}<path class="in-rod" d="M${cx - 17} 133 H${cx + 17}" stroke="#7d868c" stroke-width="3" stroke-linecap="round"/><path d="M${cx - 30} 126 H${cx + 30}" stroke="#23272b" stroke-width="3"/></g>`;
-const doorAt = (x) => `<g><rect x="${x}" y="48" width="32" height="64" rx="2" fill="${DRED}" stroke="#7d1219" stroke-width="1.2"/><rect x="${x + 3}" y="52" width="12" height="30" rx="2" fill="#12202a"/><rect x="${x + 17}" y="52" width="12" height="30" rx="2" fill="#12202a"/><line x1="${x + 16}" y1="48" x2="${x + 16}" y2="112" stroke="#7d1219" stroke-width="1.4"/><rect x="${x - 2}" y="60" width="2.6" height="46" fill="#f2c230"/><rect x="${x + 31}" y="60" width="2.6" height="46" fill="#f2c230"/><rect x="${x + 2}" y="112" width="28" height="4" fill="#2a2f33"/><rect x="${x + 10}" y="88" width="12" height="3" rx="1" fill="#e9eef0"/></g>`;
-const chevrons = (x0, x1, y0, y1) => { let o = ''; for (let cx = x0; cx < x1; cx += 38) o += `<polygon points="${cx},${y1} ${cx + 22},${y1} ${cx + 52},${y0} ${cx + 30},${y0}" fill="${GRN}"/><polygon points="${cx - 7},${y1} ${cx},${y1} ${cx + 30},${y0} ${cx + 23},${y0}" fill="#fff"/>`; return o; };
-const roofGear = (x, n) => Array.from({ length: n }, (_, k) => `<rect x="${x + 70 + k * 80}" y="36" width="52" height="8" rx="3" fill="#8e979c"/><rect x="${x + 76 + k * 80}" y="34" width="40" height="3" fill="#6d767b"/>`).join('');
-const rhino2 = (x, y, k) => rhino(x, y, k);
-const car = (x, i) => {
-  let wins = '';
-  const start = i === 0 ? 150 : 62;
-  for (let n = 0; start + n * 29 < 306; n++) wins += glass(x + start + n * 29, 54, 24, 24);
-  return `<g><clipPath id="cc${i}"><rect x="${x}" y="44" width="360" height="68" rx="10"/></clipPath>
-    <rect x="${x}" y="44" width="360" height="68" rx="10" fill="${RED}"/>
-    <g clip-path="url(#cc${i})">
-      <rect x="${x}" y="44" width="360" height="5" fill="${DRED}"/>
-      ${chevrons(x + (i === 0 ? 150 : 60), x + 300, 80, 112)}
-      <rect x="${x}" y="106" width="360" height="6" fill="#8e1822"/>
-      ${i === 0 ? rhino2(x + 30, 46, 0.74) : ''}
-    </g>
-    ${wins}
-    ${i === 0 ? `<text x="${x + 54}" y="62" font-family="Rubik, Arial Black, sans-serif" font-weight="800" font-size="11" fill="none" stroke="#fff" stroke-width=".9" letter-spacing="2">ФКЛК</text>` : ''}
-    <rect x="${x + (i === 0 ? 120 : 84)}" y="87" width="${i === 0 ? 200 : 232}" height="15" fill="#fff"/><polygon points="${x + (i === 0 ? 120 : 84)},87 ${x + (i === 0 ? 112 : 76)},102 ${x + (i === 0 ? 120 : 84)},102" fill="#fff" opacity=".0"/>
-    <text x="${x + (i === 0 ? 220 : 200)}" y="98.5" text-anchor="middle" font-family="Rubik, Arial Black, sans-serif" font-weight="800" font-size="11" fill="${RED}" letter-spacing=".8">${i === 1 ? 'ФК ЛОКОМОТИВ КИЇВ 1919' : 'УКРЗАЛІЗНИЦЯ · ЛОКО'}</text>
-    ${doorAt(x + 18)}${doorAt(x + 310)}
-    ${roofGear(x, 3)}
-    ${[100, 200, 290].map((dx) => `<rect x="${x + dx}" y="34" width="26" height="4" rx="2" fill="#a9b2b7"/>`).join('')}
-    <rect x="${x + 52}" y="82" width="18" height="6" rx="1.5" fill="#f1efe8"/><text x="${x + 61}" y="87" text-anchor="middle" font-family="Rubik, Arial, sans-serif" font-weight="800" font-size="5" fill="#14231e">${i === 0 ? '0141' : '0142'}</text>
-    <circle cx="${x + 8}" cy="98" r="3" fill="#ffe9a6"/><circle cx="${x + 352}" cy="98" r="3" fill="#c8202b"/>
-    <path d="M${x + 100} 119 q6 8 12 0" fill="none" stroke="#15181b" stroke-width="2"/><rect x="${x + 120}" y="112" width="34" height="10" rx="2" fill="#3a4248"/><rect x="${x + 250}" y="112" width="30" height="9" rx="2" fill="#3a4248"/>
-    <rect x="${x + 96}" y="112" width="60" height="9" rx="2" fill="#2f353a"/><rect x="${x + 200}" y="112" width="46" height="8" rx="2" fill="#2f353a"/>
-    ${bogie(x + 62)}${bogie(x + 298)}
-  </g>`;
-};
-const gang = (x) => `<g><rect x="${x}" y="52" width="10" height="58" fill="#15181b"/>${[0, 1, 2, 3].map((n) => `<line x1="${x + 2 + n * 2.2}" y1="52" x2="${x + 2 + n * 2.2}" y2="110" stroke="#2b3136" stroke-width="1"/>`).join('')}</g>`;
-const head = (x) => `<g><clipPath id="ch"><path d="M${x} 44 H${x + 224} Q${x + 262} 46 ${x + 284} 72 L${x + 298} 108 V112 H${x} Z"/></clipPath>
-    <path d="M${x} 44 H${x + 224} Q${x + 262} 46 ${x + 284} 72 L${x + 298} 108 V112 H${x} Z" fill="${RED}"/>
-    <g clip-path="url(#ch)"><rect x="${x}" y="44" width="300" height="5" fill="${DRED}"/>${chevrons(x + 60, x + 250, 80, 112)}<polygon points="${x + 236},112 ${x + 300},112 ${x + 300},84 ${x + 272},72" fill="${GRN}"/><polygon points="${x + 230},112 ${x + 237},112 ${x + 273},72 ${x + 266},72" fill="#fff"/><rect x="${x}" y="106" width="300" height="6" fill="#8e1822"/></g>
-    ${doorAt(x + 18)}
-    ${[0, 1, 2, 3, 4].map((n) => glass(x + 62 + n * 29, 54, 24, 24)).join('')}
-    <path d="M${x + 214} 49 Q${x + 244} 50 ${x + 263} 70 L${x + 270} 80 H${x + 214} Z" fill="#12202a" stroke="#2b343a" stroke-width="1.6"/><path d="M${x + 222} 52 L${x + 250} 54 L${x + 232} 78 H${x + 222} Z" fill="#6f8fa1" opacity=".3"/>
-    <rect x="${x + 84}" y="87" width="120" height="15" fill="#fff"/><text x="${x + 144}" y="98.5" text-anchor="middle" font-family="Rubik, Arial Black, sans-serif" font-weight="800" font-size="10.5" fill="${RED}" letter-spacing=".6">УЗ · ЛОКО</text>
-    <rect x="${x + 258}" y="92" width="26" height="9" rx="2" fill="#f1efe8"/><text x="${x + 271}" y="99.5" text-anchor="middle" font-family="Rubik, Arial, sans-serif" font-weight="800" font-size="7" fill="#14231e">1919</text>
-    <rect x="${x + 270}" y="80" width="12" height="7" rx="2" fill="#fff6dc"/><circle class="in-head" cx="${x + 288}" cy="92" r="4.5" fill="#fff6dc"/><circle class="in-head" cx="${x + 288}" cy="92" r="14" fill="#ffe9a6" opacity=".3"/>
-    <rect x="${x + 284}" y="104" width="18" height="6" rx="2" fill="#f2c230"/>
-    <path d="M${x + 80} 44 V32 H${x + 150} V44 M${x + 92} 32 L${x + 108} 14 H${x + 126} L${x + 140} 32" fill="none" stroke="#23272b" stroke-width="3"/><rect x="${x + 100}" y="11" width="34" height="5" rx="2" fill="#23272b"/>
-    <rect x="${x + 20}" y="36" width="52" height="8" rx="3" fill="#8e979c"/>
-    <rect x="${x + 232}" y="41" width="34" height="7" rx="1.5" fill="#0b1114"/><text x="${x + 249}" y="47" text-anchor="middle" font-family="Rubik, Arial, sans-serif" font-weight="800" font-size="5.6" fill="#ffb52e">ЛОКО · КИЇВ</text>
-    <path d="M${x + 244} 77 L${x + 262} 66" stroke="#15181b" stroke-width="1.6"/>
-    ${bogie(x + 62)}${bogie(x + 232)}
-  </g>`;
-/** Вагон 1:1 за зразком (плацкарт УЗ, вигляд збоку): рифлений корпус, 10 вікон (парні зі спущеною рамою), дві торцеві двері, чорна рама, два візки. Малюється в координатах зразка (x 38..1258, y 545..767), далі масштабується до локомотива. */
-const WK = 0.745;
-const wagon = (i) => {
-  const RED = '#d6282f', DK = '#b3202a';
-  const xs = [242, 332, 422, 512, 600, 690, 780, 870, 958, 1048];
-  const win = (x, n) => {
-    const split = n % 2 === 0, w = 49;
-    return `<g><rect x="${x}" y="612" width="${w}" height="45" rx="5" fill="#1b1a3a" stroke="#f4f4ee" stroke-width="2.4"/>${split ? `<rect x="${x + 2}" y="613" width="${w - 4}" height="15" rx="3" fill="#f4f4ee"/><rect x="${x + 4}" y="616" width="${w - 8}" height="9" rx="2" fill="#1b1a3a"/><line x1="${x + 2}" y1="634" x2="${x + w - 2}" y2="634" stroke="#f4f4ee" stroke-width="1.6"/>` : ''}<polygon points="${x + 6},${655} ${x + 22},${614} ${x + 32},${614} ${x + 16},${655}" fill="#fff" opacity=".07"/></g>`;
+// ---------- текстури диму: клуб із викривленого фрактального шуму, білий згори з легкою тінню знизу ----------
+const fr = (x) => { const v = Math.sin(x) * 43758.5453; return v - Math.floor(v); };   // сталий «випадок»: кожен показ однаковий
+function smokeTex(kind, seed) {
+  const S = 96, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d'), im = g.createImageData(S, S), px = im.data;
+  const h = (x, y) => fr(x * 127.1 + y * 311.7 + seed * 74.7);
+  const sm = (t) => t * t * (3 - 2 * t);
+  const vn = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), u = sm(x - xi), v = sm(y - yi);
+    const a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), e = h(xi + 1, yi + 1);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + e) * u * v;
   };
-  let ribs = '';
-  for (let y = 596; y < 706; y += 7) if (y < 612 || y > 668) ribs += `<line x1="108" y1="${y}" x2="1182" y2="${y}" stroke="${DK}" stroke-width="1.5"/>`;
-  for (const y of [624, 636, 648]) { ribs += `<line x1="108" y1="${y}" x2="238" y2="${y}" stroke="${DK}" stroke-width="1.2"/><line x1="1100" y1="${y}" x2="1182" y2="${y}" stroke="${DK}" stroke-width="1.2"/>`; }
-  const door = (x) => `<g><rect x="${x}" y="598" width="44" height="108" fill="#a81c24" stroke="#7d1219" stroke-width="2"/><rect x="${x + 8}" y="612" width="28" height="44" rx="3" fill="#1b1a3a" stroke="#f4f4ee" stroke-width="2.2"/><line x1="${x + 8}" y1="634" x2="${x + 36}" y2="634" stroke="#f4f4ee" stroke-width="1.6"/>${[0, 1, 2].map((n) => `<line x1="${x + 8}" y1="${588 + n * 3}" x2="${x + 36}" y2="${588 + n * 3}" stroke="#2a2f33" stroke-width="1.4"/>`).join('')}<rect x="${x + 4}" y="676" width="36" height="6" fill="#7d1219"/></g>`;
-  const wheel = (cx) => `<g><circle cx="${cx}" cy="745" r="23" fill="#0e1012"/><circle cx="${cx}" cy="745" r="21.6" fill="url(#wmT)"/><circle cx="${cx}" cy="745" r="18.4" fill="#171b1e"/><g class="in-wh"><circle cx="${cx}" cy="745" r="17.4" fill="url(#wmD)"/><path d="M${cx + 10.0} ${745 + 0.0} L${cx + 16.2} ${745 + 0.0}M${cx + 8.7} ${745 + 5.0} L${cx + 14.0} ${745 + 8.1}M${cx + 5.0} ${745 + 8.7} L${cx + 8.1} ${745 + 14.0}M${cx + 0.0} ${745 + 10.0} L${cx + 0.0} ${745 + 16.2}M${cx + -5.0} ${745 + 8.7} L${cx + -8.1} ${745 + 14.0}M${cx + -8.7} ${745 + 5.0} L${cx + -14.0} ${745 + 8.1}M${cx + -10.0} ${745 + 0.0} L${cx + -16.2} ${745 + 0.0}M${cx + -8.7} ${745 + -5.0} L${cx + -14.0} ${745 + -8.1}M${cx + -5.0} ${745 + -8.7} L${cx + -8.1} ${745 + -14.0}M${cx + -0.0} ${745 + -10.0} L${cx + -0.0} ${745 + -16.2}M${cx + 5.0} ${745 + -8.7} L${cx + 8.1} ${745 + -14.0}M${cx + 8.7} ${745 + -5.0} L${cx + 14.0} ${745 + -8.1}" stroke="#69747b" stroke-width="1.5"/><circle cx="${cx}" cy="745" r="10.6" fill="none" stroke="#2f363b" stroke-width="2.2"/><circle cx="${cx}" cy="745" r="8.2" fill="url(#wmH)"/><circle cx="${cx + 5.2}" cy="${745 + 0.0}" r="1.1" fill="#4b545a"/><circle cx="${cx + 2.6}" cy="${745 + 4.5}" r="1.1" fill="#4b545a"/><circle cx="${cx + -2.6}" cy="${745 + 4.5}" r="1.1" fill="#4b545a"/><circle cx="${cx + -5.2}" cy="${745 + 0.0}" r="1.1" fill="#4b545a"/><circle cx="${cx + -2.6}" cy="${745 + -4.5}" r="1.1" fill="#4b545a"/><circle cx="${cx + 2.6}" cy="${745 + -4.5}" r="1.1" fill="#4b545a"/><circle cx="${cx}" cy="745" r="2.8" fill="#23282c"/></g><path d="M${cx - 20} 740 A21 21 0 0 1 ${cx - 6} 724.5" fill="none" stroke="#fff" stroke-width="1.6" opacity=".22"/></g>`;
-  const bog = (cx) => `<g><rect x="${cx - 96}" y="722" width="192" height="12" rx="5" fill="#15181b"/><rect x="${cx - 70}" y="712" width="140" height="12" fill="#1f2428"/>${[-62, 62].map((d) => `<rect x="${cx + d - 13}" y="724" width="26" height="10" rx="2" fill="#23282c"/><path d="M${cx + d - 9} 722 l4 -5 l-8 -3 l8 -3 l-8 -3 l8 -3" fill="none" stroke="#6d767b" stroke-width="2"/>`).join('')}<rect x="${cx - 40}" y="738" width="6" height="10" fill="#59636a"/><rect x="${cx + 34}" y="738" width="6" height="10" fill="#59636a"/>${[-62, 62].map((d) => `<rect x="${cx + d + (d < 0 ? 17 : -24)}" y="733" width="7" height="24" rx="2.5" fill="#15181b"/>`).join('')}<rect x="${cx - 58}" y="728" width="116" height="6" fill="#2a3036"/>${wheel(cx - 62)}${wheel(cx + 62)}<rect x="${cx - 24}" y="736" width="48" height="5" fill="#3a4248"/></g>`;
-  const label = ['ФК ЛОКОМОТИВ КИЇВ 1919', 'УКРЗАЛІЗНИЦЯ · ЛОКО', 'ЗАЛІЗНИЧНИКИ · КИЇВ', 'ЛОКО · ВПЕРЕД!', 'КИЇВ · 1919', 'РИКОШЕТ · ЛОКО'][i];
-  return `<g>
-    <rect x="38" y="705" width="1220" height="15" fill="#101214"/>
-    <rect x="520" y="719" width="46" height="18" fill="#101214"/><rect x="330" y="719" width="110" height="9" fill="#101214"/><rect x="705" y="719" width="152" height="10" fill="#101214"/><rect x="900" y="719" width="60" height="8" fill="#101214"/>
-    <path d="M44 590 V563 Q44 545 72 545 H1226 Q1252 545 1252 566 V590 Z" fill="#e4e5e3"/><path d="M44 575 H1252 V590 H44 Z" fill="#cfd1cf"/>
-    <rect x="140" y="552" width="40" height="12" fill="#b9bcbd"/><rect x="146" y="544" width="10" height="10" fill="#9ea2a4"/><rect x="164" y="544" width="10" height="10" fill="#9ea2a4"/>
-    <rect x="1128" y="546" width="14" height="10" fill="#aeb2b3"/><rect x="1188" y="544" width="14" height="12" fill="#aeb2b3"/>
-    <rect x="42" y="585" width="1212" height="122" rx="3" fill="${RED}"/>
-    ${ribs}
-    <rect x="108" y="660" width="1072" height="8" fill="#3fae3c"/><rect x="108" y="668" width="1072" height="2.4" fill="#f4f4ee"/>
-    <text x="640" y="697" text-anchor="middle" font-family="Rubik, Arial Black, sans-serif" font-weight="800" font-size="19" fill="#fff" letter-spacing="4">${label}</text>
-    ${xs.map(win).join('')}
-    <rect x="1130" y="614" width="32" height="42" rx="4" fill="#1b1a3a" stroke="#f4f4ee" stroke-width="2.2"/>
-    ${door(62)}${door(1186)}
-    <rect x="38" y="585" width="24" height="132" fill="#15181b"/><rect x="1236" y="585" width="22" height="132" fill="#15181b"/>
-    <text x="230" y="590" font-family="Rubik, Arial, sans-serif" font-weight="700" font-size="9" fill="#fff" opacity=".8">61 22 20-77 0${20 + i + 1}-4</text>
-    ${bog(210)}${bog(1060)}
-  </g>`;
-};
-const gangN = (x) => `<g><rect x="${x}" y="170" width="24" height="86" fill="#15181b"/>${[0, 1, 2, 3, 4].map((n) => `<line x1="${x + 2 + n * 2.6}" y1="170" x2="${x + 2 + n * 2.6}" y2="256" stroke="#2b3136" stroke-width="1"/>`).join('')}<rect x="${x - 4}" y="254" width="22" height="7" fill="#444"/></g>`;
-const TRAIN = `<svg class="in-train" viewBox="-5217 128 6097 182" aria-hidden="true"><defs><radialGradient id="wmT" cx="35%" cy="30%"><stop offset="0" stop-color="#cdd5d9"/><stop offset="1" stop-color="#4a545b"/></radialGradient><radialGradient id="wmD" cx="40%" cy="35%"><stop offset="0" stop-color="#6a757c"/><stop offset="1" stop-color="#2a3035"/></radialGradient><radialGradient id="wmH" cx="35%" cy="30%"><stop offset="0" stop-color="#e3e8ea"/><stop offset="1" stop-color="#7b858b"/></radialGradient></defs>${[0, 1, 2, 3, 4, 5].reverse().map((k) => { const fx = -602 - k * 923; return `<g class="in-w" data-cx="${fx + 454}"><g transform="translate(${fx} 300) scale(${WK}) translate(-38 -765)">${wagon(k)}</g>${gangN(fx + 905)}</g>`; }).join('')}<g id="not_found_train" transform="translate(1190 0) scale(-1 1)"><clipPath id="lcClip"><path d="M321.8 300.7v-32.4s1.2.7-1.5-2.4v-29.1s3.1-11.6 10.7-21.1c0 0 7.6-12 15.5-17.5h1.3s10.2-4.9 30.9-28h.6s-.9-1.4 0-2.7c0 0 10.1-10.5 21-12.3 0 0 9.4-1.8 20.2-1.8h47.7V151H492v-1.1h10.1v1.1h19v2.2s8.2.9 19.2-4.2c0 0 1.4-1.1 28.8-1.1h291.5v6.8h7.5v2.2s12.2-.6 12.2 9.8V177l-10-.1v57.9s14.9-.5 14.9 10.2c0 0 1 9-14.9 8.9v3.8H719.5s-2.4.1-4.3 3l-15 29s-2.9 5.1-10.8 5.1H504.3s-2.9.1-6.1-5l-13.1-25s-4.5-7.1-11.8-7.1H369v2.4s-3.2 1.3-7.1 8.7L351.4 289s-2.9 6.3-6.9 6.4h-17.8l-4.9 5.3z"/></clipPath><path fill="#b3dcdf" d="M344.5 248.5h507.2v37.8H344.5z"></path><g id="not_found_wheels"><circle class="not_found_st6" cx="384.1" cy="285.6" r="15.1"></circle><path class="not_found_st2" d="M384.1 295.7c-5.6 0-10.1-4.5-10.1-10.1s4.5-10.1 10.1-10.1 10.1 4.5 10.1 10.1c0 5.5-4.6 10.1-10.1 10.1z"></path><circle class="not_found_st6" cx="416.1" cy="285.6" r="15.1"></circle><path class="not_found_st2" d="M416.1 295.7c-5.6 0-10.1-4.5-10.1-10.1s4.5-10.1 10.1-10.1 10.1 4.5 10.1 10.1c0 5.5-4.6 10.1-10.1 10.1z"></path><circle class="not_found_st6" cx="469.1" cy="285.6" r="15.1"></circle><path class="not_found_st2" d="M469.1 295.7c-5.6 0-10.1-4.5-10.1-10.1s4.5-10.1 10.1-10.1 10.1 4.5 10.1 10.1c0 5.5-4.6 10.1-10.1 10.1z"></path><circle class="not_found_st6" cx="734.1" cy="285.6" r="15.1"></circle><path class="not_found_st2" d="M734.1 295.7c-5.6 0-10.1-4.5-10.1-10.1s4.5-10.1 10.1-10.1 10.1 4.5 10.1 10.1c0 5.5-4.6 10.1-10.1 10.1z"></path><circle class="not_found_st6" cx="766.1" cy="285.6" r="15.1"></circle><path class="not_found_st2" d="M766.1 295.7c-5.6 0-10.1-4.5-10.1-10.1s4.5-10.1 10.1-10.1 10.1 4.5 10.1 10.1c0 5.5-4.6 10.1-10.1 10.1z"></path><circle class="not_found_st6" cx="821.1" cy="285.6" r="15.1"></circle><path class="not_found_st2" d="M821.1 295.7c-5.6 0-10.1-4.5-10.1-10.1s4.5-10.1 10.1-10.1 10.1 4.5 10.1 10.1c0 5.5-4.6 10.1-10.1 10.1z"></path></g><path id="not_found_bracefront" class="not_found_st7" d="M383.2 285.6h88.1"></path><path id="not_found_braceback" class="not_found_st7" d="M733.2 285.6h88.1"></path><g id="not_found_car-layers"><path id="not_found_car" class="not_found_st8" d="M321.8 300.7v-32.4s1.2.7-1.5-2.4v-29.1s3.1-11.6 10.7-21.1c0 0 7.6-12 15.5-17.5h1.3s10.2-4.9 30.9-28h.6s-.9-1.4 0-2.7c0 0 10.1-10.5 21-12.3 0 0 9.4-1.8 20.2-1.8h47.7V151H492v-1.1h10.1v1.1h19v2.2s8.2.9 19.2-4.2c0 0 1.4-1.1 28.8-1.1h291.5v6.8h7.5v2.2s12.2-.6 12.2 9.8V177l-10-.1v57.9s14.9-.5 14.9 10.2c0 0 1 9-14.9 8.9v3.8H719.5s-2.4.1-4.3 3l-15 29s-2.9 5.1-10.8 5.1H504.3s-2.9.1-6.1-5l-13.1-25s-4.5-7.1-11.8-7.1H369v2.4s-3.2 1.3-7.1 8.7L351.4 289s-2.9 6.3-6.9 6.4h-17.8l-4.9 5.3z"></path><g clip-path="url(#lcClip)"><polygon points="355,300 385,300 360,246 330,246" fill="#3fae3c"/><polygon points="348,300 355,300 330,246 323,246" fill="#fff"/><polygon points="417,300 447,300 422,246 392,246" fill="#3fae3c"/><polygon points="410,300 417,300 392,246 385,246" fill="#fff"/><polygon points="479,300 509,300 484,246 454,246" fill="#3fae3c"/><polygon points="472,300 479,300 454,246 447,246" fill="#fff"/><polygon points="541,300 571,300 546,246 516,246" fill="#3fae3c"/><polygon points="534,300 541,300 516,246 509,246" fill="#fff"/><polygon points="603,300 633,300 608,246 578,246" fill="#3fae3c"/><polygon points="596,300 603,300 578,246 571,246" fill="#fff"/><polygon points="665,300 695,300 670,246 640,246" fill="#3fae3c"/><polygon points="658,300 665,300 640,246 633,246" fill="#fff"/><polygon points="727,300 757,300 732,246 702,246" fill="#3fae3c"/><polygon points="720,300 727,300 702,246 695,246" fill="#fff"/><polygon points="789,300 819,300 794,246 764,246" fill="#3fae3c"/><polygon points="782,300 789,300 764,246 757,246" fill="#fff"/><polygon points="851,300 881,300 856,246 826,246" fill="#3fae3c"/><polygon points="844,300 851,300 826,246 819,246" fill="#fff"/></g><path id="not_found_streamline-outine" class="not_found_st8" d="M320.3 236.6s1.4-6.8 4.4-11.3c0 0 .1-2.3 23.2-6.3l78-16.6s103.3-21.1 134.9-26.1c0 0 93.3-16 120.5-17.9 0 0 57.6-4.3 100-4.1h88.9v63.4s-10.3 5.4-17.1 5.3c0 0-305.6 4.9-366.3 8.1 0 0-100.3 4.8-119.1 6.8 0-.1-46.6 1.2-47.4-1.3z"></path><g id="not_found_window-grate"><path class="not_found_st9" d="M739.5 182.6H854"></path><path class="not_found_st9" d="M739.5 177.6H854"></path><path class="not_found_st9" d="M739.5 172.6H854"></path><path class="not_found_st9" d="M739.5 167.6H854"></path><path class="not_found_st9" d="M739.5 161.4H854v26.1H739.5z"></path></g><path class="not_found_st9" d="M320.3 257.8h549.9"></path><g id="not_found_ladders"><g id="not_found_ladder-f"><path id="not_found_front-ladder" class="not_found_st8" d="M433.8 258.4h17.8v34.8h-17.8z"></path><path id="not_found_fb-rung" class="not_found_st9" d="M433.8 281.1h17.7"></path><path id="not_found_ft-rung" class="not_found_st9" d="M433.8 268.6h17.7"></path></g><g id="not_found_ladder-b"><path id="not_found_ladder-back" class="not_found_st8" d="M851.8 257.8h17.8v34.8h-17.8z"></path><path id="not_found_bt-rung" class="not_found_st9" d="M851.8 268.6h17.7"></path><path id="not_found_bb-rung" class="not_found_st9" d="M851.8 281.1h17.7"></path></g></g><path id="not_found_window-front" class="not_found_st8" d="M350.5 196.4s-.4 3.9 15.2 4.3l32.3-30.3s-18.2 1.1-19-.8l-28.5 26.8z"></path></g></g><text x="783" y="230" text-anchor="middle" class="in-ltx" font-size="21">ЛОКО</text><text x="440" y="212" text-anchor="middle" class="in-ltx" font-size="18">ЛОКОМОТИВ КИЇВ 1919</text></svg>`;
+  const fbm = (x, y) => { let s = 0, a = .5, q = 1; for (let o = 0; o < 4; o++) { s += a * vn(x * q, y * q); q *= 2.03; a *= .5; } return s / .9375; };
+  const col = { smoke: [[250, 251, 250], [178, 187, 183]], steam: [[255, 255, 255], [190, 201, 196]], lit: [[255, 243, 208], [222, 186, 122]] }[kind];
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const X = x / S, Y = y / S, r = Math.hypot(X - .5, Y - .5) * 2;
+    const wx = fbm(X * 3 + seed, Y * 3 + 7.3), wy = fbm(X * 3 + 3.1, Y * 3 + seed * 1.7);
+    const n = fbm(X * 4.2 + wx * 1.7 + seed * 5, Y * 4.2 + wy * 1.7);
+    const fall = Math.max(0, 1 - r), dens = Math.pow(fall, 1.3) * (n * 1.75 - .38);
+    const t = Math.min(1, Math.max(0, Y * .85 + (.5 - n) * .7)), i = (y * S + x) * 4;
+    for (let c = 0; c < 3; c++) px[i + c] = col[0][c] + (col[1][c] - col[0][c]) * t;
+    px[i + 3] = Math.pow(Math.max(0, Math.min(1, dens * 1.35)), 1.15) * 255;
+  }
+  g.putImageData(im, 0, 0);
+  return cv.toDataURL();
+}
+let TEX = null;                                                  // малюються раз за сесію
+const textures = () => TEX || (TEX = { smoke: [1, 2, 3].map((s) => smokeTex('smoke', s)), steam: [4, 5, 6].map((s) => smokeTex('steam', s)), lit: [7, 8].map((s) => smokeTex('lit', s)) });
 
-const HILL = 'M0 120 C80 70 170 50 260 84 C340 112 420 52 520 66 C620 80 700 108 800 76 C880 52 950 84 1000 100 V120Z';
-const SCENERY = `<div class="in-clouds">${[8, 20, 34, 14, 28].map((t, i) => `<i style="top:${t}%;--d:${i * -9}s;--sp:${28 + i * 7}s;--s:${0.7 + (i % 3) * 0.3}"></i>`).join('')}</div>
-  <svg class="in-hills h2" viewBox="0 0 2000 120" preserveAspectRatio="none" aria-hidden="true"><g fill="#a7d6bd"><path d="${HILL}"/><path transform="translate(1000 0)" d="${HILL}"/></g></svg>
-  <svg class="in-hills h1" viewBox="0 0 2000 120" preserveAspectRatio="none" aria-hidden="true"><g fill="#5db070"><path transform="translate(-300 20) scale(1 .8)" d="${HILL}"/><path transform="translate(700 20) scale(1 .8)" d="${HILL}"/><path transform="translate(1700 20) scale(1 .8)" d="${HILL}"/></g></svg>`;
+/** Частка часу, коли крива cubic-bezier(e) доходить до частки шляху p. */
+function timeAt(e, p) {
+  p = Math.max(0, Math.min(1, p));
+  for (let i = 1; i <= 400; i++) {
+    const t = i / 400, m = 1 - t, y = 3 * m * m * t * e[1] + 3 * m * t * t * e[3] + t * t * t;
+    if (y >= p) return 3 * m * m * t * e[0] + 3 * m * t * t * e[2] + t * t * t;
+  }
+  return 1;
+}
 
+// ---------- рух локомотива: відстань до глядача z, видимий розмір 1/z ----------
+const LT = 700, D = 2700, ARR = LT + D;                         // старт, час виїзду, мить зупинки
+const C = .74, Z0 = 7;                                           // рівний хід майже до виходу, далі різке гальмування; на старті він усемеро далі
+const SET = 1100;                                                // скільки після зупинки ще заспокоюється підвіска
+const V = 1 / (C + (1 - C) / 2);
+const dist = (u) => u < C ? V * u : V * u - V * (u - C) * (u - C) / (2 * (1 - C));   // пройдена частка шляху
+const zAt = (u) => Z0 - (Z0 - 1) * dist(u);
+const sAt = (u) => 1 / zAt(u);
+const spd = (u) => u < C ? 1 : Math.max(0, 1 - (u - C) / (1 - C));
+const tr = (x, y) => 'translate(' + x.toFixed(3) + 'px,' + y.toFixed(3) + 'px)';
+const persp = (s) => tr(VP[0] * (1 - s), VP[1] * (1 - s)) + ' scale(' + s.toFixed(4) + ')';
+const world = (p, s) => [VP[0] + s * (p[0] - VP[0]), VP[1] + s * (p[1] - VP[1])];
+const uWhen = (ok) => { let u = 0; while (u < 1 && !ok(u)) u += .002; return u; };
+const glow = (u) => Math.min(1, .3 + 1.9 * Math.max(0, sAt(u) - .14));   // скільки світла фари в тунелі: що ближче, то яскравіше
+const joints = [];                                                // стики рейок: через рівні відрізки шляху
+for (let i = 1, zb = Z0; i <= 1600; i++) { const u = i / 1600, z = zAt(u); if (zb - z >= .3) { zb = z; joints.push(u); } }
+
+/** Підвіска. Передній і задній візки ловлять кожен стик по черзі, рама гойдається між ними; кузов на ресорах іде за рамою
+ *  з запізненням, клює носом, поки тримають гальма, і відскакує, коли потяг став; на ходу кузов погойдується з боку на бік.
+ *  Стан кожні 4 мс: [час, підскок рами, нахил рами°, плуг відносно рами, кузов відносно рами, кивок кузова°, крен°]. */
+function suspension() {
+  const dt = 4, n = Math.round((D + SET) / dt), w = (hz) => 2 * Math.PI * hz / 1000;
+  const wB = w(15), wH = w(3.3), wP = w(2.1), wR = w(1.2);
+  const J = joints.map((u) => u * D), hits = [];
+  J.forEach((t, k) => { const gap = (k < J.length - 1 ? J[k + 1] : t + (t - J[k - 1])) - t, a = spd(t / D); hits.push([t, 0, a], [t + gap * .42, 1, a]); });
+  hits.sort((p, q) => p[0] - q[0]);
+  let cf = 0, vf = 0, cr = 0, vr = 0, yb = 0, vb = 0, th = 0, vt = 0, ro = 0, vro = 0, bk = 0, hi = 0;
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i * dt, u = Math.min(1, t / D);
+    while (hi < hits.length && hits[hi][0] <= t) {
+      const [, rear, a] = hits[hi++];
+      if (rear) vr -= .085 * a; else vf -= .085 * a;
+      vb -= .012 * a; vro += (fr(hi * 2.71) - .5) * .0001 * a;
+    }
+    bk += ((t >= D * C && t < D ? 1 : 0) - bk) * Math.min(1, dt / 110);   // гальма набирають силу й відпускають за ~0,1 с
+    vf += (-wB * wB * cf - 2 * .42 * wB * vf) * dt; cf += vf * dt;
+    vr += (-wB * wB * cr - 2 * .42 * wB * vr) * dt; cr += vr * dt;
+    const yc = (cf + cr) / 2, vc = (vf + vr) / 2;
+    vb += (-wH * wH * (yb - yc) - 2 * .26 * wH * (vb - vc)) * dt; yb += vb * dt;
+    vt += (-wP * wP * (th - 1.6 * bk) - 2 * .24 * wP * vt) * dt; th += vt * dt;
+    vro += (-wR * wR * ro - 2 * .25 * wR * vro + wR * wR * .0025 * spd(u) * Math.sin(2 * Math.PI * t / 760)) * dt; ro += vro * dt;
+    out.push([t, yc, (cr - cf) / 88 * 57.3, cf - yc, yb - yc, th, ro * 57.3]);
+  }
+  return out;
+}
+
+/** Заставка запуску: повний герб із тунелем у червоному трикутнику; з тунелю виїжджає локомотив, гальмує й стає на своє місце,
+ *  тунель розчиняється, фара гасне. Дотик будь-де пропускає. `done` кличеться один раз, коли заставка почала зникати. */
 export function playIntro(root, done) {
+  if (P.length !== 20 || !CAB) { done(); return; }                // герб змінили так, що деталі вже не впізнати: заставку пропускаємо
   const el = document.createElement('section');
   el.className = 'intro'; el.id = 'intro';
-  const year = [...'1919'].map((c, i) => `<s style="--i:${i}">${c}</s>`).join('');
-  const word = (t, cls) => [...t].map((c, i) => `<s class="${cls}" style="--i:${i}">${c}</s>`).join('');
-  el.innerHTML = `${SCENERY}
-    <div class="in-flash"></div><div class="in-rays"></div>
-    <div class="in-ground"><div class="in-sleepers"></div><div class="in-rail"></div></div>
-    <div class="in-run">${TRAIN}</div>
-    <div class="in-sem red"><div class="in-lamp"><i class="r"></i><i class="g"></i></div><b class="in-say"><span class="s1">СТОП</span><span class="s2">ВПЕРЕД!</span></b></div>
-    <div class="in-chant" data-s=""><b class="q">ХТО МИ?</b><b class="a">ЛОКО!</b></div>
-    <div class="in-cards" id="in-cards"></div>
-    <div class="in-year" hidden><small>КИЇВСЬКІ ЗАЛІЗНИЧНИКИ З</small><div class="in-flap">${year}</div></div>
-    <div class="in-crest">${lokoCrest()}</div>
-    <h1 class="in-title"><div class="t1">${word('LOKO', 'a')}</div><div class="t2">${word('RUSH', 'b')}</div></h1>
-    <div class="in-slip"><span>РЕЙС №1</span><b>КИЇВ → ЧЕМПІОНАТ СВІТУ</b><i></i></div>
-    <button class="in-skip" aria-label="Пропустити">ПРОПУСТИТИ ›</button>`;
+  el.innerHTML = scene() + '<button class="li-skip" type="button" aria-label="Пропустити">ПРОПУСТИТИ ›</button>';
   root.appendChild(el);
-
-  let finished = false;
-  const T = [];
+  const $ = (s) => el.querySelector(sel(s)), $$ = (s) => [...el.querySelectorAll(sel(s))];
+  const live = [], T = [];
+  const A = (node, kf, o) => { const a = node.animate(kf, o); live.push(a); return a; };
+  const each = (s, kf, o) => $$(s).forEach((node) => A(node, kf, o));
   const at = (ms, fn) => T.push(setTimeout(fn, ms));
+  let finished = false;
   const end = () => {
-    if (finished) return; finished = true; T.forEach(clearTimeout); cancelAnimationFrame(raf);
-    try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+    if (finished) return; finished = true;
+    T.forEach(clearTimeout);
     el.classList.add('out');
-    setTimeout(() => { el.remove(); }, 700);
+    setTimeout(() => { for (const a of live) a.cancel(); el.remove(); }, 650);
     done();
   };
   el.addEventListener('click', end);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {   // без руху: лише готовий герб
+    $('#tdark').remove(); $('#railExt').remove();
+    at(1600, end);
+    return;
+  }
+  const tex = textures();
+  $$('.sp').forEach((im, i) => { const l = tex[im.dataset.k]; im.setAttribute('href', l[i % l.length]); });
 
-  // плавний рух і фізика: кожен вагон — окрема маса на пружно-демпферних зчепках
-  const sem = el.querySelector('.in-sem'), run = el.querySelector('.in-run'), ws = [...el.querySelectorAll('.in-w')], N = ws.length, VB = 6097;
-  const cxs = ws.map((w) => +w.dataset.cx), r = new Float32Array(N), vr = new Float32Array(N);
-  const K = 130, C = 15, LIM = 9;
-  run.style.animation = 'none';
-  const scen = el.getAnimations({ subtree: true }).filter((an) => /^(hill|sleep)$/.test(an.animationName || ''));
-  let last = performance.now(), t0 = last, xPrev = null, vPrev = 0, dist = 0, raf = 0;
-  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
-  const frame = (now) => {
-    if (finished) return;
-    raf = requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    const t = (now - t0) / 1000, vw = innerWidth, Wpx = run.getBoundingClientRect().width || 1;
-    const TA = 3.0, TH = 4.2, TD = 6.5, x0 = -0.08 * vw - Wpx, x1 = 0.86 * vw - Wpx, x2 = 1.03 * vw;
-    let x;
-    if (t < TA) x = x0 + (x1 - x0) * (1 - Math.pow(1 - t / TA, 3));            // заїзд і плавне гальмування перед червоним
-    else if (t < TH) x = x1;                                                      // стоїть: червоний → зелений
-    else { const q = Math.min(1, (t - TH) / TD); x = x1 + (x2 - x1) * (0.5 - 0.5 * Math.cos(Math.PI * q)); }   // м'який розгін, проходять усі вагони
-    if (t > 3.5 && sem.classList.contains('red')) { sem.classList.replace('red', 'green'); audio.click(); audio.bell(); }
-    run.style.transform = `translateX(${x.toFixed(2)}px)`;
-    if (xPrev === null || dt <= 0) { xPrev = x; return; }
-    const v = (x - xPrev) / dt, upx = Wpx / VB, a = (v - vPrev) / dt / upx;
-    xPrev = x; vPrev = v; dist += (Math.abs(v) / upx) * dt;
-    const sf = clamp(Math.abs(v) / (0.45 * vw), 0, 1);
-    for (let i = 0; i < N; i++) {
-      const prev = i === 0 ? 0 : r[i - 1], vprev = i === 0 ? 0 : vr[i - 1];
-      const next = i === N - 1 ? r[i] : r[i + 1], vnext = i === N - 1 ? vr[i] : vr[i + 1];
-      const F = -a + K * (prev - r[i]) + C * (vprev - vr[i]) - K * (r[i] - next) - C * (vr[i] - vnext);
-      vr[i] += F * dt; r[i] = clamp(r[i] + vr[i] * dt, -LIM, LIM);
-      const ph = ((dist + i * 923) / 425) * Math.PI * 2;
-      const dy = -Math.abs(Math.sin(ph)) * 0.9 * sf, rot = Math.sin(ph + 1.3) * 0.16 * sf + clamp(a * 0.0009, -0.35, 0.35);
-      ws[i].setAttribute('transform', `translate(${r[i].toFixed(2)} ${dy.toFixed(2)}) rotate(${rot.toFixed(3)} ${cxs[i]} 300)`);
-    }
-    const rate = clamp(Math.abs(v) / (0.18 * vw), 0.0001, 6);
-    for (const an of scen) an.playbackRate = rate;
-    run.style.setProperty('--wp', Math.abs(v) < 8 ? 'paused' : 'running');
-    run.style.setProperty('--ws', clamp(138 / Math.max(1, Math.abs(v) / upx), 0.06, 3).toFixed(3) + 's');
-  };
-  raf = requestAnimationFrame(frame);
+  const run = { duration: D, delay: LT, easing: 'linear', fill: 'both' };
+  const sample = (n, fn) => Array.from({ length: n + 1 }, (_, i) => fn(i / n));
+  /** Клуб диму чи пари: виринає, розпливається й тане; рух гальмує, як у справжнього диму. */
+  const puff = (node, x, y, dx, dy, s0, s1, r0, dr, op, dur, t) => A(node, [
+    { opacity: 0, transform: tr(x, y) + ' rotate(' + r0 + 'deg) scale(' + s0.toFixed(3) + ')', easing: 'cubic-bezier(.1,.55,.3,1)' },
+    { opacity: op, offset: .14, easing: 'ease-in-out' },
+    { opacity: op * .55, offset: .5, easing: 'ease-in-out' },
+    { opacity: 0, transform: tr(x + dx, y + dy) + ' rotate(' + (r0 + dr) + 'deg) scale(' + s1.toFixed(3) + ')' }], { duration: dur, delay: t, fill: 'backwards' });
 
-  // звук і сценарій: гудок, зупинка, зелений, відправлення, фінал із чантом «Хто ми? — ЛОКО!»
-  const CARDS = [
-    ['ФК ЛОКОМОТИВ', 'КИЇВ · ЗАЛІЗНИЧНИКИ', 0],
-    ['1919', 'РІК ЗАСНУВАННЯ · НАЙСТАРІШИЙ КЛУБ КИЄВА', 1],
-    ['ЗАЛІЗНИЧНИКИ', 'КЛУБ ПІВДЕННО-ЗАХІДНОЇ ЗАЛІЗНИЦІ', 0],
-    ['СТОП → ВПЕРЕД', 'ЧЕРВОНИЙ І ЗЕЛЕНИЙ — СИГНАЛИ ЗАЛІЗНИЦІ', 0],
-    ['5× ЧЕМПІОН КИЄВА', 'ПЕРЕМОГИ, ЯКІ ВАРТО ПАМ’ЯТАТИ', 0],
-    ['СТАДІОН «ЛОКОМОТИВ»', 'З 1925 РОКУ · 1631 МІСЦЕ', 0],
-    ['ДАВАЙ, ЛОКО!', 'ВІД ДРУГОЇ ЛІГИ ДО ЧЕМПІОНАТУ СВІТУ', 0],
-  ];
-  const box = el.querySelector('#in-cards');
-  CARDS.forEach(([big, sub, flap], i) => {
-    const c = document.createElement('div'); c.className = 'in-card';
-    const head = flap ? `<div class="in-cf">${[...big].map((ch, k) => `<s style="--i:${k}">${ch}</s>`).join('')}</div>` : `<b>${big}</b>`;
-    c.innerHTML = `<i class="in-ci">${lokoCrest()}</i><div>${head}<small>${sub}</small></div>`;
-    box.appendChild(c);
-    at(500 + i * 1150, () => c.classList.add('on'));
-    at(500 + i * 1150 + 1000, () => c.classList.remove('on'));
+  // 1. тунель: темний зів у червоному трикутнику; коли потяг став, денне світло заходить у зів, і темрява відступає
+  //    в глибину рваним димчастим краєм, лампи перед краєм блимають і гаснуть, лишається легкий туман, що тане
+  const DV0 = ARR + 140, DVD = 1700, FA = 132, FB = 4, DE = [.42, 0, .3, 1];
+  const ang = Math.atan2(DIRV[1], DIRV[0]) * 180 / Math.PI;
+  const front = (F) => 'translate(' + VP[0] + 'px,' + VP[1] + 'px) rotate(' + ang.toFixed(2) + 'deg) translate(' + F + 'px,0px)';
+  const atFront = (q) => DV0 + DVD * timeAt(DE, Math.max(0, Math.min(1, (FA - q) / (FA - FB))));
+  A($('#disF'), [{ transform: front(FA) }, { transform: front(FB) }], { duration: DVD, delay: DV0, easing: 'cubic-bezier(' + DE + ')', fill: 'both' });
+  const TD = DV0 + DVD + 150;
+  A($('#tdark'), [{ opacity: 1 }, { opacity: 1, offset: (DV0 + DVD - 100) / TD }, { opacity: 0 }], { duration: TD, fill: 'both' });
+  $$('.wl').forEach((w) => {
+    const o = +w.getAttribute('opacity');
+    A(w, [{ opacity: o }, { opacity: o * .3, offset: .2 }, { opacity: o * .85, offset: .34 }, { opacity: o * .12, offset: .55 }, { opacity: o * .45, offset: .66 }, { opacity: 0 }], { duration: 340, delay: atFront(+w.dataset.p + 40) - 120, fill: 'forwards' });
   });
-  const chant = el.querySelector('.in-chant');
-  const shout = (kind) => { chant.dataset.s = ''; void chant.offsetWidth; chant.dataset.s = kind; };
-  at(150, () => audio.horn());
-  at(400, () => audio.rumble());
-  at(2900, () => audio.thud());
-  at(4200, () => { audio.horn(); audio.rumble(); });
-  at(8800, () => { el.classList.add('fin'); audio.horn(); audio.thud(); });
-  at(10300, () => { shout('q'); say('Хто ми?', 0.5, 0.85, 1); });
-  at(11300, () => { shout('a'); say('Локо!', 1.0, 1.0, 1); audio.crowd(0.98); audio.horn(); });
-  at(12300, () => { shout('q'); say('Хто ми?', 0.5, 0.85, 1); });
-  at(13200, () => { shout('b'); say('Локо!', 1.1, 1.05, 1); audio.crowd(1); audio.horn(); audio.thud(); });
-  at(15000, end);
-  el.classList.add('go');
+  $$('.ms').forEach((m, j) => {
+    const q = (j + .5) / 9 * .92, F = FA - (FA - FB) * q, r = fr(j * 6.7 + 31), off = -30 + (j % 5) * 12 + r * 6, a = DIRV;
+    const x = VP[0] + a[0] * (F - 16) - a[1] * off, y = VP[1] + a[1] * (F - 16) + a[0] * off, far = 8 + 8 * r;
+    puff(m, x, y, a[0] * far, a[1] * far - 5 - 4 * r, .9, 1.9 + .8 * r, (r * 360) | 0, ((r - .5) * 60) | 0, .32, 1500 + 600 * r, DV0 + DVD * timeAt(DE, q));
+  });
+  // світло фари в тунелі: пляма на стінах, конус у димці, відблиск на рейці; кільця спалахують, коли світло підходить до них
+  A($('#beamT'), sample(90, (u) => ({ offset: u, opacity: +glow(u).toFixed(3) })), run);
+  A($('#apg'), sample(90, (u) => { const s = sAt(u); return { offset: u, opacity: +(glow(u) * (s < .42 ? 1 : Math.max(.35, 1 - (s - .42) * 2.5))).toFixed(3) }; }), run);
+  A($('#glint'), sample(90, (u) => ({ offset: u, opacity: +(.85 * glow(u) * (sAt(u) < .8 ? 1 : 0)).toFixed(3) })), run);
+  $$('.rb').forEach((r, j) => {
+    const zr = 1 / RIBS[j];
+    A(r, sample(90, (u) => { const d = zAt(u) - zr, b = d < -.04 ? 0 : Math.exp(-((d - .3) ** 2) / .1); return { offset: u, opacity: +(.12 + .88 * b * glow(u)).toFixed(3) }; }), run);
+  });
+  $$('.lh').forEach((h, j) => {
+    const r = fr(j * 8.3 + 5), d = 24 + j * 20, o = (r - .5) * 18, k0 = 1.4 + j * .35, a0 = (r * 360) | 0;
+    const x = LAMP[0] + AX[0] * d + PX[0] * o, y = LAMP[1] + AX[1] * d + PX[1] * o;
+    A(h, [{ opacity: 0, transform: tr(x, y) + ' rotate(' + a0 + 'deg) scale(' + k0 + ')' }, { opacity: .35, offset: .08 }, { opacity: .35, offset: .9 }, { opacity: 0, transform: tr(x + 4, y - 3) + ' rotate(' + (a0 + 40) + 'deg) scale(' + (k0 * 1.3).toFixed(2) + ')' }], { duration: D + 300, delay: LT - 300, fill: 'both' });
+  });
+
+  // 2. виїзд: перспектива спільна для всіх копій локомотива (сам, його вогні, промінь фари);
+  //    кожна деталь реагує на рух по-своєму: рама й плуг на візках, кузов на ресорах, крен
+  each('.pg', sample(120, (u) => ({ offset: u, transform: persp(sAt(u)) })), run);
+  const SU = suspension(), TS = D + SET, ride = { duration: TS, delay: LT, easing: 'linear', fill: 'both' };
+  const keys = (fn) => { const k = []; for (let i = 0; i < SU.length; i += 3) k.push({ offset: Math.min(1, SU[i][0] / TS), transform: fn(SU[i]) }); k.push({ offset: 1, transform: fn([TS, 0, 0, 0, 0, 0, 0]) }); return k; };
+  each('.pc', keys((q) => 'translateY(' + q[1].toFixed(3) + 'px) rotate(' + q[2].toFixed(3) + 'deg)'), ride);
+  each('.pp', keys((q) => 'translateY(' + q[3].toFixed(3) + 'px)'), ride);
+  each('.pr', keys((q) => 'rotate(' + q[6].toFixed(3) + 'deg)'), ride);
+  each('.pb', keys((q) => 'translateY(' + q[4].toFixed(3) + 'px) rotate(' + q[5].toFixed(3) + 'deg)'), ride);
+  // фара: у тунелі сліпить, на денному світлі здається слабшою, а коли потяг став, гасне, як лампа розжарення:
+  // спершу швидко, далі довгим хвостом, і біле світло наостанок тепліє до бурштинового
+  const uX = uWhen((u) => sAt(u) >= .8), uL = uWhen((u) => sAt(u) >= .76), OFF = ARR + 260, FADE = 1500, TL = OFF + FADE - LT;
+  const lamp = (o) => [{ opacity: 0 }, { opacity: o, offset: .02 * D / TL }, { opacity: o, offset: D * uL / TL }, { opacity: o * .62, offset: (D * uL + 280) / TL }, { opacity: o * .62, offset: (OFF - LT) / TL, easing: 'cubic-bezier(.2,.6,.35,1)' }, { opacity: 0 }];
+  const lit = { duration: TL, delay: LT, fill: 'both' };
+  A($('#lampRun'), lamp(1), lit);
+  each('.mk', lamp(.95), lit);
+  A($('#amber'), [{ opacity: 0 }, { opacity: 0, offset: .08 }, { opacity: 1, offset: .5 }, { opacity: 0 }], { duration: FADE + 150, delay: OFF, easing: 'ease-in-out', fill: 'both' });
+  A($('#beamP'), [{ opacity: 0 }, { opacity: 0, offset: D * uL / TL }, { opacity: .5, offset: (D * uL + 320) / TL }, { opacity: .5, offset: (OFF - LT) / TL, easing: 'cubic-bezier(.2,.6,.35,1)' }, { opacity: 0 }], lit);
+  A($('#flare'), sample(120, (u) => { const s = sAt(u), p = world(LAMP, s); return { offset: u, transform: tr(p[0], p[1]) + ' scale(' + (.3 + .7 * Math.sqrt(s)).toFixed(3) + ')' }; }), run);
+  A($('#flare'), lamp(1), lit);
+  each('.cab', [{ opacity: 0 }, { opacity: .85, offset: .03 }, { opacity: .85, offset: uX }, { opacity: 0 }], run);
+  // тунельні лампи: щоразу, коли локомотив минає лампу, по ньому від морди до хвоста пробігає теплий відблиск
+  $$('.sw').forEach((s, j) => {
+    const zr = LAMPS_Z[j], u0 = uWhen((u) => zAt(u) <= zr), u1 = uWhen((u) => zAt(u) <= zr - .3);
+    if (u0 >= 1 || sAt(u0) < .17 || sAt(u0) > .84) return;
+    A(s, [{ opacity: 0, transform: 'translateX(158px)' }, { opacity: .55, offset: .2 }, { opacity: .55, offset: .7 }, { opacity: 0, transform: 'translateX(56px)' }], { duration: Math.min(420, Math.max(110, D * (u1 - u0))), delay: LT + D * u0, easing: 'linear', fill: 'backwards' });
+  });
+  // гуркіт: що ближче важкий локомотив, то сильніше дрижить картинка
+  const rn = Math.round(D / 42);
+  A($('#shake'), sample(rn, (u) => { const i = Math.round(u * rn), a = u < .2 || i === rn ? 0 : .55 * Math.pow(sAt(u), 1.5) * (1 - .7 * (1 - spd(u))); return { offset: u, transform: tr((fr(i * 1.7) - .5) * 2 * a, (fr(i * 3.1) - .5) * 2 * a) }; }), { duration: D, delay: LT, easing: 'linear' });
+  // іскри з-під коліс на гальмуванні: вилітають там, де колесо було тієї миті, і летять назад до тунелю
+  $$('.sk').forEach((k, i) => {
+    const u = C + .02 + (i / 26) * (.97 - C - .02), s = sAt(u), r = fr(i * 5.1);
+    const x0 = VP[0] + s * (WHEELS[i % 5] - VP[0]), y0 = 127, fly = (5 + r * 9) * s + 1.5, k0 = (.4 + s).toFixed(2);
+    A(k, [
+      { opacity: 1, transform: tr(x0, y0) + ' scale(' + k0 + ')' },
+      { opacity: 1, transform: tr(x0 - fly * .7, y0 - (1.5 + r * 3) * s) + ' scale(' + k0 + ')', offset: .45 },
+      { opacity: 0, transform: tr(x0 - fly, y0 + 1.5) + ' scale(' + k0 + ')' }], { duration: 220 + r * 180, delay: LT + D * u, easing: 'ease-out', fill: 'forwards' });
+  });
+  // щойно ніс заходить на праву ногу трикутника, її продовження за локомотивом розчиняється, і до зупинки лишаються зрізи, як у гербі
+  const x0 = LT + D * uWhen((u) => sAt(u) >= .62);
+  A($('#railExt'), [{ opacity: 1 }, { opacity: 0 }], { duration: ARR + 250 - x0, delay: x0, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' });
+
+  // 3. дим, і в кожного свій видимий початок. Вихлоп б'є з комина на даху, щойно той підходить до виходу,
+  //    вітер зносить його вгору-вправо; що ближче зупинка, то рідше й слабше: дизель скидає оберти
+  const ex = $$('.ex'), e0 = LT + D * uWhen((u) => sAt(u) >= .74), e1 = ARR + 900;
+  ex.forEach((e, j) => {
+    const t = e0 + (e1 - e0) * Math.pow(j / (ex.length - 1), 1.35), u = Math.min(1, (t - LT) / D), s = sAt(u), p = world(STACK, s), r = fr(j * 3.3 + 11), q = fr(j * 7.1 + 13);
+    const k = t < ARR ? 1 : Math.max(.45, 1 - (t - ARR) / 1600);
+    puff(e, p[0] + (q - .5) * 1.5, p[1], 6 + 11 * r, -(15 + 13 * q), .28 + .1 * q, (1.2 + .9 * r) * k, (r * 360) | 0, ((q - .5) * 110) | 0, (.42 + .12 * q) * k, 2000 + 900 * r, t);
+  });
+  // носова хвиля: дим тунелю зривається з морди, щойно та проходить зів, і розкочується навсібіч
+  const bw = $$('.bw'), n0 = uWhen((u) => sAt(u) >= .6), n1 = uWhen((u) => sAt(u) >= .92);
+  bw.forEach((b, j) => {
+    const u = n0 + (n1 - n0) * j / (bw.length - 1), s = sAt(u), pt = NOSE[j % NOSE.length], p = world(pt, s), r = fr(j * 4.7 + 21), q = fr(j * 1.3 + 23);
+    const rx = p[0] - VP[0], ry = p[1] - VP[1], rl = Math.hypot(rx, ry), up = pt[1] < 100 ? -.75 : pt[1] < 120 ? -.3 : 0, far = (9 + 13 * r) * s * 1.4;
+    puff(b, p[0], p[1], rx / rl * far, (ry / rl + up) * far - 3 * q, .3 * s + .1, (1.3 + .9 * r) * s, (q * 360) | 0, ((r - .5) * 100) | 0, .34 + .12 * q, 1300 + 700 * r, LT + D * u);
+  });
+  // пара з гальм: б'є з-під передніх коліс, коли ті вже на світлі, густішає до зупинки й тягнеться вздовж колії;
+  // на зупинці ще раз шипить з-під задніх
+  const sb = $$('.sb'), b0 = LT + D * uWhen((u) => sAt(u) >= .8), b1 = ARR + 420, nb = sb.length - 4;
+  sb.forEach((b, j) => {
+    const r = fr(j * 6.1 + 4), q = fr(j * 2.3 + 8);
+    if (j >= nb) {
+      const x = j % 2 ? 70 : 92;
+      puff(b, x + (q - .5) * 4, 125.6, (j % 2 ? -1 : 1) * (6 + r * 10), -(2 + q * 5), .4, 1.1 + r * .8, (r * 360) | 0, ((q - .5) * 60) | 0, .5, 1800 + r * 900, ARR + 240 + (j - nb) * 70);
+      return;
+    }
+    const t = b0 + (b1 - b0) * Math.pow(j / (nb - 1), .7), s = sAt(Math.min(1, (t - LT) / D)), side = j % 4 === 0 ? -1 : 1;
+    const x = VP[0] + s * ((j % 2 ? 124 : 144) - VP[0]) + (q - .5) * 4;
+    puff(b, x, 125.4, side * (6 + r * 16), -(2.5 + q * 7), .45 + .15 * q, 1.2 + r * 1.1, (r * 360) | 0, (side * (20 + q * 40)) | 0, .5 + .2 * q, 1900 + r * 1100, t);
+  });
+
+  // 4. зупинка: герб здригається; наостанок по всьому гербу пробігає відблиск
+  A($('#root'), [{ transform: 'none' }, { transform: tr(.9, .5) }, { transform: tr(-.35, 0) }, { transform: 'none' }], { duration: 380, delay: ARR - 20, easing: 'ease-out' });
+  const SH = ARR + 1300;
+  A($('#sheen'), [{ transform: 'skewX(-22deg) translateX(0)' }, { transform: 'skewX(-22deg) translateX(250px)' }], { duration: 1000, delay: SH, easing: 'cubic-bezier(.65,0,.35,1)', fill: 'both' });
+
+  // звук: гуркіт із глибини, гудок у тунелі, скрип гальм, глухий удар зупинки, шипіння пари, дзвін на фіналі
+  at(LT, () => audio.rumble());
+  at(LT + 900, () => audio.horn());
+  at(LT + D * C, () => audio.hiss(3600, 10, 0.8, 0.03));
+  at(ARR, () => audio.thud());
+  at(ARR + 240, () => audio.hiss(1500, 0.6, 0.8, 0.05));
+  at(SH + 200, () => audio.bell());
+  at(SH + 1350, end);
 }
