@@ -16,6 +16,7 @@ import { DETAIL, MAX_LEVEL, loadPerf, savePerf } from './perf.js';
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const _v = new THREE.Vector3();
 const _d = new THREE.Vector3();
+const SPLASH_FLY = 1.25, SPLASH_LOCK = 0.2;   // с: камера екрана ЛОКО РАШ спершу летить разом із м'ячем, потім доїжджає до центрального кола
 const _co = { asp: 1, preset: '', dist: 100, tilt: 0, follow: 100, snap: false };   // параметри режисера камери: без нового об'єкта щокадру
 /** Крок критично загасаної пружини: точка x зі швидкістю v до цілі tg. */
 function springStep(x, v, tg, w, h) {
@@ -98,6 +99,100 @@ export class Game {
   /** Звичайний матч (і сцена матчу, яку позичає онлайн-гість). */
   ensureMatch() { if (!this.solo) { this.solo = new Match(this); this.match = this.solo; this.computeMatchBase(); this.solo.view.setDetail(DETAIL[this.level]); } if (!this.match) this.match = this.solo; return this.solo; }
 
+  /** Екран ЛОКО РАШ стоїть на справжньому стадіоні: камера в центрі поля дивиться на трибуни. Гравців і м'яча ще немає. Сцену матчу все одно збудував би «ГРАТИ». */
+  startSplash() {
+    if (this.splash || this.level < 1 || this.lost) return false;
+    try {
+      const v = this.ensureMatch().view, off = [...v.players.map((p) => p.root), v.ball.group, v.shadows, v.aim.mesh, v.ring, v.band];
+      const was = off.map((o) => o.visible);
+      for (const o of off) o.visible = false;
+      v.setEnv('day', 'clear');
+      this.renderer.toneMappingExposure = v.exposure || 1.1;
+      const cam = new THREE.PerspectiveCamera(46, this.w / this.h, 0.5, 500); cam.rotation.order = 'YXZ';
+      this.splash = { v, cam, off, was, t: 0, roar: 0, show: true, ball: null, ballCam: v.ball.cam, ct: 0, p0: new THREE.Vector3(), v0: new THREE.Vector3(), pv: new THREE.Vector3() };
+      this.warmShaders(false);
+      this.updateSplash(0);
+      return true;
+    } catch (e) { console.warn(e); this.splash = null; return false; }
+  }
+  /** Під заслоном стадіону не видно: тоді ні оновлення, ні кадру. Вмикає вхід, коли отвір O стає прозорим. */
+  splashView(on) { if (this.splash) this.splash.show = on; }
+  /**
+   * Камера повільно оглядає трибуни; після удару назви короткий поштовх. До м'яча вона стоїть трохи позаду центрального кола.
+   * Щойно з'явився 3D-м'яч, камера стартує з його швидкістю (м'яч на екрані стоїть, як і плаский перед ним) і плавно гальмує
+   * до центрального кола: крива Ерміта з початковою швидкістю м'яча й нульовою в кінці, тож без ривка й без відкату назад.
+   */
+  updateSplash(dt) {
+    const sp = this.splash, v = sp.v, c = sp.cam; sp.t += dt;
+    if (!sp.show) return;
+    sp.roar = Math.max(0, sp.roar - dt * 1.6);
+    if (sp.ball) this.splashBallStep(dt);
+    v.stands.update(dt, this.time); v.surround.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
+    if (c.aspect !== this.w / this.h) { c.aspect = this.w / this.h; c.fov = c.aspect < 1.5 ? 50 : 40; c.updateProjectionMatrix(); }
+    const sx = Math.sin(sp.t * 0.5) * 0.06;
+    if (sp.ball) {
+      sp.ct = Math.min(SPLASH_LOCK + SPLASH_FLY, sp.ct + dt);
+      if (sp.ct < SPLASH_LOCK) {                                                       // поки тане плаский м'яч, камера летить точно з 3D-м'ячем: він стоїть у кадрі
+        const b = sp.ball; c.position.set(b.x - sp.v0.x, b.y - sp.v0.y, b.z - sp.v0.z);
+        sp.p0.copy(c.position); sp.pv.set(b.vx, b.vy, b.vz);
+      } else {
+        const T = SPLASH_FLY, s = (sp.ct - SPLASH_LOCK) / T, s2 = s * s, s3 = s2 * s, h0 = 2 * s3 - 3 * s2 + 1, h1 = (s3 - 2 * s2 + s) * T, h2 = 3 * s2 - 2 * s3;
+        c.position.set(sp.p0.x * h0 + sp.pv.x * h1, sp.p0.y * h0 + sp.pv.y * h1 + 1.5 * h2 + sx, sp.p0.z * h0 + sp.pv.z * h1 - 8 * h2);
+      }
+    } else c.position.set(0, 2 + sx, -3);
+    const shake = sp.roar * sp.roar * 0.012;
+    c.rotation.set(0.2 + Math.sin(sp.t * 0.31) * 0.012 + Math.sin(sp.t * 41) * shake, Math.sin(sp.t * 0.16) * 0.2 + Math.cos(sp.t * 37) * shake, 0);
+  }
+  /**
+   * М'яч у отворі O стає справжнім 3D-м'ячем гри в тій самій точці кадру й того самого розміру (плаский над ним ще тане),
+   * далі гравітація, відскоки від газону й котіння. at: {x, y, d} у пікселях екрана (d — діаметр), або нічого, якщо вхід пропустили.
+   */
+  splashBall(at) {
+    const sp = this.splash; if (!sp || sp.ball) return;
+    sp.show = true;
+    const c = sp.cam, v = sp.v, r = PITCH.BALL_VIS, w = this.w, h = this.h;
+    const px = at ? at.x : w * 0.5, py = at ? at.y : h * 0.45, dpx = at ? Math.max(8, at.d) : h * 0.12;
+    c.updateMatrixWorld();
+    _d.set((px / w) * 2 - 1, -(py / h) * 2 + 1, 0.5).unproject(c).sub(c.position).normalize();
+    const dist = (r * h) / (dpx * 0.5 * 2 * Math.tan((c.fov * Math.PI) / 360));   // відстань, на якій м'яч займає dpx пікселів
+    _v.copy(c.position).addScaledVector(_d, dist);
+    const sp0 = 11;                                                                   // швидкість удару, од./с: лоб, що падає перед камерою
+    sp.ball = { x: _v.x, y: _v.y, z: _v.z, vx: _d.x * sp0, vy: _d.y * sp0 + 3.4, vz: _d.z * sp0, rest: false };
+    sp.v0.set(_v.x - c.position.x, _v.y - c.position.y, _v.z - c.position.z); sp.ct = 0;   // v0 тут: зсув камери від м'яча, який тримаємо, поки тане плаский
+    sp.p0.copy(c.position); sp.pv.set(sp.ball.vx, sp.ball.vy, sp.ball.vz);
+    v.ball.cam = null; v.ball.vs = 1; v.ball.group.visible = true; v.shadows.visible = true;   // cam = null: розмір видимості рахує splashBallStep
+    this.splashBallStep(0);
+  }
+  /** Політ і відскоки 3D-м'яча екрана ЛОКО РАШ. Без алокацій: стан у sp.ball. */
+  splashBallStep(dt) {
+    const sp = this.splash, b = sp.ball, v = sp.v, r = PITCH.BALL_VIS, G = 9.81 / 0.9;
+    if (!b.rest) {
+      b.vy -= G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+      if (b.y <= r) {                                                                  // газон: відскок із втратою, тертя гальмує по землі
+        b.y = r;
+        if (b.vy < -0.6) { b.vy = -b.vy * 0.55; b.vx *= 0.82; b.vz *= 0.82; v.ball.squash(0, 0, Math.min(0.3, -b.vy * 0.04)); }
+        else { b.vy = 0; const f = Math.max(0, 1 - dt * 1.6); b.vx *= f; b.vz *= f; if (Math.hypot(b.vx, b.vz) < 0.05) b.rest = true; }
+      }
+      if (b.z < -PITCH.W + 1) { b.z = -PITCH.W + 1; b.vz = -b.vz * 0.4; }             // до щитів не докотиться, а якщо докотиться, відскочить
+    }
+    const hgt = Math.max(0, b.y - r), c = sp.cam;
+    // здалеку м'яч не дрібніший за ~3 % висоти кадру, як і в матчі (там поріг менший); справжній розмір зблизька
+    const want = (0.015 * Math.hypot(c.position.x - b.x, c.position.y - b.y, c.position.z - b.z) * 2 * Math.tan((c.fov * Math.PI) / 360)) / r;
+    v.ball.vs += (Math.max(1, want) - v.ball.vs) * Math.min(1, dt * 8 || 1);
+    v.ball.update(dt, b.x, b.z, b.rest ? 0 : b.vx, b.rest ? 0 : b.vz, hgt, 0);
+    v.updateShadows(b.x, b.z, hgt);
+  }
+  /** Назва впала на місце: трибуни вибухають. */
+  splashRoar() { const sp = this.splash; if (!sp) return; sp.roar = 1; sp.v.stands.react('goal', { mine: true, dur: 4.5 }); }
+  /** Екран сховано: далі знову острів, сцена матчу лишається для першого матчу. */
+  stopSplash() {
+    const sp = this.splash; if (!sp) return;
+    sp.off.forEach((o, i) => { o.visible = sp.was[i]; });
+    sp.v.ball.cam = sp.ballCam; sp.v.ball.vs = 1;
+    this.renderer.toneMappingExposure = 1.1;
+    this.splash = null;
+  }
+
   /**
    * Шейдери наперед, лише де компіляція не стоїть у кадрі (KHR_parallel_shader_compile): програми збираються паралельно, а не
    * по одній у першому кадрі. Без розширення нічого не робимо: той самий фриз лише переїхав би на іншу мить.
@@ -130,6 +225,7 @@ export class Game {
       },
       update(dt) {
         g.time += dt;
+        if (g.splash) return g.updateSplash(dt);
         g.island.update(dt, g.time);
         g.menuParticles.update(dt);
         g.updateMenuCam(dt);
@@ -511,7 +607,7 @@ export class Game {
     // телефон із екраном 120 Гц: 60 рівних кадрів замість вдвічі більшої роботи й перегріву за кілька хвилин. 90 Гц тут не ріжеться: у них 11 мс
     if (this.coarse && S.settings.quality !== 'high' && now - this.last < 10.5) return;
     const calm = this.sm.name === 'MENU' && (this.ui.panel || !this.ui.started);   // острів під панеллю чи заставкою: ~30 кадрів достатньо
-    if (calm && now - this.last < 30) return;
+    if (calm && (this.coarse || !this.splash) && now - this.last < 30) return;     // на ПК камера стадіону йде плавно
     if (calm && this.ui.panelCovers()) { this.last = now; return; }
     // пауза: кадр стоїть під оверлеєм, ~15 кадрів вистачає (на панелі камери кадр за нею ще рухається)
     const still = this.match === this.solo && this.match && this.match.phase === 'paused' && this.sm.name === 'MATCH';
@@ -529,6 +625,7 @@ export class Game {
     if (!menu && this.dof && !this.cineBroken) { try { done = (this.cinefx ??= new CineFX(this.renderer)).render(this.match.view.scene, this.matchCam, this.dof.focus, this.dof.ap, dt); } catch (_) { this.cineBroken = true; } }
     // перші кадри з ефектом перевіряємо: однотонний кадр (білий/небо) — драйвер телефона зламав прохід; тоді ефект вимикаємо
     if (done && (this.cineChecks = (this.cineChecks || 0) + 1) <= 4 && this.cineFlat()) { this.cineBroken = true; done = false; }
-    if (!done) this.renderer.render(menu ? this.menuScene : this.match.view.scene, menu ? this.menuCam : this.matchCam);
+    if (menu && this.splash && !this.splash.show) return;   // екран ЛОКО РАШ: стадіон під суцільним заслоном не малюємо
+    if (!done) { const sp = menu && this.splash; this.renderer.render(sp ? sp.v.scene : menu ? this.menuScene : this.match.view.scene, sp ? sp.cam : menu ? this.menuCam : this.matchCam); }
   }
 }

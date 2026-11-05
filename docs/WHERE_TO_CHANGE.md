@@ -127,6 +127,10 @@
 
 | Завдання | Де |
 |---|---|
+| Екран ЛОКО РАШ: літери, вхід, м'яч | `GLYPH`, `enter`, `Trace`, `bounceOne`, `landed` у `src/ui/splash.js`; стилі від «головна: ЛОКО РАШ» у `src/style.css`; `hideSplash`, `splashReady` у `src/ui/ui.js` |
+| Екран ЛОКО РАШ: стадіон на тлі, камера | `startSplash`, `updateSplash`, `splashRoar`, `stopSplash` у `src/core/game.js` |
+| Екран ЛОКО РАШ: 3D-м'яч у O, камера за ним, політ і відскоки | `splashBall`, `splashBallStep`, `SPLASH_LOCK`, `SPLASH_FLY` у `src/core/game.js`; точка передачі `handoff` і `atT` у `src/ui/splash.js` |
+| Екран ЛОКО РАШ: коли стадіон не малюється | `splashView` у `src/core/game.js`, `hooks.view` у `src/ui/splash.js` |
 | Заставка з потягом | `src/ui/intro.js` |
 | Вихід команд | `driveIntro`, `introCam`, `src/match/walkout.js` |
 | Святкування гола | `goalImportance`, `setupCelebration`, `updateCelebration` |

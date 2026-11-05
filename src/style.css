@@ -54,8 +54,6 @@ svg { display: block; }
 .brand h1 span { font-size: calc(var(--u) * 12.5); color: #fff; -webkit-text-stroke: calc(var(--u) * 0.9) var(--ink); paint-order: stroke fill; text-shadow: 0 calc(var(--u) * 1.2) 0 var(--ink); }
 .brand h1 .r { color: var(--gold); font-size: calc(var(--u) * 11.5); transform: rotate(-2deg); }
 .brand p { margin-top: calc(var(--u) * 1.8); font-size: var(--fs-m); color: #e8fff1; max-width: 70vw; }
-.splash small { font-size: var(--fs-s); color: #cfeedd; max-width: 70vw; }
-.splash .big { animation: bob 1.6s ease-in-out infinite; font-size: calc(var(--u) * 6.4); padding: calc(var(--u) * 2.2) calc(var(--u) * 7); }
 
 
 /* ---------- панелі ---------- */
@@ -135,7 +133,6 @@ svg { display: block; }
 }
 
 /* ---------- символіка клубу ---------- */
-.splash-crest { width: calc(var(--u) * 13); height: calc(var(--u) * 15); margin: 0 auto calc(var(--u) * 1.2); filter: drop-shadow(0 calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.35)); }
 .club-line { color: #e8c96a; font-weight: 800; }
 .plate-r { display: flex; align-items: center; gap: calc(var(--u) * 1.2); }
 .fact { font-size: var(--fs-s); color: #cfeedd; line-height: 1.35; max-width: calc(var(--u) * 60); } .card-box .fact { text-align: center; max-width: none; }
@@ -301,7 +298,7 @@ svg { display: block; }
 @keyframes reveal { from { transform: scale(0.3) rotate(-8deg); opacity: 0; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes rot { 0%, 15% { transform: rotate(0); } 55%, 85% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
-@media (prefers-reduced-motion: reduce) { .cta, .stn.cur .stn-n, .cash, .splash .big, .urgent .plate-time, .rays { animation: none; } .warn { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .cta, .stn.cur .stn-n, .cash, .urgent .plate-time, .rays { animation: none; } .warn { animation: none; } }
 
 
 /* емблема-картинка заповнює свій контейнер */
@@ -613,38 +610,43 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .ios-hint b { color: #ffcf3a; font-size: var(--fs-m); } .ios-hint ol { margin: calc(var(--u) * 0.8) 0 calc(var(--u) * 1.2) calc(var(--u) * 2.6); line-height: 1.45; } .ios-hint .shr { font-style: normal; display: inline-grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: 0.3em; background: #fff; color: #0b3d2a; font-weight: 800; }
 .ios-hint .btn { min-height: 36px; }
 
-/* ===== головна: ЛОКО РАШ — швидкість, залізниця, лівреї УЗ ===== */
-.splash { justify-content: flex-start; align-items: stretch; overflow: hidden; background: linear-gradient(100deg, rgba(4, 24, 17, 0.96) 0%, rgba(4, 24, 17, 0.9) 34%, rgba(4, 24, 17, 0.35) 66%, rgba(4, 24, 17, 0.0) 100%); }
-.splash-in { position: relative; z-index: 2; align-items: flex-start; justify-content: center; text-align: left; gap: calc(var(--u) * 3.2); padding: var(--pad-t) 0 var(--pad-b) calc(var(--pad-l) + var(--u) * 6); }
-.sp-crest { width: calc(var(--u) * 11); height: calc(var(--u) * 12.6); filter: drop-shadow(0 calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.4)); animation: crestin 0.9s 0.1s cubic-bezier(0.2, 1.2, 0.4, 1) both; }
+/* ===== головна: ЛОКО РАШ. Власні літери й вхід у src/ui/splash.js; плоскі кольори, без градієнтів і світіння ===== */
+.splash { justify-content: flex-start; align-items: stretch; overflow: hidden; background: none; }
+#ui .splash.out .splash-in, #ui .splash.out button { pointer-events: none; }
+.splash.gating .splash-in { visibility: hidden; }
+.splash-in { position: relative; z-index: 2; align-items: flex-start; justify-content: center; text-align: left; gap: calc(var(--u) * 2.6); padding: var(--pad-t) 0 var(--pad-b) calc(var(--pad-l) + var(--u) * 4); }
+.sp-defs { position: absolute; }
+/* літери */
+.sp-title { --cu: calc(var(--u) * 0.198); display: flex; flex-direction: column; }
+.sp-gt { --cu: 1px; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; }
+.sp-row { display: flex; }
+.sp-row + .sp-row { margin-top: calc(var(--cu) * -8); }
+.sp-row.r0 { margin-left: calc(var(--cu) * 28); }
+.sp-ch { display: block; flex: none; width: calc(var(--cu) * var(--w)); height: calc(var(--cu) * 168); margin-right: calc(var(--cu) * -34); overflow: visible; transform-origin: 50% 82%; }
+.sp-title .sp-ch { cursor: pointer; touch-action: manipulation; }
+.sp-gt .sp-ch { opacity: 0; will-change: transform; }   /* літери заслону живуть секунду: шар наперед; у спокої шар дає лише анімація */
+/* заслін: темне поле з отвором у літері O, летить на камеру й зникає */
+.sp-gate { position: absolute; inset: 0; z-index: 3; overflow: hidden; }
+.sp-gz, .sp-gk { position: absolute; inset: 0; will-change: transform; }
+.sp-gz { background: #06120d; }
+.sp-gz.open { background: none; }
+.sp-field { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.sp-cover { position: absolute; overflow: visible; will-change: opacity; }
+.sp-flash { position: absolute; inset: 0; z-index: 4; background: #fff; opacity: 0; pointer-events: none; }
+.sp-fx { position: absolute; inset: 0; z-index: 5; overflow: hidden; pointer-events: none; }
+.sp-ball { position: absolute; left: 0; top: 0; aspect-ratio: 1; margin: 0; opacity: 0; transform-origin: 0 0; will-change: transform; }   /* центр м'яча в точці (0,0) елемента: масштаб і стиск навколо нього */
+.sp-ball svg { position: absolute; left: -50%; top: -50%; width: 100%; height: 100%; }
+.sp-chip { position: absolute; opacity: 0; will-change: transform; }
+/* кнопка: плоский блок із твердим об'ємом, як літери */
+.sp-cta { display: flex; align-items: center; gap: calc(var(--u) * 4); margin-left: calc(var(--u) * 2); }
+.sp-go { position: relative; display: inline-flex; align-items: center; height: calc(var(--u) * 11.5); padding: 0 calc(var(--u) * 7); background: #e02a38; color: #fff; font-weight: 800; font-style: italic; font-size: calc(var(--u) * 6); letter-spacing: 0.04em; transform: skewX(-10deg); box-shadow: calc(var(--u) * 1.1) calc(var(--u) * 1.1) 0 #7d1219, calc(var(--u) * 1.1) calc(var(--u) * 1.1) 0 calc(var(--u) * 0.5) #06120d, 0 0 0 calc(var(--u) * 0.5) #06120d; transition: transform 0.12s, box-shadow 0.12s, background 0.12s; touch-action: manipulation; }
+.sp-go span { display: block; transform: skewX(10deg); }
+.sp-go:focus-visible { outline: max(2px, calc(var(--u) * 0.5)) solid #fff; outline-offset: calc(var(--u) * 1); }
+@media (hover: hover) { .sp-go:hover { background: #ee3644; transform: skewX(-10deg) translate(calc(var(--u) * -0.5), calc(var(--u) * -0.5)); box-shadow: calc(var(--u) * 1.6) calc(var(--u) * 1.6) 0 #7d1219, calc(var(--u) * 1.6) calc(var(--u) * 1.6) 0 calc(var(--u) * 0.5) #06120d, 0 0 0 calc(var(--u) * 0.5) #06120d; } }
+.sp-go:active { transform: skewX(-10deg) translate(calc(var(--u) * 1.1), calc(var(--u) * 1.1)); box-shadow: 0 0 0 0 #7d1219, 0 0 0 calc(var(--u) * 0.5) #06120d; }
+.sp-crest { flex: none; width: calc(var(--u) * 10.4); height: calc(var(--u) * 12); }
 .sp-crest .crest { width: 100%; height: 100%; }
-@keyframes crestin { from { opacity: 0; transform: translateY(-30%) scale(0.7); } to { opacity: 1; transform: none; } }
-
-/* назва: косі літери, «розріз» швидкості, шлейф */
-.sp-title { position: relative; display: flex; flex-direction: column; line-height: 0.82; font-weight: 800; letter-spacing: -0.03em; font-style: italic; }
-.sp-title .l1, .sp-title .l2 { position: relative; display: block; width: max-content; transform: skewX(-9deg); animation: wordin 0.8s cubic-bezier(0.2, 1, 0.3, 1) both; }
-.sp-title .l1 { font-size: calc(var(--u) * 27); color: #f6f4ec; animation-delay: 0.15s; }
-.sp-title .l2 { font-size: calc(var(--u) * 27); color: #e02a38; margin-left: calc(var(--u) * 6); animation-delay: 0.32s; -webkit-text-stroke: 0; }
-.sp-title .l1::before, .sp-title .l2::before { content: attr(data-t); position: absolute; inset: 0; clip-path: inset(46% 0 40% 0); transform: translateX(calc(var(--u) * -1.1)); color: inherit; }
-.sp-title .l2::before { color: #1f8f3f; transform: translateX(calc(var(--u) * 1.1)); }
-.sp-title .l1::after, .sp-title .l2::after { content: ''; position: absolute; left: -2%; right: 4%; top: 46%; height: calc(var(--u) * 0.5); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.0)); }
-@keyframes wordin { from { opacity: 0; transform: skewX(-9deg) translateX(-14%); filter: blur(6px); } to { opacity: 1; transform: skewX(-9deg); filter: none; } }
-.sp-trail { position: absolute; left: calc(var(--u) * -9); top: 12%; width: calc(var(--u) * 9); height: 70%; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
-.sp-trail i { display: block; height: calc(var(--u) * 0.7); background: linear-gradient(90deg, transparent, #e02a38); transform-origin: right; animation: trail 1.8s ease-in-out infinite; }
-.sp-trail i:nth-child(2) { background: linear-gradient(90deg, transparent, #f6f4ec); animation-delay: 0.25s; width: 70%; align-self: flex-end; } .sp-trail i:nth-child(3) { background: linear-gradient(90deg, transparent, #1f8f3f); animation-delay: 0.5s; }
-@keyframes trail { 0%, 100% { transform: scaleX(0.35); opacity: 0.35; } 50% { transform: scaleX(1); opacity: 1; } }
-
-/* кнопка */
-.sp-go { position: relative; display: inline-flex; align-items: center; gap: calc(var(--u) * 2.4); height: calc(var(--u) * 11); padding: 0 calc(var(--u) * 5.6) 0 calc(var(--u) * 6); margin-left: calc(var(--u) * 2.4); background: #d4202c; color: #fff; font-weight: 800; font-size: calc(var(--u) * 5.2); letter-spacing: 0.08em; transform: skewX(-9deg); box-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 #1f8f3f, calc(var(--u) * 1) calc(var(--u) * 1) 0 calc(var(--u) * 0.3) #08140f; animation: wordin 0.8s 0.55s cubic-bezier(0.2, 1, 0.3, 1) both; transition: transform 0.15s, box-shadow 0.15s; }
-.sp-go::before { content: ''; position: absolute; left: calc(var(--u) * -2.4); top: 0; bottom: 0; width: calc(var(--u) * 1.4); background: #f6f4ec; }
-.sp-go-t { transform: skewX(9deg); }
-.sp-go svg { width: calc(var(--u) * 7); height: calc(var(--u) * 4.2); fill: #fff; transform: skewX(9deg); }
-.sp-go svg path { animation: chev 1.2s ease-in-out infinite; } .sp-go svg path:nth-child(2) { animation-delay: 0.15s; } .sp-go svg path:nth-child(3) { animation-delay: 0.3s; }
-@keyframes chev { 0%, 100% { opacity: 0.35; } 40% { opacity: 1; } }
-.sp-go:hover { transform: skewX(-9deg) translate(calc(var(--u) * 0.6), calc(var(--u) * -0.4)); box-shadow: calc(var(--u) * 1.6) calc(var(--u) * 1.6) 0 #1f8f3f, calc(var(--u) * 1.6) calc(var(--u) * 1.6) 0 calc(var(--u) * 0.3) #08140f; }
-.sp-go:active { transform: skewX(-9deg) translate(calc(var(--u) * 0.8), calc(var(--u) * 0.8)); box-shadow: 0 0 0 #1f8f3f; }
-
-/* діагональні смуги лівреї УЗ праворуч */
+/* діагональні смуги лівреї на екрані результату й панелях */
 .sp-bg { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 .sp-bg i { position: absolute; top: -12%; bottom: -12%; transform: skewX(-18deg); animation: bandin 1.1s cubic-bezier(0.2, 1, 0.3, 1) both; }
 .sp-bg .b1 { right: 6%; width: 7%; background: linear-gradient(180deg, rgba(224, 42, 56, 0.85), rgba(224, 42, 56, 0.35)); animation-delay: 0.3s; }
@@ -652,20 +654,9 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .sp-bg .b3 { right: 17.5%; width: 4.5%; background: linear-gradient(180deg, rgba(31, 143, 63, 0.8), rgba(31, 143, 63, 0.3)); animation-delay: 0.5s; }
 .sp-bg .b4 { right: -2%; width: 5%; background: rgba(246, 244, 236, 0.08); animation-delay: 0.2s; }
 @keyframes bandin { from { opacity: 0; transform: skewX(-18deg) translateX(40%); } to { opacity: 1; transform: skewX(-18deg); } }
-
-/* колія внизу: рейки, що біжать, і вогні поїзда */
-.sp-rails { position: absolute; left: 0; right: 0; bottom: calc(var(--pad-b) + var(--u) * 1.6); height: calc(var(--u) * 5); z-index: 1; pointer-events: none; opacity: 0.9; }
-.sp-rails i { position: absolute; left: 0; right: 0; height: max(2px, calc(var(--u) * 0.35)); background: rgba(246, 244, 236, 0.55); }
-.sp-rails i:first-child { top: calc(var(--u) * 1); } .sp-rails i:nth-child(2) { top: calc(var(--u) * 4); }
-.sp-rails::before { content: ''; position: absolute; left: 0; right: 0; top: calc(var(--u) * 1); height: calc(var(--u) * 3.4); background: repeating-linear-gradient(90deg, rgba(246, 244, 236, 0.22) 0 calc(var(--u) * 0.7), transparent calc(var(--u) * 0.7) calc(var(--u) * 3.6)); animation: railrun 1.1s linear infinite; }
-@keyframes railrun { to { background-position-x: calc(var(--u) * -3.6); } }
-.sp-rails u { position: absolute; top: calc(var(--u) * 1.5); width: calc(var(--u) * 14); height: calc(var(--u) * 1.6); border-radius: 99px; background: linear-gradient(90deg, transparent, #e02a38); filter: blur(1px); animation: dash 3.6s linear infinite; }
-.sp-rails u.g { top: calc(var(--u) * 3.4); background: linear-gradient(90deg, transparent, #3fe08f); animation-delay: 1.6s; animation-duration: 4.2s; }
-@keyframes dash { from { transform: translateX(-20vw); } to { transform: translateX(120vw); } }
-
-.splash .ios-hint { margin-left: calc(var(--u) * 2.4); }
-@media (max-aspect-ratio: 5/3) { .sp-title .l1, .sp-title .l2 { font-size: calc(var(--u) * 21); } }
-@media (prefers-reduced-motion: reduce) { .sp-trail i, .sp-rails::before, .sp-rails u, .sp-go svg path { animation: none !important; } }
+/* підказка iPhone праворуч від назви */
+.splash .ios-hint { position: absolute; z-index: 6; right: calc(var(--pad-r) + var(--u) * 2); top: 50%; transform: translateY(-50%); max-width: min(calc(var(--u) * 64), 42vw); background: #082820; pointer-events: auto; }
+@media (max-aspect-ratio: 5/3) { .sp-title { --cu: calc(var(--u) * 0.185); } }
 
 
 /* налаштування джойстика: рядок не накладається на «На весь екран» */

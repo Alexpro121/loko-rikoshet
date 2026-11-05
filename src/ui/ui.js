@@ -10,6 +10,7 @@ import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact }
 import { Hud } from './hud.js';
 import { MapHud } from './minimap.js';
 import { playIntro } from './intro.js';
+import { splashHtml, runSplash } from './splash.js';
 import { portrait } from './portrait.js';
 import { ensureSquad, oppSquad, allPlayers, swapPlayers, swapStarters, setTactic, bestLine, CAREER_FORMS, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook, myKit, matchKit, lookSig, customizeLook, resetLook } from '../state/squad.js';
 
@@ -108,19 +109,9 @@ export class UI {
 <section class="overlay settings" id="settings" hidden></section>
 <section class="overlay custom" id="custom" hidden></section>
 <section class="overlay reveal" id="reveal" hidden></section>
-<section class="splash" id="splash">
-  <div class="sp-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></div>
-  <div class="sp-rails" aria-hidden="true"><i></i><i></i><u></u><u class="g"></u></div>
-  <div class="splash-in">
-    <div class="sp-crest">${lokoCrest()}</div>
-    <h1 class="sp-title" aria-label="LOKO RUSH">
-      <span class="sp-trail" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="l1" data-t="LOKO">LOKO</span>
-      <span class="l2" data-t="RUSH">RUSH</span>
-    </h1>
-    <button class="sp-go" data-act="start"><span class="sp-go-t">ГРАТИ</span><svg viewBox="0 0 40 24" aria-hidden="true"><path d="M2 3l11 9-11 9V3zM15 3l11 9-11 9V3zM28 3l11 9-11 9V3z"/></svg></button>
-    <div class="ios-hint" id="ios-hint" hidden><b>Для повного екрана на iPhone</b><ol><li>Натисни <i class="shr">⬆︎</i> «Поділитись» у Safari</li><li>Обери «На початковий екран»</li><li>Відкрий гру з нової іконки</li></ol><button class="btn alt" data-act="ios-ok"><b>ЗРОЗУМІЛО</b></button></div>
-  </div>
+<section class="splash gating" id="splash">
+  ${splashHtml(lokoCrest())}
+  <div class="ios-hint" id="ios-hint" hidden><b>Для повного екрана на iPhone</b><ol><li>Натисни <i class="shr">⬆︎</i> «Поділитись» у Safari</li><li>Обери «На початковий екран»</li><li>Відкрий гру з нової іконки</li></ol><button class="btn alt" data-act="ios-ok"><b>ЗРОЗУМІЛО</b></button></div>
 </section>
 <div class="joy-scrim" id="joy-scrim" hidden></div>
 <div class="joy-bar" id="joy-bar" hidden><span>Перетягни джойстик у зручне місце</span><button class="btn alt" data-act="joy-reset"><b>СКИНУТИ</b></button><button class="btn go" data-act="joy-done"><b>ГОТОВО</b></button></div>
@@ -153,6 +144,7 @@ export class UI {
     this.initJoy();
     this.applyControls();
     this.iosHint();
+    this.splashReady();
     subscribe(() => this.refresh());
     onSaveError(() => this.toast('Прогрес не зберігається'));
     addEventListener('keydown', (e) => this.key(e));
@@ -183,6 +175,7 @@ export class UI {
     // e.code: P і F працюють у будь-якій розкладці; спершу закривається верхнє вікно, а вже потім пауза чи панель
     if (e.key === 'Escape' || e.code === 'KeyP') this.goBack();
     else if (e.code === 'KeyF') g.toggleFullscreen();
+    else if ((e.key === ' ' || e.key === 'Enter') && e.target.tagName !== 'BUTTON' && !this.el.splash.hidden) this.act('start');   // екран ЛОКО РАШ: звідси клавіші запускають лише заставку, не матч
     else if ((e.key === ' ' || e.key === 'Enter') && e.target.tagName !== 'BUTTON' && g.sm.name === 'MENU' && !this.panel && this.el.splash.hidden && this.el.settings.hidden) this.menuTap();   // на сфокусованій кнопці ці клавіші тиснуть її саму
   }
 
@@ -198,6 +191,30 @@ export class UI {
   }
   canGoBack() {
     return !!(this.joyEdit || this.map.editing || !this.el.reveal.hidden || !this.el.settings.hidden || !this.el.custom.hidden || this.game.sm.name === 'MATCH' || this.panel);
+  }
+
+  /** Ховає екран ЛОКО РАШ. Другий дотик подвійного тапу влучив би в заставку (пропустив її) або в меню, тому півсекунди кліки не проходять. */
+  hideSplash() {
+    const s = this.el.splash; s.classList.add('out');
+    if (this._spStop) { this._spStop(); this._spStop = null; }
+    if (this.game) this.game.stopSplash();
+    clearTimeout(this._spT); this._spT = setTimeout(() => { s.hidden = true; }, 380);
+    const r = this.root, stop = (e) => { e.stopPropagation(); e.preventDefault(); };
+    r.addEventListener('click', stop, true); setTimeout(() => r.removeEventListener('click', stop, true), 500);
+  }
+  /** Вхід ЛОКО РАШ стартує, коли готовий стадіон: конструктор гри й перші кадри блокують потік, і анімація пройшла б невидимою. Рівень деталізації відомий лише тепер. */
+  splashReady() {
+    let built = false, on = false;
+    const g = () => this.game;
+    const run = () => { if (on || !this.el.splash || this.started) return; on = true; const gm = g(); const st = !!(gm && gm.splash); this._spStop = runSplash(this.el.splash, gm ? gm.level : 3, { stadium: st, view: (on) => gm && gm.splashView(on), ball: (at) => gm && gm.splashBall(at), land: () => gm && gm.splashRoar() }); };
+    const build = () => {
+      if (built || this.started) return; built = true;                               // гравець уже натиснув «ГРАТИ»: стадіон не вмикаємо, інакше він лишився б замість острова
+      const gm = g(); if (gm) gm.startSplash();
+      requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(run)));   // перший кадр стадіону збирає шейдери, вхід стартує вже після нього
+      setTimeout(run, 1800);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(build));
+    setTimeout(build, 2500);                                                           // прихована вкладка: rAF мовчить, а екран не має лишитись порожнім
   }
 
   /** iPhone не вміє fullscreen API: пропонуємо встановити гру на початковий екран (тоді вона відкривається без рядка Safari). */
@@ -296,13 +313,14 @@ export class UI {
   act(a, el) {
     const g = this.game;
     switch (a) {
-      case 'start': if (this.started) { audio.click(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); return; }   // екран повернула підказка iPhone: заставку вдруге не граємо
-        this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.el.splash.classList.add('out'); setTimeout(() => { this.el.splash.hidden = true; }, 380); audio.click(); g.ensureMatch(); playIntro(this.root, () => { audio.music('menu'); this.showMenu(); }); return;
+      case 'start': if (this.el.splash.classList.contains('out')) return;   // другий дотик подвійного тапу: екран уже ховається
+        if (this.started) { audio.click(); this.hideSplash(); return; }   // екран повернула підказка iPhone: заставку вдруге не граємо
+        this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.hideSplash(); audio.click(); g.ensureMatch(); playIntro(this.root, () => { audio.music('menu'); this.showMenu(); }); return;
       case 'play': return this.menuTap();
       case 'test-coins': if (!TEST_MODE) return; S.coins += 10000; commit(); audio.coin(3); this.toast('+10 000 монет (тест)'); return;
       case 'pens': { const mm = g.match; if (!mm) return; audio.click(); this.el.pause.hidden = true; if (mm.phase === 'paused') mm.resume(); mm.startPens(); return; }
       case 'ios-ok': try { localStorage.setItem('loko-ios-hint', '1'); } catch (_) { /* ignore */ } this.iosHint(); return;
-      case 'fs': audio.click(); if (this.isIOS() && !this.isStandalone()) { this.closeSettings(); this.el.splash.hidden = false; this.el.splash.classList.remove('out'); this.iosHint(true); return; } return g.toggleFullscreen();
+      case 'fs': audio.click(); if (this.isIOS() && !this.isStandalone()) { this.closeSettings(); clearTimeout(this._spT); this.el.splash.hidden = false; this.el.splash.classList.remove('out'); this.iosHint(true); return; } return g.toggleFullscreen();
       case 'settings': audio.click(); return this.openSettings();
       case 'close-settings': audio.back(); return this.closeSettings();
       case 'cash': return this.claimCash();
