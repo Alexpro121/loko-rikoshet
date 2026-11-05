@@ -21,7 +21,7 @@ const lerpAt = (A, B, k, al) => A[k] + (B[k] - A[k]) * al;
 const GK_THROW = 1.25, MATE_R = 0.5;                    // MATE_R — радіус тіла гравця у фізиці (body.r)
 const STALE_MS = 1500;                                  // звук і частинки, старші за це (вкладка була у фоні), вже не грають
 const NET_SILENCE = 32;                                 // с показу гри без жодного кадру при живому з'єднанні: господар згорнув гру чи завис, матч не зараховуємо
-const CROWD_OK = ['goal', 'groan', 'gasp', 'wave', 'clap', 'flash'];
+const CROWD_OK = ['goal', 'groan', 'gasp', 'wave', 'clap', 'flash', 'miss'];
 const SWAP_SND = { goal: 'concede', concede: 'goal', win: 'lose', lose: 'win' };
 const SND_OK = new Set(['kick', 'wall', 'pass', 'save', 'whistle', 'horn', 'goal', 'concede', 'bell', 'rumble', 'slide', 'clap', 'thud', 'crowd', 'win', 'lose']);
 

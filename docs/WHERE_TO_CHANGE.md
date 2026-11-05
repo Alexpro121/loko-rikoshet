@@ -105,9 +105,9 @@
 |---|---|
 | Поле, борти, ворота, сітка | `buildPitch` у `src/graphics/pitch.js`, рух сітки: `netBulge` |
 | Трибуни й реакції глядачів | `src/graphics/stands.js` |
-| Рухи глядачів у реакціях і співах | цикл у `Stands.writeMatrices`, сила реакції `rxEnv`, згасання старої реакції `FADE` у `src/graphics/stands.js` |
-| Як часто оновлюється натовп | `Stands.stagger` і частоти в `Stands.update`, частка й `crowdEvery` у `DETAIL` (`src/core/perf.js`) |
-| Гойдання плакатів, прапорів і хвиля полотнищ | `Stands.update` (`phB`, `phF`, `amp`), шейдер `waveMat` у `src/graphics/stands.js` |
+| Рухи глядачів у реакціях і співах | `crReact` і `crowdPos` у шейдері `CROWD_VS`, тривалість `DUR`, номер типу `RX`, згасання старої реакції `FADE` у `src/graphics/stands.js` |
+| Як натовп стежить за грою (погляд, напруга біля воріт) | `Stands.track` і блок напруги в `crowdPos` (`CROWD_VS`); реакція на промах і сейв: `missReact` у `src/match/cinema.js`, `saveReact` у `src/match/match.js` |
+| Гойдання плакатів, прапорів і хвиля полотнищ | шейдер `BAN_VS` (`BAN_NORMAL`, `BAN_POS`), фази в `Stands.update` (`phB`, `phF`, `amp`) |
 | Час доби й світло | `MatchView.setEnv` у `src/match/view.js` |
 | Дощ і сніг | `src/graphics/weather.js` |
 | Острів у меню | `src/graphics/island.js` |

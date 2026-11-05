@@ -60,6 +60,7 @@ export class MatchView {
     for (const p of this.players) scene.add(p.root);
 
     this.ball = new BallView(); scene.add(this.ball.group);
+    this.stands.ball = this.ball.group.position;                          // трибуни стежать за м'ячем на екрані (і в гостя)
     const sh = new THREE.PlaneGeometry(1, 1); sh.rotateX(-Math.PI / 2);
     this.shadows = new THREE.InstancedMesh(sh, new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false, opacity: 0.62 }), this.players.length + 1);
     this.shadows.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.shadows.frustumCulled = false; this.shadows.renderOrder = 2;

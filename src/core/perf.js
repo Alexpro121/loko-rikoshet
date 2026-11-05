@@ -2,16 +2,15 @@
 const KEY = 'loko-perf-v1';                                     // свій ключ, не в S: налаштування S їдуть хмарою на інші пристрої, а сила телефона ні
 
 /**
- * Від слабкого до повного. crowd і weather — частка глядачів і крапель, crowdEvery — дільник частоти натовпу: у реакціях і співах кожен глядач
- * оновлюється 60/crowdEvery разів на секунду справжнього часу (не рідше 20), у спокої 7.5/crowdEvery (Stands.update)
- * banners — чи малювати полотнища й прапори (близько 50 викликів малювання).
+ * Від слабкого до повного. crowd і weather — частка глядачів і крапель, натовп рухає шейдер,
+ * тож частоти оновлення для нього немає (Stands). banners — чи малювати полотнища й прапори (5 викликів малювання).
  * thin (менше за рівень 2): далекі від м'яча гравці анімуються 30 разів на секунду (Match.animatePlayers).
  */
 export const DETAIL = [
-  { crowd: 0.25, weather: 0.35, crowdEvery: 4, banners: false },
-  { crowd: 0.45, weather: 0.6, crowdEvery: 3, banners: true },
-  { crowd: 0.7, weather: 0.8, crowdEvery: 2, banners: true },
-  { crowd: 1, weather: 1, crowdEvery: 1, banners: true },
+  { crowd: 0.25, weather: 0.35, banners: false },
+  { crowd: 0.45, weather: 0.6, banners: true },
+  { crowd: 0.7, weather: 0.8, banners: true },
+  { crowd: 1, weather: 1, banners: true },
 ];
 export const MAX_LEVEL = DETAIL.length - 1;
 

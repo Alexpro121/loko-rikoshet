@@ -504,6 +504,7 @@ export class Match {
     const shooterSide = -g.side, isShot = (shooterSide > 0 && this.shotBy === 1) || (shooterSide < 0 && this.shotBy === -1);
     if (!isShot || this.saveReactId === this.shotId) return;
     this.saveReactId = this.shotId;
+    this.view.stands.react('miss', { mine: shooterSide > 0, dur: 2.4 });   // трибуни: сейв для того, хто бив, — той самий промах
     if (!caught && Math.random() < 0.7) g.p.react('save', 1.6);           // спіймав — тримає м'яч, радіє вже на ходу (не перериваємо прийом)
     const sh = shooterSide > 0 ? this.shooter : this.lastOppTaker;
     if (sh && !sh.isGK && Math.random() < 0.85) sh.p.react('miss', 1.8);
