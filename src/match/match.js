@@ -1858,7 +1858,7 @@ export class Match {
     const B = this.replay.ball, sd = B.x > 0 ? 1 : -1, dep = Math.abs(B.x) - (L + PITCH.GOAL_D - PITCH.R);
     this.world.netPush = dep > 0 && Math.abs(B.z) < G + 0.5 ? { sd, depth: Math.min(0.55, dep), y: B.y, z: B.z } : null;
     this.netBulge(rawDt);
-    const v = this.view; v.stands.update(rawDt, this.time); v.weather.update(rawDt); v.surround.update(rawDt); v.pitch.decals.update(rawDt); v.particles.update(rawDt);
+    const v = this.view; v.stands.update(rawDt); v.weather.update(rawDt); v.surround.update(rawDt); v.pitch.decals.update(rawDt); v.particles.update(rawDt);
     if (r.hold > 0.45) this.nextClip();
   }
   endClips() {
@@ -2945,7 +2945,7 @@ export class Match {
     }
     v.updateShadows(rx, rz, h);
     this.netBulge(dt);
-    v.stands.update(dt, this.time); v.weather.update(dt); v.surround.update(dt); v.pitch.decals.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
+    v.stands.update(dt); v.weather.update(dt); v.surround.update(dt); v.pitch.decals.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
     v.particles.update(dt);
     // кільце володіння — лише в живій грі (не в інтро, перерві, пенальті чи на фіналі)
     const live = (this.phase === 'paused' ? this.prevPhase : this.phase) === 'play';

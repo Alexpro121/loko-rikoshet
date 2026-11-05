@@ -192,7 +192,7 @@ export class GuestMatch {
       if (!this.lagShown || sec !== this.lagSec) { this.lagSec = sec; hud.warn(this.hostHidden && live ? 'СУПЕРНИК ЗГОРНУВ ГРУ · ' + sec + ' С' : sec > 25 ? 'ЗВ’ЯЗОК ІЗ СУПЕРНИКОМ…' : 'ЗВ’ЯЗОК ІЗ СУПЕРНИКОМ… ' + sec + ' С'); }
     } else if (this.lagShown) hud.warn(null);
     this.lagShown = lag;
-    v.stands.update(rawDt, this.time); v.weather.update(rawDt); v.surround.update(rawDt); v.pitch.decals.update(rawDt);
+    v.stands.update(rawDt); v.weather.update(rawDt); v.surround.update(rawDt); v.pitch.decals.update(rawDt);
     v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
     v.particles.update(rawDt);
     this.solo.netBulge(rawDt);

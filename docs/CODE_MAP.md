@@ -40,12 +40,12 @@ Game: рендерер, сцена меню, стейт-машина MENU/MATCH/
 - **Game** :37
   constructor:38, cineFlat:87, ensureMatch:99, warmShaders:106, buildStates:119, play:159, toMenu:163, quitMatch:164, onStadiumUpgraded:166, resize:171, basePixelRatio:182, applyPixelRatio:191, resMin:202, fixedLevel:205, setLevel:207, qualityChanged:214, levelDown:224, governor:239, onGlLost:282, onGlRestored:289, onVisibility:295, updateMenuCam:302, computeMatchBase:316, snapCamera:317, addTrauma:319, fovKick:321, updateMatchCam:323, autoFocus:379, screenToGround:395, worldToScreen:406, acquireWake:413, floatWorld:422, bindInput:429, isFullscreen:475, enterFullscreen:476, toggleFullscreen:484, tick:491, onFrameError:499, step:508
 
-## src/core/perf.js (39 рядків)
+## src/core/perf.js (40 рядків)
 
 Рівні деталізації під пристрій: що спрощувати, коли роздільність уже не рятує, перша оцінка телефона, пам'ять між запусками.
 
-- Експорти: DETAIL:9, MAX_LEVEL:15, loadPerf:28, savePerf:37
-- Внутрішні функції: guess:18
+- Експорти: DETAIL:10, MAX_LEVEL:16, loadPerf:29, savePerf:38
+- Внутрішні функції: guess:19
 
 ## src/core/stateMachine.js (17 рядків)
 
@@ -133,13 +133,13 @@ Ragdoll: падіння гравця як система точок Верле; 
 - **Ragdoll** :52
   constructor:63, com:94, setDrive:102, frame:118, step:126, limitKnees:218, minDist:232, limitLegs:244, legLim:261, limitBody:274, closest:283, segSep:294, nudge:311, faceDown:314, apply:322
 
-## src/graphics/stands.js (395 рядків)
+## src/graphics/stands.js (479 рядків)
 
 Stands: трибуни й глядачі на InstancedMesh, реакції натовпу, банери, прапори, сектор гостей.
 
-- Внутрішні функції: drawAtlas:14, bannerAtlas:29, waveMat:43
-- **Stands** :59
-  constructor:60, buildBanners:168, buildFlags:191, buildAway:211, setOpponent:230, setHome:253, react:272, cheer:277, chantEnv:280, writeMatrices:286, push:330, setDetail:337, update:345, runFlashes:383
+- Внутрішні функції: drawAtlas:14, bannerAtlas:29, waveMat:48, rxEnv:73
+- **Stands** :81
+  constructor:82, buildBanners:198, buildFlags:221, buildAway:241, setOpponent:260, setHome:283, react:305, cheer:311, chantEnv:314, writeMatrices:323, push:384, setDetail:392, stagger:406, update:422, runFlashes:467
 
 ## src/graphics/surround.js (129 рядків)
 
