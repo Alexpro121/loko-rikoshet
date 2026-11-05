@@ -55,9 +55,9 @@ const _hm = new THREE.Matrix4(), _hqa = new THREE.Quaternion(), _hqe = new THREE
 const _XA = new THREE.Vector3(1, 0, 0), _Q1 = new THREE.Quaternion();
 const _ka = new THREE.Vector3(), _kb = new THREE.Vector3(), _kc = new THREE.Vector3();   // IK контакту ноги з м'ячем (kickIK)
 /** Дії воротаря, у яких руки працюють свідомо (м'язи, без розхитування). */
-const GK_MODES = new Set(['pdive', 'gkdive', 'catch', 'scoop', 'parry', 'gkjump', 'throw', 'gkwait', 'gkpunch', 'gktip', 'gkfoot', 'gkstar', 'gkknee', 'gkfall']);
+const GK_MODES = new Set(['pdive', 'gkdive', 'catch', 'scoop', 'parry', 'gkjump', 'throw', 'gkwait', 'gkpunch', 'gktip', 'gkfoot', 'gkstar', 'gkknee', 'gkfall', 'gkshin']);
 /** Сейви, у яких воротар м'яч не ловить, а відбиває (кулаками, долонею через поперечину, ногою, тілом «зірочкою»). */
-export const GK_STRIKE = new Set(['gkpunch', 'gktip', 'gkfoot', 'gkstar']);
+export const GK_STRIKE = new Set(['gkpunch', 'gktip', 'gkfoot', 'gkstar', 'gkshin']);
 
 /**
  * Кінематика стрибка воротаря за прогресом P (0..1 — сам стрибок, далі лежить і встає).
@@ -72,6 +72,7 @@ const DK = { travel: 0, roll: 0, lift: 0, maxRoll: 0, landAt: 0 };   // резу
 const DK_MAXR = [1.42, 1.34, 1.46], DK_R0 = [0.16, 0.13, 0.06], DK_RL = [0.58, 0.5, 0.3], DK_PEAK = [1.05, 0.42, 0.12];   // низом тіло лягає набік одразу після відштовхування
 /** Удар: мить, коли стопа біля м'яча (гра випускає м'яч на 0.13 с, windT у match.js), і у скільки разів замах стиснутий до неї. */
 const KICK_TC = 0.13, KICK_W = 1.36, KICK_STIFF = 1.6, KICK_LEG = 0.45;
+const SHIN_F = 0.3, SHIN_BACK = 0.28, SHIN_REAR = 0.26, SHIN_DROP = [0.18, 0.42];     // gkShin: контакт за SHIN_F перед тілом, щиколотка ближче до тіла на SHIN_BACK (коліно попереду), присід за часом
 const FWD_K = 0.35;                                  // gkSmother: множник швидкості польоту (грудьми вперед тіло ковзає далі, ніж набік)
 const dkSm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 /** Нахил стопи, що лишає її рівною відносно газону (мінус сума нахилів тіла й ноги): основа поз контакту ногою. */
@@ -990,6 +991,16 @@ export class Player {
   gkTip(at, T) { this.saveSide(at, T); if (!this.saveS) this.saveS = 1; this.setMode('gktip', this.saveT + 0.6); this.setExpr('shock', 1.0); }
   /** Низом поруч, а впасти вже нема коли — ногою: ближня нога вибивається вбік уздовж газону, опорна глибоко підсідає. */
   gkFoot(at, T) { this.saveSide(at, T); if (!this.saveS) this.saveS = Math.random() < 0.5 ? -1 : 1; this.setMode('gkfoot', this.saveT + 0.55); this.setExpr('shock', 0.8); }
+  /**
+   * Гарячий низовий м'яч близько до тіла, руками не втримати: блок коліном і гомілкою. Ближня нога виходить на лінію м'яча, таз підсідає,
+   * коліно йде вперед-донизу, гомілка перекриває газон (shinIK). Hitbox читає саме цю ногу: у цьому режимі кола навколо воротаря немає (keeperBodies).
+   */
+  gkShin(at, T) {
+    this.saveSide(at, T); if (!this.saveS) this.saveS = Math.random() < 0.5 ? -1 : 1;
+    const bx = this.ball ? this.ball.x - at.x : Math.sin(this.bodyYaw), bz = this.ball ? this.ball.z - at.z : Math.cos(this.bodyYaw), l = Math.hypot(bx, bz) || 1;
+    this.shinUx = bx / l; this.shinUz = bz / l;                         // звідки летить м'яч: контакт перед площиною тіла, на лінії польоту
+    this.setMode('gkshin', this.saveT + 0.6); this.setExpr('shock', 0.8);
+  }
   /** Удар упритул — «зірочка»: короткий підскок, руки й ноги широко в боки, тіло перекриває якомога більше воріт. */
   gkStar(at, T) { this.saveSide(at, T); this.setMode('gkstar', this.saveT + 0.55); this.setExpr('shock', 0.8); }
   /**
@@ -1863,6 +1874,18 @@ export class Player {
         if (this.strikeHit !== this.modeD && el >= T) { this.strikeHit = this.modeD; this.impulse(-0.4, 1.2, (nearA ? 1 : -1) * 1.4, -2, -2, 1.3); }
         break;
       }
+      case 'gkshin': {
+        // блок коліном: опорна нога глибоко підсідає й відводиться, ближню до м'яча веде shinIK; тут лише вихідна поза, у яку вона повертається після контакту.
+        // Руки вбік, а не до м'яча: контакт має припасти на ногу. Глибина присіду залежить від часу: коротко — лише випад із гомілкою, довше — коліно майже до трави
+        const T = this.saveT ?? 0.25, el = md - this.modeT, k = smooth(clamp(el / Math.max(0.08, T * 0.8), 0, 1)) * (1 - smooth(clamp((el - T - 0.14) / 0.38, 0, 1)));
+        const nearA = this.saveS < 0, deep = SHIN_DROP[0] + SHIN_DROP[1] * smooth(clamp((T - 0.1) / 0.16, 0, 1));
+        const lB = (0.8 + 1.1 * deep) * k, kB = 0.06 + (1.2 + 1.7 * deep) * k;   // опорна нога гнеться разом із присідом, інакше таз не сяде (legReach)
+        if (nearA) { legA = lB; kneeA = kB; abdSA = -0.2 * k; legB = lB; kneeB = kB; abdSB = 0.3 * k; }
+        else { legB = lB; kneeB = kB; abdSB = 0.2 * k; legA = lB; kneeA = kB; abdSA = -0.3 * k; }
+        drop = deep * k; leanX = 0.42 * k; leanZ = (nearA ? -1 : 1) * 0.1 * k; armA = armB = 0.4 * k; elbA = elbB = 0.5; spread = 0.3 + 0.55 * k; hdX = 0.25 * k;
+        if (this.strikeHit !== this.modeD && el >= T) { this.strikeHit = this.modeD; this.impulse(-0.5, 1.4, (nearA ? 1 : -1) * 0.8, -2, -2, 1.1); }
+        break;
+      }
       case 'gkstar': {
         // «зірочка»: короткий підскок на м'яч, руки й ноги широко — тіло на всю ширину; м'яч б'є в тіло — віддача
         const T = this.saveT ?? 0.2, el = md - this.modeT, sp2 = smooth(clamp(el / Math.max(0.08, T * 0.7), 0, 1)) * (1 - smooth(clamp((el - T - 0.2) / 0.3, 0, 1)));
@@ -2194,6 +2217,7 @@ export class Player {
     this.root.position.set(this.x + sx * slide, 0, this.z + cx * slide);
     this.plantFeet(dt, 1 - lw, Math.abs(jTilt + flip) < 0.5 && Math.abs(jRoll) < 0.5 && !grounded && this.mode !== 'pdive', grounded || this.mode === 'pdive');   // стрибок воротаря сам відриває ноги
     if (this.kicking > 0) this.kickIK(dt);
+    else if (this.mode === 'gkshin') this.shinIK();
     else if (this.mode === 'tackle') this.tackleIK();
     if (this.mode === 'control' && this.cW > 0.002) { const i = this.recvSide ? 1 : 0, lg = i ? this.legR : this.legL, sh = i ? this.shinR : this.shinL, ft = i ? this.footR : this.footL; ft.rotation.set(lerp(ft.rotation.x, kickFlat(this, lg, sh) + this.cPh, this.cW), lerp(ft.rotation.y, this.cTw, this.cW), 0); }   // стопа прийому: підошва горизонтально чи внутрішня грань уперед
     const diving = this.mode === 'pdive' || this.mode === 'gkdive', flying = this.rag && this.rag.dive && this.ragDone < 0;
@@ -2687,6 +2711,39 @@ export class Player {
   }
 
   /**
+   * Блок коліном: щиколотка ближньої ноги на лінії польоту м'яча, трохи позаду точки контакту, тож коліно виходить уперед над нею, а гомілка
+   * перекриває газон. Щокадру в світових координатах, бо таз ще зміщується (saveShift). Контакт рахує hitbox за цією ж ногою, тож м'яч б'є туди, де нога видно.
+   */
+  shinIK() {
+    const md = this.modeD || 1, T = this.saveT ?? 0.25, el = md - this.modeT, at = this.saveAt; if (!at) return;
+    const win = smooth(clamp(el / Math.max(0.07, T * 0.72), 0, 1)) * (1 - smooth(clamp((el - T - 0.1) / 0.3, 0, 1)));
+    if (win < 0.002) return;
+    const s = this.root.scale.x || 0.82, i = this.saveS < 0 ? 0 : 1, leg = i ? this.legR : this.legL, shin = i ? this.shinR : this.shinL, foot = i ? this.footR : this.footL;
+    this.root.updateMatrixWorld(true);
+    // куди стопа: м'яч проходить за SHIN_F перед площиною тіла, щиколотка трохи ближче до неї. Щиколотка не далі, ніж дозволяє нога
+    const ux = this.shinUx ?? 0, uz = this.shinUz ?? 1, f = SHIN_F - SHIN_BACK * (1 - clamp(Math.abs(this.shinLat(at)) / 0.4, 0, 1));
+    const l0 = leg.rotation.x, lz0 = leg.rotation.z, k0 = shin.rotation.x, f0 = foot.rotation.x;
+    _w.set(at.x + ux * f, Math.max(YA * s, Math.min(at.y - PITCH.BALL_VIS, 0.3) + YA * s), at.z + uz * f);
+    this.pelvis.worldToLocal(_w); _w.sub(leg.position);
+    const ik = (this._pik ??= { hip: 0, knee: 0 }), abd = clamp(Math.atan2(_w.x, Math.max(0.25, -_w.y)), -1, 1), down = _w.x * Math.sin(abd) - _w.y * Math.cos(abd);
+    this.gaitSys.legIK(_w.z, down, ik);
+    leg.rotation.x = lerp(l0, -ik.hip, win); leg.rotation.z = lerp(lz0, abd, win); shin.rotation.x = lerp(k0, ik.knee, win);
+    // носок назовні: стопа лягає поперек лінії м'яча, і перше, що він зустрічає, це коліно й гомілка, а не носок
+    const ty0 = foot.rotation.y; foot.rotation.set(lerp(f0, kickFlat(this, leg, shin), win), lerp(ty0, (leg.position.x > 0 ? 1 : -1) * 1.15, win), 0); leg.updateMatrixWorld(true);
+    // дальня нога відступає назад і вбік, коліно до трави: так це випад на ближнє коліно, а не присід на обидві. Дугою, щоб стопа не волочилась
+    const j = 1 - i, lF = j ? this.legR : this.legL, sF = j ? this.shinR : this.shinL, fF = j ? this.footR : this.footL, sg = lF.position.x > 0 ? 1 : -1;
+    const sx = Math.cos(this.bodyYaw) * sg, sz = -Math.sin(this.bodyYaw) * sg, arc = 0.09 * s * Math.sin(Math.PI * clamp(el / Math.max(0.09, T * 0.8), 0, 1));
+    _w.set(this.root.position.x - ux * SHIN_REAR + sx * 0.16, YA * s + arc, this.root.position.z - uz * SHIN_REAR + sz * 0.16);
+    this.pelvis.worldToLocal(_w); _w.sub(lF.position);
+    const abF = clamp(Math.atan2(_w.x, Math.max(0.25, -_w.y)), -1, 1), dnF = _w.x * Math.sin(abF) - _w.y * Math.cos(abF);
+    this.gaitSys.legIK(_w.z, dnF, ik);
+    lF.rotation.x = lerp(lF.rotation.x, -ik.hip, win); lF.rotation.z = lerp(lF.rotation.z, abF, win); sF.rotation.x = lerp(sF.rotation.x, ik.knee, win);
+    fF.rotation.x = lerp(fF.rotation.x, kickFlat(this, lF, sF), win); lF.updateMatrixWorld(true);
+  }
+  /** Де at відносно тіла вбік, м: чим далі, тим більше нога випростана, тим менше коліно йде вперед. */
+  shinLat(at) { return (at.x - this.x) * Math.cos(this.bodyYaw) - (at.z - this.z) * Math.sin(this.bodyYaw); }
+
+  /**
    * Контакт відбору: гра перевіряє м'яч у точці 0.85 м перед тілом (resolveTackle), і в мить contact стопа має бути саме там. Швидкий випад
    * (~0.2 с) пружини не встигають: ударна нога лишалась на ~0.3 м коротшою. IK веде стопу (внутрішня грань, як у відборі блоком) до цієї точки.
    */
@@ -2747,7 +2804,7 @@ export class Player {
       let tx, ty, tz, k;
       // б'юча нога — цілком за дією, поки вона йде на м'яч і вгору (інакше стопу чіпляло до трави залежно від кроку часу:
       // той самий удар на 60 Гц волочив ногу газоном, а на 90+ Гц — ні); стає на газон уже як звичайна нога
-      const swinging = this.mode === 'pkick' ? i === 1 && (this.kickP || 0) < 0.8 : this.kicking > 0 && i === this.kickSide && this.kicking < 0.13 + 0.3 * (this.kickF ?? 1);
+      const swinging = this.mode === 'pkick' ? i === 1 && (this.kickP || 0) < 0.8 : this.mode === 'gkshin' ? i === (this.saveS < 0 ? 0 : 1) : this.kicking > 0 && i === this.kickSide && this.kicking < 0.13 + 0.3 * (this.kickF ?? 1);
       if (swinging || !allowed) { q.on = false; if (swinging) q.step = 0; }
       else if (q.step === 0) {
         const gf = this.gaitSys.feet[i];

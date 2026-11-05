@@ -31,8 +31,8 @@ const KIT_LIST = [
 ];
 const kitOf = (id) => KIT_LIST.find((k) => k[0] === id) || KIT_LIST[0];
 const T0 = 3.0;   // «рух по лінії»: час перебіжки від штанги до штанги, с
-const GK_ANIMS = ['gkwait', 'gkshuffle', 'catch', 'scoop', 'gkdive', 'pdive', 'gkjump', 'parry', 'gkpunch', 'gktip', 'gkfoot', 'gkstar', 'gkknee', 'gkfall', 'throw', 'gksmother'];
-const GK_STRIKES = { gkpunch: 'gkPunch', gktip: 'gkTip', gkfoot: 'gkFoot', gkstar: 'gkStar', gkknee: 'gkKnee', gkfall: 'gkFall' };
+const GK_ANIMS = ['gkwait', 'gkshuffle', 'catch', 'scoop', 'gkdive', 'pdive', 'gkjump', 'parry', 'gkpunch', 'gktip', 'gkfoot', 'gkstar', 'gkknee', 'gkshin', 'gkfall', 'throw', 'gksmother'];
+const GK_STRIKES = { gkpunch: 'gkPunch', gktip: 'gkTip', gkfoot: 'gkFoot', gkstar: 'gkStar', gkknee: 'gkKnee', gkshin: 'gkShin', gkfall: 'gkFall' };
 /** Куди дивиться гравець відносно руху (для перевірки бігу боком, спиною, навскіс): зсув погляду від напрямку руху. */
 const FACES = [['move', 'Туди, куди біжить'], ['side', 'Біжить боком (праворуч)'], ['sideL', 'Біжить боком (ліворуч)'], ['back', 'Біжить спиною'],
   ['diag', 'Навскіс уперед'], ['diagback', 'Навскіс назад'], ['target', 'Дивиться на точку (м’яч)']];
@@ -43,7 +43,7 @@ const ANIMS = [
   ['idle', 'Стійка'], ['run', 'Біг'], ['aim', 'Прицілювання'], ['kick', 'Удар'], ['pkick', 'Пенальті: удар'], ['control', 'Прийом'], ['chest', 'Груди'],
   ['header', 'Удар головою'], ['block', 'Блок'], ['hit', 'Влучання м’ячем'], ['tackle', 'Відбір'], ['slide', 'Підкат'], ['stumble', 'Падіння'],
   ['kneel', 'Ковзання на колінах'], ['knock', 'Поштовх (падіння тіла)'], ['cheer', 'Радість'], ['sad', 'Розчарування'], ['gkwait', 'Воротар: стійка'], ['catch', 'Воротар: ловить'], ['scoop', 'Воротар: підбирає'],
-  ['gkdive', 'Воротар: стрибок'], ['pdive', 'Пенальті: стрибок'], ['gkjump', 'Воротар: вгору'], ['parry', 'Воротар: відбиває'], ['gkpunch', 'Воротар: кулаками'], ['gktip', 'Воротар: через поперечину'], ['gkfoot', 'Воротар: ногою'], ['gkstar', 'Воротар: «зірочка»'], ['gkknee', 'Воротар: на коліно'], ['gkfall', 'Воротар: падає на бік'], ['throw', 'Воротар: кидок'],
+  ['gkdive', 'Воротар: стрибок'], ['pdive', 'Пенальті: стрибок'], ['gkjump', 'Воротар: вгору'], ['parry', 'Воротар: відбиває'], ['gkpunch', 'Воротар: кулаками'], ['gktip', 'Воротар: через поперечину'], ['gkfoot', 'Воротар: ногою'], ['gkstar', 'Воротар: «зірочка»'], ['gkknee', 'Воротар: на коліно'], ['gkshin', 'Воротар: блок коліном'], ['gkfall', 'Воротар: падає на бік'], ['throw', 'Воротар: кидок'],
   ['gkshuffle', 'Воротар: рух по лінії'], ['stagger', 'Втримав рівновагу'], ['fend', 'Тримає суперника рукою'],
   ['volley', 'Воле: удар у повітрі'],
   ['beaten', 'Обіграний захисник'],
@@ -188,6 +188,7 @@ function gkShot(p) {
   else if (a === 'gktip') { side = 0.45 * (Math.random() < 0.5 ? -1 : 1); y = 2.8; fwd = 0.2; tc = 0.45; parryAt = tc; arc = 0.8; }
   else if (a === 'gkfoot') { side = 0.85 * (Math.random() < 0.5 ? -1 : 1); y = GB_R; y0 = GB_R; arc = 0; fwd = 0.3; tc = 0.3; parryAt = tc; }
   else if (a === 'gkknee') { side = 0.5 * (Math.random() < 0.5 ? -1 : 1); y = GB_R; y0 = GB_R; arc = 0; fwd = 0.6; tc = 0.3; stick = true; }
+  else if (a === 'gkshin') { side = 0.3 * (Math.random() < 0.5 ? -1 : 1); y = GB_R; y0 = GB_R; arc = 0; fwd = 0.5; tc = 0.25; parryAt = tc; }
   else if (a === 'gkfall') { side = 1.25 * (Math.random() < 0.5 ? -1 : 1); y = 0.35; y0 = 0.3; arc = 0.05; fwd = 0.3; tc = 0.3; parryAt = tc; }
   else if (a === 'gkstar') { side = 0.6 * (Math.random() < 0.5 ? -1 : 1); y = 1.1; fwd = 0.5; tc = 0.25; parryAt = tc; arc = 0.2; }
   else if (a === 'gkdive' || a === 'pdive') {

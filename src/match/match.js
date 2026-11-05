@@ -438,7 +438,7 @@ export class Match {
       if (speed < 6) return true;
     } else {
       // удар у корпус до ~90–130 км/год воротар ловить (за «Ловлею»); раніше межа була ~18–30 од/с, а удари долітають ~25 — лише відбивав
-      const sk = a.sk, limit = a.receiver ? 38 : 26 + 12 * sk.hands;
+      const sk = a.sk, limit = this.catchLimit(a);
       // ловить, лише якщо м'яч прийшов у рукавиці; удар у ноги чи тулуб — відскік (повільний м'яч біля ніг — підбере сам)
       const outBox = (this.ball.x + a.side * L) * a.side > PITCH.BOX_D || Math.abs(this.ball.z) > PITCH.BOX_W;   // поза штрафним — грає ногою, як польовий
       const strike = a.isGK && GK_STRIKE.has(a.p.mode) && speed > 5;   // кулаками, долонею, ногою, тілом — відбиває, а не ловить
@@ -453,13 +453,14 @@ export class Match {
       }
     }
     if (a.isGK) {
-      const shotAt = this.shotBy === -a.side;                // удар суперника, а не свій пас чи вільний м'яч
+      const shotAt = this.shotBy === -a.side, legBlock = a.p.mode === 'gkshin' && speed > 5;                // удар суперника, а не свій пас чи вільний м'яч
       this.saveReact(a);
       if (shotAt) { audio.save(); this.creditSave(a); }
       a.p.parry(); audio.thud(); if (speed > 18) this.view.stands.react('gasp');
       { const k = clamp(speed / 25, 0.3, 1.4); a.p.impulse(-0.9 * k, 2.0 * k, 0, -3 * k, -3 * k, 0.7 * k); if (speed > 22) this.game.addTrauma(0.05 + 0.04 * k); }   // м'яч б'є в руки чи тіло — тіло «віддає»
       if (speed > 20 && shotAt) this.markMoment('save');   // сильний удар відбито — у підбірку моментів тайму
       if (shotAt) this.floatAt(a.p.x, a.p.z, a.side > 0 ? 'ВРЯТУВАВ!' : 'ВОРОТАР!', a.side > 0 ? 'good' : 'warn');
+      if (legBlock) { this.legDeflect(a, nx, nz); v.ball.squash(nx, nz, 0.22); this.planT = 0; this.deflectId = this.shotId; return true; }   // відскік порахували самі, world його не повторює
     } else {
       audio.wall(0, 8);
       if (speed > 24) { if (hy < 0.6) a.p.block(); else a.p.hit(); }   // голова лише вище ~1.4 (гілка вгорі): низький м'яч блокує ногою, на рівні тіла приймає корпусом
@@ -467,6 +468,29 @@ export class Match {
     }
     v.ball.squash(nx, nz, 0.22); this.planT = 0; this.deflectId = this.shotId;   // м'яч змінив курс — прогноз перерахувати одразу; партнери того, хто бив, знову тверді
     return false;
+  }
+
+  /** Сейв на місці з випадом-кроком до м'яча: таз іде вбік за час прильоту й лишає keep м до нього, не більше ніж на 0.55 м. */
+  saveStep(g, lateral, keep, eta) {
+    const s = Math.sign(lateral) * clamp(Math.abs(lateral) - keep, 0, 0.55);
+    g.saveShift = s ? { z0: g.p.z, dz: s, t: 0, T: Math.max(0.12, eta * 0.8) } : null;
+  }
+
+  /** Швидкість м'яча (од/с), до якої воротар ловить його руками; вище лише відбиває. */
+  catchLimit(g) { return g.receiver ? 38 : 26 + 12 * g.sk.hands; }
+
+  /**
+   * Відскік від коліна чи гомілки. Нормаль ноги нахилена вниз, бо коліно вище за м'яч, і чесний 3D-відскік загнав би його в газон і далі у ворота.
+   * Тому беремо лише горизонтальну частину нормалі: м'яч низом від ноги, невисоко над газоном. Прямий дотик завжди виносить м'яч від воріт,
+   * а дотичний лише міняє курс, і такий м'яч ще може зайти.
+   */
+  legDeflect(g, nx, nz) {
+    const B = this.ball, l = Math.hypot(nx, nz), s0 = Math.hypot(B.vx, B.vz) || 1;
+    if (l > 0.2) { nx /= l; nz /= l; } else { nx = g.side; nz = 0; }
+    const vn = B.vx * nx + B.vz * nz;
+    if (vn < 0) { const j = -1.45 * vn; B.vx += j * nx; B.vz += j * nz; }
+    if (-vn / s0 > 0.45 && B.vx * g.side < 3) B.vx = g.side * rand(3, 6);
+    B.vy = rand(1, 3.5); B.w *= 0.4;
   }
 
   /** Сейв нашого воротаря: досвід і рядок «Порятунки воротаря» на екрані результату. Один удар — один сейв, навіть якщо відбив і потім спіймав. */
@@ -2515,6 +2539,14 @@ export class Match {
       if (!redo) {
         // упритул сильно на рівні тіла, часу ні на що нема — «зірочка»
         if (eta < 0.24 && bsp > 16 && need > 0 && lat < 1.25 && predY >= 0.5 && predY < 1.7) { strike(() => g.p.gkStar(at, eta)); continue; }
+        // низом близько до тіла, а м'яч на межі того, що ловлять руки, чи гарячіший: блок коліном і гомілкою, м'яч відлітає від ноги (legDeflect). Повільніший далі ловить («кошик», «бар'єр»)
+        if (lowBall && predY < 0.6 && lat < 1.0 && this.shotBy === -side) {
+          const P = this.plan, iA = Math.min(P.len - 2, Math.round(eta / P.dt));
+          if (iA >= 0 && Math.hypot(P.x[iA + 1] - P.x[iA], P.y[iA + 1] - P.y[iA], P.z[iA + 1] - P.z[iA]) / P.dt > 0.85 * this.catchLimit(g)) {
+            if (eta > 0.3) continue;
+            this.saveStep(g, lateral, 0.42, eta); strike(() => g.p.gkShin(at, eta)); continue;
+          }
+        }
         if (need <= 0) {                                                 // на лінії удару: ловить
           if (eta > 0.45) continue;
           // під саму поперечину — переводить долонею; сильний високий — кулаками; високо по центру — вистрибує; інакше ловить
@@ -2534,13 +2566,12 @@ export class Match {
           if (eta > 0.3) continue;
           // сейв на місці — з коротким випадом-кроком до м'яча (до ~0.55 м): так ноги й руки дістають м'яч, що йде ~1–1.5 м
           // убік (раніше нога чи падіння на бік на місці не діставали, і такий м'яч проходив поруч у ворота)
-          const shift = (keep) => { const s = Math.sign(lateral) * clamp(lat - keep, 0, 0.55); g.saveShift = s ? { z0: g.p.z, dz: s, t: 0, T: Math.max(0.12, eta * 0.8) } : null; };
-          if (lowBall && lat < 1.0) { shift(0.3); hands(() => g.p.gkKnee(at, eta)); }      // «барʼєр» на коліні — ловить руками
-          else if (lowBall && lat < 1.3 && bsp > 12) { shift(0.7); strike(() => g.p.gkFoot(at, eta)); }
+          if (lowBall && lat < 1.0) { this.saveStep(g, lateral, 0.3, eta); hands(() => g.p.gkKnee(at, eta)); }      // «барʼєр» на коліні — ловить руками
+          else if (lowBall && lat < 1.3 && bsp > 12) { this.saveStep(g, lateral, 0.7, eta); strike(() => g.p.gkFoot(at, eta)); }
           // низом далі — короткий стрибок уздовж газону, нижня рука по траві до м'яча. Падіння на бік з місця лише нахиляло
           // корпус (плечі ~0.9 м над газоном): нижня рука до трави не діставала, м'яч проходив під верхньою
           else if (lowBall) lowDive = true;
-          else { shift(0.75); g.decided = this.shotId; g.decType = 'hands'; g.frozen = Math.max(g.frozen, eta + 1.2); g.p.vx = g.p.vz = 0; g.p.gkFall(at, eta); }
+          else { this.saveStep(g, lateral, 0.75, eta); g.decided = this.shotId; g.decType = 'hands'; g.frozen = Math.max(g.frozen, eta + 1.2); g.p.vx = g.p.vz = 0; g.p.gkFall(at, eta); }
           if (!lowDive) continue;
         }
         // під поперечину трохи збоку — відштовхується й дотягується однією рукою, переводить через перекладину
@@ -2827,7 +2858,8 @@ export class Match {
         o.vx = clamp((c.vax + c.vbx) / 2, -12, 12); o.vy = clamp((c.vay + c.vby) / 2, -12, 12); o.vz = clamp((c.vaz + c.vbz) / 2, -12, 12);
       }
       // для м'яча: у стрибку — тіло (коло 0.45) і капсули; стоячи — капсули й невелика зона ніг і тулуба (0.5 м, а не 0.9–1.3)
-      cs.n = n; b.capsOnly = false;
+      // блок ногою: лише сама нога, інакше м'яч відскочить від кола раніше, ніж торкнеться її
+      cs.n = n; b.capsOnly = a.p.mode === 'gkshin' || a.p.mode === 'gkfoot';
       if (!a.sliding) b.r = a.dive ? 0.45 : 0.5;
       b.h = a.dive ? 0.6 : 1.1;
     }
