@@ -132,7 +132,7 @@
 | Екран ЛОКО РАШ: стадіон на тлі, камера | `startSplash`, `updateSplash`, `splashRoar`, `stopSplash` у `src/core/game.js` |
 | Екран ЛОКО РАШ: 3D-м'яч у O, камера за ним, політ і відскоки | `splashBall`, `splashBallStep`, `SPLASH_LOCK`, `SPLASH_FLY` у `src/core/game.js`; точка передачі `handoff` і `atT` у `src/ui/splash.js` |
 | Екран ЛОКО РАШ: коли стадіон не малюється | `splashView` у `src/core/game.js`, `hooks.view` у `src/ui/splash.js` |
-| Заставка з потягом | `src/ui/intro.js` |
+| Заставка після «ГРАТИ»: герб, тунель, локомотив, дим, світло, звук | `playIntro`, `scene`, `suspension` у `src/ui/intro.js`; стилі `.intro` у `src/style.css` |
 | Вихід команд | `driveIntro`, `introCam`, `src/match/walkout.js` |
 | Святкування гола | `goalImportance`, `setupCelebration`, `updateCelebration` |
 | Повтори | `Replay` у `src/match/cinema.js`, `playClips` |
