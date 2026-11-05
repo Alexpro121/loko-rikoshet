@@ -7,7 +7,7 @@ import { encode, captureRef, PHASES, F } from './codec.js';
 
 const HUD_FWD = ['setTime', 'setProg', 'addedTime', 'combo', 'scored', 'scoreCard', 'setSignal', 'goal', 'clearGoal', 'cine', 'setCard'];   // рахунок гість бере з кадру
 // новий звук: також SND_OK у guest.js, гість фільтрує своїм списком
-const SND_FWD = ['kick', 'wall', 'pass', 'save', 'whistle', 'horn', 'goal', 'concede', 'bell', 'rumble', 'slide', 'clap', 'thud', 'crowd', 'win', 'lose'];
+const SND_FWD = ['kick', 'wall', 'post', 'net', 'pass', 'save', 'whistle', 'horn', 'goal', 'concede', 'bell', 'rumble', 'slide', 'clap', 'thud', 'crowd', 'win', 'lose'];
 const FRAME_MS = 50;
 
 export class HostLink {

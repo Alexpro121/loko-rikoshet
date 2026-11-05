@@ -146,6 +146,11 @@
 | Мінімапа: місце, розмір, обхід HUD | `MapHud.compute`, зони `.z-*` у `src/style.css`; поля `map*` у `SETTINGS_DEFAULT`; вкладка `map` у `renderSettings` |
 | Іконки | `src/ui/icons.js`, `src/ui/vox.js` |
 | Звуки й музика | `AudioEngine` у `src/core/audio.js`; для онлайну також `SND_FWD` і `SND_OK` |
+| Послухати й порівняти звук, заміри | `/sound.html`, `src/lab/sound.js` (`SOUNDS`, `SCENE`, `TESTS`, `window.soundLab`) |
+| Новий запис звуку | файл `<слот>_<варіант><дубль>.mp3` у `src/audio`, рядок у `src/audio/SOURCES.md`, порядок у `ORDER`, `LOOP_LEN` для петлі (`src/core/audio-bank.js`) |
+| Рівні мікса, простір, приглушення верху | `AudioEngine.attach`, `makeIR`; рівні натовпу `BED`, `TENSE`, `CHANT`, музики `MUS` |
+| Реакції натовпу | `AudioEngine.crowdReact` (кличе `Stands.react`), `goal`, `concede`; напруга біля воріт `track`, `syncCrowd` |
+| Як поєднуються записи | шари в `kick`, `save`, `goal`, `concede`, `crowdReact`, `win`, `lose`; зміна гулу `rotateBed`, `tick`, `swapQuiet` |
 | Клавіші, дотики, повний екран | `Game.bindInput`, `UI.key` |
 | Звук на зупиненому контексті | `AudioEngine.live` у `src/core/audio.js` |
 | Коли наша форма міняється на матч | `pickKit`, `KIT_CLASH` у `src/config.js`, `matchKit` у `src/state/squad.js` |

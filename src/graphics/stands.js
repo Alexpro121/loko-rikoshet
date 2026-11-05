@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { PITCH } from '../config.js';
 import { VoxelBuilder, rng } from './voxel.js';
 import { drawFlag } from '../online/flag.js';
+import { audio } from '../core/audio.js';
 import { whenLogo, logoReady, logoImg } from './logo.js';
 
 const TEXTS = ['ЛОКО, ВПЕРЕД!', 'ЗАЛІЗНИЧНИКИ', 'ЛОКОМОТИВ КИЇВ', 'СТОП ✕ ВПЕРЕД', 'ЛОКО · 1919', 'ДАВАЙ, ЛОКО!', 'ЗА КИЇВ!', 'ВІРИМО В ПЕРЕМОГУ', 'РИКОШЕТ!', 'ЛОКО — ДО ВЕРШИНИ', 'МИ — ЗАЛІЗНИЧНИКИ', 'СЛАВА УКРАЇНІ'];
@@ -273,6 +274,7 @@ export class Stands {
     const DUR = { goal: 3.8, groan: 2.6, gasp: 1.2, wave: 4.2, clap: 2.6, flash: 3.2 };
     if (type !== 'flash') this.flash.count = 0;                // спалахи малює лише реакція flash: без цього застигли б білими квадратами
     this.rx = { type, t: 0, dur: o.dur || DUR[type] || 2, mine: o.mine !== false };
+    audio.crowdReact(type);                                    // «ох» і зітхання: гість теж проходить тут, тому чує те саме
   }
   cheer(sec) { this.react('goal', { dur: sec, mine: true }); }
 
@@ -343,7 +345,8 @@ export class Stands {
   }
 
   update(dt, t) {
-    const rx = this.rx, ch = this.chantEnv(t), react = rx && (rx.type === 'goal' || rx.type === 'wave') ? Math.min(1, rx.t * 4) * (1 - rx.t / rx.dur) : 0;
+    const rx = this.rx, ch = this.chantEnv(t); audio.chant(ch);
+    const react = rx && (rx.type === 'goal' || rx.type === 'wave') ? Math.min(1, rx.t * 4) * (1 - rx.t / rx.dur) : 0;
     this.chant = ch;
     this.arms.visible = this.scarf.visible = !!rx || ch > 0.01;       // поза реакціями й співами руки й шарфи згорнуті: не малюємо їх узагалі
     const amp = Math.min(1.3, 0.28 + 0.65 * ch + 0.8 * react);

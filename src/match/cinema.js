@@ -198,6 +198,7 @@ export function missReact(m, post, impact = 0) {
   const mine = m.shotBy === 1, sh = mine ? m.shooter : m.lastOppTaker;
   if (!sh || sh.isGK) return;
   if (!post && (mine ? m.shot.power < 0.45 : m.shotBy !== -1 && impact < 18)) return;   // у борт повз ворота — лише справжній удар, не пас (shotBy −2 — пас чи удар повз: лише дуже сильний м'яч)
+  if (!post) m.view.stands.react('gasp');                               // справжній удар повз ворота: «ох» трибун (штанга кличе його сама)
   const gx = mine ? PITCH.L : -PITCH.L, sd = mine ? m.mine : m.opp, df = mine ? m.opp : m.mine;
   if (Math.random() < (post ? 0.95 : 0.8)) sh.p.emote(pickOf([0, 0, 1]), 1.7);
   for (let i = 0; i < sd.length; i++) {

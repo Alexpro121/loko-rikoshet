@@ -23,7 +23,7 @@ const STALE_MS = 1500;                                  // звук і част�
 const NET_SILENCE = 32;                                 // с показу гри без жодного кадру при живому з'єднанні: господар згорнув гру чи завис, матч не зараховуємо
 const CROWD_OK = ['goal', 'groan', 'gasp', 'wave', 'clap', 'flash'];
 const SWAP_SND = { goal: 'concede', concede: 'goal', win: 'lose', lose: 'win' };
-const SND_OK = new Set(['kick', 'wall', 'pass', 'save', 'whistle', 'horn', 'goal', 'concede', 'bell', 'rumble', 'slide', 'clap', 'thud', 'crowd', 'win', 'lose']);
+const SND_OK = new Set(['kick', 'wall', 'post', 'net', 'pass', 'save', 'whistle', 'horn', 'goal', 'concede', 'bell', 'rumble', 'slide', 'clap', 'thud', 'crowd', 'win', 'lose']);
 
 export class GuestMatch {
   constructor(session, game, solo) {

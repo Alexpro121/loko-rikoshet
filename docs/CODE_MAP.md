@@ -15,13 +15,22 @@
 
 - Експорти: PITCH:3, PHYS:20, COL:35, KIT_LOKO:42, KITS:44, KIT_GK_LOKO:49, KIT_CLASH:52, kitDist:55, pickKit:60, LEAGUES:74, STAT_KEYS:88, GK_KEYS:89, LINE_OF:90, FORMATIONS:95, FIXTURES:105, matchSpec:111, STRIKERS:134, shotSkill:144, KEEPERS:146, ACADEMY:154, STADIUM_TIERS:174, STADIUM_TIER_NAMES:175, SETTINGS_DEFAULT:177, CAM_PRESETS:189
 
-## src/core/audio.js (207 рядків)
+## src/core/audio-bank.js (153 рядків)
 
-Увесь звук синтезується на льоту (WebAudio): жодних файлів, нуль завантаження.
+Банк семплів: справжні записи з src/audio (джерела й ліцензії в src/audio/SOURCES.md). Вантажаться у фоні після першого
 
-- Експорти: audio:202, vibrate:204
-- **AudioEngine** :5
-  constructor:6, unlock:18, applySettings:42, suspend:49, resume:51, live:56, tone:59, hiss:72, kick:86, wall:90, coin:98, pass:103, save:104, whistle:105, horn:115, goal:128, concede:133, bell:137, rumble:141, click:142, back:143, buy:144, deny:145, win:146, lose:147, slowmo:149, beat:153, slide:154, clap:155, thud:156, startCrowd:158, crowd:166, music:172, schedule:181
+- Експорти: LOOP_LEN:10, MARGIN:11, groupUrls:18, sealLoop:134
+- Внутрішні функції: toMono:146, decode:153
+- **Bank** :28
+  constructor:29, has:43, count:44, load:47, loadAll:66, fetchBuf:75, prepare:86, take:96, swap:108, pick:120
+
+## src/core/audio.js (624 рядків)
+
+AudioEngine: гібрид. Натовп, удар, свисток, сітка, стовп, рукавиці це справжні записи (audio-bank.js), тонкі шари, інтерфейс
+
+- Експорти: audio:619, vibrate:621
+- **AudioEngine** :15
+  constructor:16, rnd:41, jit:42, chance:43, clock:44, gate:46, unlock:48, attach:62, makeIR:113, applySettings:129, suspend:137, resume:139, live:144, claim:148, tone:156, hiss:170, mallet:185, sample:195, kick:219, pass:231, wall:239, post:249, net:261, save:270, thud:277, slide:283, clap:290, revPing:293, whistle:303, horn:318, goal:335, concede:344, crowdReact:353, win:371, lose:376, bell:381, rumble:383, click:386, back:387, coin:389, buy:394, deny:395, slowmo:398, beat:409, buildCrowd:417, crowd:423, lift:432, syncCrowd:434, ensureLayer:454, startVoice:460, dropVoice:468, rotateBed:476, swapQuiet:488, tick:496, ensureSynth:504, stopTimer:512, stopLayers:516, slotReady:520, chant:522, track:528, music:545, schedule:559, playBar:565, padChord:579, key:596
 
 ## src/core/camera.js (312 рядків)
 
@@ -31,14 +40,14 @@ CamDirector: ігрова камера матчу за пресетами CAM_PR
 - **CamDirector** :50
   constructor:51, snap:65, add:67, nearest:70, collect:85, need:122, needOne:131, solve:137, bounds:152, update:174, keepIn:298
 
-## src/core/game.js (532 рядків)
+## src/core/game.js (534 рядків)
 
 Game: рендерер, сцена меню, стейт-машина MENU/MATCH/GOAL/RESULT, головний цикл, ввід, камера матчу, якість.
 
 - Експорти: gfxFail:27
 - Внутрішні функції: springStep:21
 - **Game** :37
-  constructor:38, cineFlat:87, ensureMatch:99, warmShaders:106, buildStates:119, play:159, toMenu:163, quitMatch:164, onStadiumUpgraded:166, resize:171, basePixelRatio:182, applyPixelRatio:191, resMin:202, fixedLevel:205, setLevel:207, qualityChanged:214, levelDown:224, governor:239, onGlLost:282, onGlRestored:289, onVisibility:295, updateMenuCam:302, computeMatchBase:316, snapCamera:317, addTrauma:319, fovKick:321, updateMatchCam:323, autoFocus:379, screenToGround:395, worldToScreen:406, acquireWake:413, floatWorld:422, bindInput:429, isFullscreen:475, enterFullscreen:476, toggleFullscreen:484, tick:491, onFrameError:499, step:508
+  constructor:38, cineFlat:87, ensureMatch:99, warmShaders:106, buildStates:119, play:159, toMenu:163, quitMatch:164, onStadiumUpgraded:166, resize:171, basePixelRatio:182, applyPixelRatio:191, resMin:202, fixedLevel:205, setLevel:207, qualityChanged:214, levelDown:224, governor:239, onGlLost:282, onGlRestored:289, onVisibility:295, updateMenuCam:302, computeMatchBase:316, snapCamera:317, addTrauma:319, fovKick:321, updateMatchCam:323, autoFocus:381, screenToGround:397, worldToScreen:408, acquireWake:415, floatWorld:424, bindInput:431, isFullscreen:477, enterFullscreen:478, toggleFullscreen:486, tick:493, onFrameError:501, step:510
 
 ## src/core/perf.js (39 рядків)
 
@@ -133,13 +142,13 @@ Ragdoll: падіння гравця як система точок Верле; 
 - **Ragdoll** :52
   constructor:63, com:94, setDrive:102, frame:118, step:126, limitKnees:218, minDist:232, limitLegs:244, legLim:261, limitBody:274, closest:283, segSep:294, nudge:311, faceDown:314, apply:322
 
-## src/graphics/stands.js (395 рядків)
+## src/graphics/stands.js (398 рядків)
 
 Stands: трибуни й глядачі на InstancedMesh, реакції натовпу, банери, прапори, сектор гостей.
 
-- Внутрішні функції: drawAtlas:14, bannerAtlas:29, waveMat:43
-- **Stands** :59
-  constructor:60, buildBanners:168, buildFlags:191, buildAway:211, setOpponent:230, setHome:253, react:272, cheer:277, chantEnv:280, writeMatrices:286, push:330, setDetail:337, update:345, runFlashes:383
+- Внутрішні функції: drawAtlas:15, bannerAtlas:30, waveMat:44
+- **Stands** :60
+  constructor:61, buildBanners:169, buildFlags:192, buildAway:212, setOpponent:231, setHome:254, react:273, cheer:279, chantEnv:282, writeMatrices:288, push:332, setDetail:339, update:347, runFlashes:386
 
 ## src/graphics/surround.js (129 рядків)
 
@@ -182,6 +191,13 @@ Weather: дощ і сніг на InstancedMesh.
 - **Weather** :9
   constructor:10, setDensity:24, set:29, update:34
 
+## src/lab/audio-old.js (115 рядків)
+
+Старий синтез (до оновлення звуку) для порівняння на сторінці прослуховування. У гру не потрапляє.
+
+- **OldAudio** :2
+  attach:3, clock:21, tone:22, hiss:33, kick:44, wall:45, coin:53, pass:58, save:59, whistle:60, horn:69, goal:81, concede:82, bell:83, rumble:84, click:85, back:86, buy:87, deny:88, win:89, lose:90, slowmo:91, beat:95, slide:96, clap:97, thud:98, crowd:99, post:101, net:102, crowdReact:103, renderMusic:105
+
 ## src/lab/lab.css (34 рядків)
 
 Стилі сторінки лабораторії (lab.html).
@@ -193,6 +209,18 @@ Weather: дощ і сніг на InstancedMesh.
 Лабораторія гравця (lab.html): окрема сторінка для перевірки моделі, ходи й анімацій; window.lab у консолі.
 
 - Внутрішні функції: spawn:89, setWire:109, setJoints:118, start:132, divePrep:169, gkShot:179, stepBall:202, steer:236, tick:264, resize:348, setCam:364, renderCams:374, btn:382, row:383, select:384, range:389, swatches:394, check:399, renderPanel:405, test:464, actions:511
+
+## src/lab/sound.css (32 рядків)
+
+Стилі сторінки прослуховування звуку (sound.html).
+
+- Розділи: Стилі сторінки прослуховування звуку (sound.html).:1
+
+## src/lab/sound.js (301 рядків)
+
+Сторінка прослуховування (sound.html): кнопка на кожен звук, старий/новий, сцена «хвилина матчу» й заміри через
+
+- Внутрішні функції: ensureCtx:27, makeEngines:37, buildPhone:44, setPhone:53, trigger:118, stopAll:126, playScene:133, stopOldMusic:141, playOldMusic:142, fft:150, analyse:152, render:161, measure:179, measureScene:188, loopSeam:197, row:211, build:233
 
 ## src/main.js (38 рядків)
 
@@ -209,7 +237,7 @@ TeamBrain: командне мислення ШІ. Читання гри, лін
 - **TeamBrain** :122
   constructor:123, reset:125, read:132, setLines:161, defSpot:182, gaps:189, assignRest:205, countJobs:220, assignMarks:227, defPace:256, updateCalls:269, hand:300, afterPass:314, pickJob:319, place:381
 
-## src/match/cinema.js (213 рядків)
+## src/match/cinema.js (214 рядків)
 
 Кат-сценні інструменти: Replay (запис і повтор поз), Slaps («дай п'ять»), рукостискання.
 
