@@ -80,6 +80,7 @@ export class Match {
     this.anchor = { x: 0, y: 0 }; this.ptr = { x: 0, y: 0 }; this.anchorW = { x: 0, z: 0 }; this.curW = { x: 0, z: 0 };
     this.shot = { vx: 0, vz: 0, power: 0, valid: false, dirx: 1, dirz: 0 };
     this.time = 0; this.acc = 0; this.ts = 1;
+    this.deflT = -9;                                                     // коли м'яч востаннє відскочив від польового чи штанги (реакція воротаря)
     this.counterV = { vx: 0, vz: 0 };
     this.holder = null; this.taker = null; this.bs = 'ready'; this.owner = 1; this.readyT = 0;
     // кінематографія: повтори голів, «драматична» камера на сейвах і штангах, перерви, рукостискання
@@ -395,7 +396,7 @@ export class Match {
     if (this.bs === 'roll' && impact > 12 && Math.abs(b.x) > L - 1.6) missReact(this, false, impact);   // сильний удар у задній борт: промах — реакція гравців (cinema.js)
   }
   onPost(nx, nz, impact) {
-    this.deflectId = this.shotId;                                       // м'яч відскочив: це вже не удар, партнери знову тверді (updateSolidity)
+    this.deflectId = this.shotId; this.deflT = this.time;               // м'яч відскочив: це вже не удар, партнери знову тверді (updateSolidity)
     if (impact > 6) this.view.stands.react('gasp');
     if (impact > 12) { this.hitStop = Math.max(this.hitStop, 0.045); if (this.shotBy !== 0) this.markMoment('post'); }   // мить завмирання: дзвін штанги; момент — у підбірку тайму
     audio.post(impact); this.view.ball.squash(nx, nz, 0.3);
@@ -466,6 +467,7 @@ export class Match {
       if (speed > 24) { if (hy < 0.6) a.p.block(); else a.p.hit(); }   // голова лише вище ~1.4 (гілка вгорі): низький м'яч блокує ногою, на рівні тіла приймає корпусом
       else if (speed > 6 && a.p.mode === 'idle' && !a.p.kicking) a.p.receive(this.ball.y, speed);   // зачепив, але не втримав — рух ногою/тілом видно
     }
+    if (!a.isGK) this.deflT = this.time;                               // рикошет від польового: воротар бачить новий напрям за пів реакції (updateKeepers)
     v.ball.squash(nx, nz, 0.22); this.planT = 0; this.deflectId = this.shotId;   // м'яч змінив курс — прогноз перерахувати одразу; партнери того, хто бив, знову тверді
     return false;
   }
@@ -2350,7 +2352,7 @@ export class Match {
       this.floatAt(a.p.x, a.p.z, 'ПІДКАТ! ВИБИВ', a.side > 0 ? 'good' : 'warn');
       audio.thud(); this.game.addTrauma(0.3); this.hitStop = Math.max(this.hitStop, 0.04); v.ball.squash(nx, nz, 0.3); if (a.side > 0) this.addXp(a, 25);
       v.particles.burst(a.p.x, 0.3, a.p.z, 12, 5, 0.6, 0.3, ['#4f7d3a', '#8fb98a', '#f1efe8'], 10, 0.8);
-      this.shotBy = 0; this.protectT = 0; this.planT = 0;
+      this.shotBy = 0; this.protectT = 0; this.planT = 0; this.deflT = this.time;
     } else {
       this.floatAt(a.p.x, a.p.z, 'ПРОСКОЧИВ', 'good'); audio.wall(0, 6);
     }
@@ -2504,7 +2506,8 @@ export class Match {
       // бачив замах (суперник цілився чи вже б'є) — стоїть «готовим» на носках і реагує на ~третину швидше; удар
       // зненацька (рикошет, з ходу) — повний час реакції
       // суперник вивчив наш улюблений кут: удар туди воротар чекає й реагує швидше, в інший — трохи повільніше (він «грав» туди)
-      const ch = side < 0 ? this.spec.scout.corner : 0, cz0 = ch ? this.plan.cross(g.p.x, -side, this._cr).z - g.p.z : 0;
+      // без перетину (t < 0) cross лишає z з минулого виклику: тоді поправки за кутом немає
+      const ch = side < 0 ? this.spec.scout.corner : 0, c0 = ch ? this.plan.cross(g.p.x, -side, this._cr) : null, cz0 = c0 && c0.t > 0 ? c0.z - g.p.z : 0;
       const ant = ch && Math.abs(cz0) > 0.4 ? (Math.sign(cz0) === Math.sign(ch) ? 1 - 0.3 * Math.abs(ch) : 1 + 0.15 * Math.abs(ch)) : 1;
       const ready = this.time - (g.setAt ?? -9) < 1.2, rt = g.p.reactT * (ready ? 0.65 : 1) * ant;
       if (this.time - g.seenT < rt || g.froze) continue;
@@ -2520,6 +2523,9 @@ export class Match {
       if (cg.t <= 0 && (sp >= 16 || Math.abs(cr.z) > G + 0.7)) continue;
       // над ним, але м'яч ще опускається у ворота за спиною (парашут, удар здалеку, коли воротар вийшов) — відступає (team.js),
       // а рішення приймає вже з нової позиції; над поперечиною не реагує. Ще не опускається чи він уже біля лінії — до самої поперечини: долонею чи стрибком
+      // рикошет від польового гравця чи штанги вже після того, як воротар побачив удар: новий напрям він теж бачить не миттєво,
+      // а за половину своєї реакції (рикошет ближче й помітніший за сам удар)
+      if (this.deflT > g.seenT && this.time - this.deflT < 0.5 * g.p.reactT) continue;
       if (cr.y > PITCH.GOAL_H || (cr.y > 2.45 && (g.p.x + side * L) * side > 1.6 && cg.t > 0 && cg.y < cr.y)) continue;
       // воротар читає удар не ідеально: точка зсунута тим більше, чим слабший «Інтелект» і чим раніше він вирішує.
       // У польоті руки виправляють помилку за тим, що він бачить, — якщо є шанс, дотягується
