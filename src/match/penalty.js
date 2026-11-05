@@ -193,8 +193,8 @@ export class Penalties {
     const m = this.m, goal = this.out === 'goal', me = this.me;
     (me ? this.res.me : this.res.opp).push(goal);
     this.dots();
-    const msg = { goal: 'ГОЛ!', save: me ? 'ВОРОТАР ВІДБИВ!' : 'ТИ ЗАХИСТИВ ВОРОТА!', miss: 'МИМО!', post: 'ШТАНГА!' }[this.out];
-    m.ui.hud.goal(msg, '', goal ? (me ? 'me' : 'opp') : (me ? 'opp' : 'me'));
+    const inf = this.kicker.info, ga = this.res.me.filter(Boolean).length, gb = this.res.opp.filter(Boolean).length;
+    m.ui.hud.goal({ pen: this.out, mine: me, name: inf ? String(inf.name).split(' ').slice(-1)[0] : '', min: 'удар ' + ((this.k >> 1) + 1), series: ga + ':' + gb });
     const kp = this.kicker.p;
     if (goal) { kp.vx = -this.dir * 6.5; kp.vz = (Math.random() < 0.5 ? -1 : 1) * 3.2; audio.goal(); m.view.stands.react('goal', { mine: me, dur: 3.4 }); m.game.addTrauma(0.35); }
     else { audio.save(); kp.setMode('sad', 2.2); m.view.stands.react(this.out === 'save' || this.out === 'post' ? 'gasp' : 'groan'); }

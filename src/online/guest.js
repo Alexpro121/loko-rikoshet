@@ -9,7 +9,12 @@
 import * as THREE from 'three';
 import { PITCH, PHYS, shotSkill } from '../config.js';
 import { audio, vibrate } from '../core/audio.js';
-import { skillOf } from '../state/squad.js';
+import { skillOf, ovr } from '../state/squad.js';
+import { GOAL_KEYS } from '../ui/hud.js';
+import { RingTone } from '../match/ring.js';
+import { shotQuality } from '../match/brain.js';
+// гравці господаря й гостя для shotQuality (потрібні лише .p.x і .p.z): кільце гостя рахується локально
+const _host = Array.from({ length: 11 }, () => ({ p: { x: 0, z: 0 } })), _mine = Array.from({ length: 11 }, () => ({ p: { x: 0, z: 0 } }));
 import { decode, NODES, EXPR, PER, BALL, PHASES, F } from './codec.js';
 import { ONLINE_AIM, plain } from './profile.js';
 import { pathPoint } from '../core/camera.js';
@@ -32,6 +37,7 @@ export class GuestMatch {
     this.nodes = this.view.players.map((p) => NODES.map((k) => p[k]));
     this.nP = this.view.players.length; this.N = this.nP * PER + BALL;
     this.ball = { x: 0, z: 0, vx: 0, vz: 0 };            // дзеркальний — для камери
+    this.ringTone = new RingTone();
     this.bp = { x: 0, z: 0, vx: 0, vz: 0, y: 0 };         // справжній
     this.shot = { dirx: 1, dirz: 0, power: 0, valid: false, vx: 0, vz: 0 };
     this.joy = { dx: 0, dy: 0, m: 0 }; this.anchor = { x: 0, y: 0 }; this.ptr = { x: 0, y: 0 }; this.anchorW = { x: 0, z: 0 }; this.curW = { x: 0, z: 0 }; this.scr = { x: 0, y: 0 };
@@ -51,12 +57,13 @@ export class GuestMatch {
     this.sk = spec.oppSquad.map((e) => skillOf(e));
     this.frames = []; this.pool = []; this.evq = []; this.off = null; this.jit = 0; this.dly = 140; this.dlyT = 140; this.gap = 50; this.prevT = 0;
     this.lastRx = performance.now(); this.lastSeq = 0; this.time = 0; this.camSeq = 0;
-    this.phase = 'intro'; this.flags = 0; this.bs = 'idle'; this.aiming = false; this.slow = false; this.takerI = -1; this.danger = 0;
+    this.phase = 'intro'; this.flags = 0; this.bs = 'idle'; this.aiming = false; this.slow = false; this.takerI = -1; this.danger = 0; this.owner = 0; this.ringT = 0; this.ringQ = 0; this.ringTone.reset();
     this.hdr = null; this.ov = null; this.cv = null; this.beatT = 0; this.aimSent = 0; this.lagShown = false; this.lagSec = 0;
     this.silT = 0; this.hostHidden = false; this.decor = false; this.overT = 0; this.overMin = 0; this.sentAt = 0;
     const hud = this.ui.hud;
     hud.show(hudSpec); hud.setScore(0, 0); hud.setTime('00:00', false, '1-й тайм', null); hud.addedTime(null); hud.warn(null); hud.hint(null); hud.setCard(null); hud.cine(true);
-    hud.banner(hudSpec.club.name, 'Онлайн-матч · ти граєш у гостях', 'Суперник: ' + hudSpec.club.name);
+    const pw = (q) => Math.round(q.reduce((t, e) => t + ovr(e), 0) / q.length);
+    hud.matchday(hudSpec, { pw: [pw(spec.oppSquad), pw(spec.mySquad)] });   // свій склад гостя — oppSquad (spec господаря)
     audio.music('match'); audio.crowd(0.7);
     g.renderer.toneMappingExposure = v.exposure || 1.1;
     g.flipCam = true; g.snapCamera();
@@ -133,8 +140,8 @@ export class GuestMatch {
       case 'combo': hud.combo(clamp(+a[0] | 0, 0, 99)); break;
       case 'clearGoal': hud.clearGoal(); break;
       case 'cine': hud.cine(!!a[0], a[1] == null ? null : String(a[1])); break;
-      case 'setSignal': hud.setSignal(-(+a[0] || 0)); break;
-      case 'scored': if (a[0]) hud.scored({ ...a[0], name: String(a[0].name), min: String(a[0].min), mine: !a[0].mine }); break;
+      case 'setSignal': this.owner = -(+a[0] || 0); hud.setSignal(this.owner); break;   // owner з нашого погляду: кільце загрози (ring.js)
+      case 'scored': if (a[0] && typeof a[0] === 'object') hud.scored({ name: plain(a[0].name || '').slice(0, 24), min: plain(a[0].min || '').slice(0, 8), mine: !a[0].mine, og: !!a[0].og }); break;
       case 'setCard': {                                                // картка йде в innerHTML — лише перевірені значення
         const c = a[0];
         if (!c || typeof c !== 'object') { hud.setCard(null); break; }
@@ -144,8 +151,10 @@ export class GuestMatch {
         break;
       }
       case 'goal': {
-        const ours = a[2] !== 'me';                                     // господар пропустив — забили ми
-        hud.goal(ours ? 'ГОЛ!' : 'ПРОПУСТИЛИ', ours ? 'у сітці!' : 'суперник забив', ours ? 'me' : 'opp');
+        const d = a[0]; if (!d || typeof d !== 'object' || d.pen) break;
+        const ours = !d.mine;                                           // господар пропустив — забили ми (і автогол його гравця теж наш)
+        hud.goal({ mine: ours, og: !!d.og, gk: !!d.gk, name: plain(d.name || '').slice(0, 24), min: plain(d.min || '').slice(0, 8), ast: plain(d.ast || '').slice(0, 24),
+          tag: GOAL_KEYS.tag.includes(d.tag) ? d.tag : '', late: GOAL_KEYS.late.includes(d.late) ? d.late : '', extra: /^РИКОШЕТ ×[\d.]{1,4}$/.test(d.extra) ? d.extra : '' });
         if (stale) break;                                               // гол забито, поки вкладка була у фоні: лише напис
         if (ours) { this.game.addTrauma(0.6); this.game.fovKick(4); vibrate([30, 40, 60]); this.ui.flash('rgba(255,255,255,.4)'); } else vibrate(80);
         break;
@@ -153,7 +162,7 @@ export class GuestMatch {
       case 'scoreCard': {
         const d = a[0]; if (!d) break;
         const NOTE = { 'Перемога': 'Поразка', 'Поразка': 'Перемога' };
-        const sc = (Array.isArray(d.scorers) ? d.scorers : []).slice(0, 40).map((s) => ({ name: plain(s && s.name).slice(0, 24), min: plain(s && s.min).slice(0, 8), mine: !(s && s.mine) }));
+        const sc = (Array.isArray(d.scorers) ? d.scorers : []).slice(0, 40).map((s) => ({ name: plain(s && s.name).slice(0, 24), min: plain(s && s.min).slice(0, 8), mine: !(s && s.mine), og: !!(s && s.og) }));
         hud.scoreCard({ title: plain(d.title || '').slice(0, 40), me: clamp(+d.opp || 0, 0, 99), opp: clamp(+d.me || 0, 0, 99), pens: null, final: !!d.final, note: plain(NOTE[d.note] || d.note || '').slice(0, 40), scorers: sc }, clamp(+a[1] || 3.5, 0.5, 12));
         break;
       }
@@ -258,13 +267,22 @@ export class GuestMatch {
     let dm = 1e9; const P = v.players;
     for (let i = 1; i < 11; i++) { const r = P[i].root.position, d = (r.x - b.x) * (r.x - b.x) + (r.z - b.z) * (r.z - b.z); if (d < dm) dm = d; }
     this.danger = turn ? clamp(1 - (Math.sqrt(dm) - 3) / 15, 0, 1) : 0;
+    // кільце рахується тут, локально, тим самим RingTone, що й у господаря: гість атакує −x, господар +x (координати сцени господаря)
+    if (this.bs !== 'aim') {
+      const mode = this.bs === 'ready' ? 1 : this.owner < 0 && this.phase === 'play' ? -1 : 0;
+      if ((this.ringT -= dt) <= 0) {
+        this.ringT = 0.16;
+        for (let i = 0; i < 11; i++) { const h0 = P[i].root.position, g0 = P[11 + i].root.position; _host[i].p.x = h0.x; _host[i].p.z = h0.z; _mine[i].p.x = g0.x; _mine[i].p.z = g0.z; }
+        this.ringQ = mode > 0 ? shotQuality(b.x, b.z, -1, _host).q : mode < 0 ? shotQuality(b.x, b.z, 1, _mine).q : 0;
+      }
+      if (mode > 0) v.band.visible = false;
+      this.ringTone.update(v.ring, dt, this.phase === 'play' ? mode : 0, this.danger, this.ringQ, b.x, b.z, this.time);
+    }
     if (this.bs === 'ready') {
-      const pr = this.danger, k = 1.15 + Math.sin(this.time * (5 + pr * 8)) * 0.12;
-      v.ring.visible = true; v.band.visible = false; v.ring.material.color.setHSL(0.36 * (1 - pr * pr), 0.55 + 0.3 * pr, 0.65 - 0.1 * pr);
-      v.ring.position.set(b.x, 0.07, b.z); v.ring.scale.setScalar(k);
+      const pr = this.danger;
       const w = this.gkWait ? 'СУПЕРНИКИ ВІДХОДЯТЬ…' : pr > 0.62 ? 'ТИСК! БИЙ ЗАРАЗ' : null;
       if (!this.lagShown) hud.warn(w);
-    } else if (this.bs === 'idle') { v.ring.visible = false; if (!this.lagShown && !this.gkWait) hud.warn(h.flags & F.AUTO && this.phase === 'play' ? 'ГРАЄ ШІ · ТОРКНИСЬ, ЩОБ КЕРУВАТИ' : null); }
+    } else if (this.bs === 'idle') { if (!this.lagShown && !this.gkWait) hud.warn(h.flags & F.AUTO && this.phase === 'play' ? 'ГРАЄ ШІ · ТОРКНИСЬ, ЩОБ КЕРУВАТИ' : null); }
     if (turn && this.slow) { this.beatT -= dt; if (this.beatT <= 0) { this.beatT = 0.55 + (1 - this.danger) * 0.5; audio.beat(this.danger); } }
   }
 
