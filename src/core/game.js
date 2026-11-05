@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { StateMachine } from './stateMachine.js';
 import { audio } from './audio.js';
 import { S, commit } from '../state/save.js';
-import { COL, matchSpec } from '../config.js';
+import { COL, matchSpec, PITCH } from '../config.js';
 import { stadiumTier } from '../state/economy.js';
 import { Island } from '../graphics/island.js';
 import { Particles } from '../graphics/particles.js';
@@ -330,6 +330,8 @@ export class Game {
     const cv = m.celebView ? m.celebView() : null, st = S.settings;
     _co.asp = this.w / this.h; _co.preset = st.camMode; _co.dist = st.camDist; _co.tilt = st.camTiltOff; _co.follow = st.camFollow; _co.snap = snap;
     cd.update(dt, this.camI, cv, _co);
+    // звук: де м'яч щодо камери. У гостя м'яч і cd обидва дзеркальні, тож панорама збігається з тим, що він бачить
+    if (m.ball) audio.track(m.ball.x, m.ball.z, m.ball.vx || 0, m.ball.vz || 0, cd.px, cd.pz, cd.tx - cd.px, cd.tz - cd.pz, PITCH.L);
     if (m.view && m.view.dense) m.view.fitFog(cd.d);
     const s = st.camShake === false ? 0 : this.trauma * this.trauma, t = this.time;
     const sx = (Math.sin(t * 23) + 0.5 * Math.sin(t * 37 + 2)) * 0.4 * s, sy = (Math.sin(t * 29 + 1) + 0.5 * Math.sin(t * 41)) * 0.3 * s;   // м'який гул, а не дрібне тремтіння

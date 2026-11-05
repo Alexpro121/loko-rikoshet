@@ -72,7 +72,7 @@ if (!process.argv.includes('--check')) {
   const norm = (s) => s.replace(/\r\n/g, '\n');
   if (!fs.existsSync(OUT) || norm(fs.readFileSync(OUT, 'utf8')) !== norm(map)) errs.push(`${OUT} застарів: запусти npm run docs:map`);
   const tree = treePaths();
-  for (const f of files) if (!tree.has(f)) errs.push(`${TREE}: немає файлу ${f}`);
+  for (const f of files) if (!tree.has(f) && !/\.mp3$/.test(f)) errs.push(`${TREE}: немає файлу ${f}`);   // записи звуку описує src/audio/SOURCES.md
   for (const p of tree) if (!files.includes(p) && !files.some((f) => f.startsWith(p + '/'))) errs.push(`${TREE}: файлу вже нема: ${p}`);
   const re = /`((?:src|public|store|docs|scripts|\.github)\/[^`\s:*]+)|\]\(((?:src|public|store|docs|scripts|\.github)\/[^)\s:#]+)|\]\(\.\.\/((?:src|public|store|docs|scripts)\/[^)\s:#]+)/g;
   for (const d of DOCS) {

@@ -398,7 +398,7 @@ export class Match {
     this.deflectId = this.shotId;                                       // м'яч відскочив: це вже не удар, партнери знову тверді (updateSolidity)
     if (impact > 6) this.view.stands.react('gasp');
     if (impact > 12) { this.hitStop = Math.max(this.hitStop, 0.045); if (this.shotBy !== 0) this.markMoment('post'); }   // мить завмирання: дзвін штанги; момент — у підбірку тайму
-    audio.wall(5, impact); this.view.ball.squash(nx, nz, 0.3);
+    audio.post(impact); this.view.ball.squash(nx, nz, 0.3);
     this.view.particles.burst(this.ball.x, 0.6, this.ball.z, 8, 6, 0.5, 0.22, ['#ffffff', '#d9dcd8'], 10, 0.6);
     this.game.addTrauma(0.18);
     this.floatAt(this.ball.x, this.ball.z, 'ШТАНГА!', 'warn');
@@ -3015,7 +3015,7 @@ export class Match {
 
   // ------------------------------------------------------------------ завершення
   pause() { if (this.link) return; if (this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens' || this.phase === 'break') { this.prevPhase = this.phase; this.phase = 'paused'; this.cancelAim(); audio.crowd(0.2); } }
-  resume() { if (this.phase === 'paused') { this.phase = this.prevPhase; audio.crowd(this.slow ? 0.18 : 0.7); } }
+  resume() { if (this.phase === 'paused') { this.phase = this.prevPhase; audio.crowd(0.7); } }
   isPlaying() { return this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens' || this.phase === 'break'; }
 
   /** Після фінального свистка: переможці збігаються до свого воротаря (кожен на своє місце довкола) і радіють; решта стоїть. */

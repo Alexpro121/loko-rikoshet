@@ -349,7 +349,7 @@ export class Penalties {
         const nx = dx / d, ny = dy / d, nz = dz / d;
         x = c.cx + nx * rr; y = c.cy + ny * rr; z = c.cz + nz * rr;
         const sp = Math.hypot(vx, vy, vz);
-        bounce(nx, ny, nz, 0.72, 0.04, (vn) => { audio.wall(0, Math.min(30, vn * 1.2)); m.game.addTrauma(0.22); v.particles.burst(c.cx, c.cy, c.cz, 8, 4, 0.4, 0.18, ['#fff', '#ddd'], 10, 0.6); v.ball.squash(nx, nz, 0.3); });
+        bounce(nx, ny, nz, 0.72, 0.04, (vn) => { audio.post(Math.min(30, vn * 1.2)); m.game.addTrauma(0.22); v.particles.burst(c.cx, c.cy, c.cz, 8, 4, 0.4, 0.18, ['#fff', '#ddd'], 10, 0.6); v.ball.squash(nx, nz, 0.3); });
         this.postHit = true; this.curve = false;
         return sp;
       }
@@ -423,7 +423,7 @@ export class Penalties {
     else if (this.gkTouch && this.bvx * dir < 0 && depth < -0.6 && Math.hypot(this.bvx, this.bvz) > 2) out = 'save';
     if (!out) return;
     this.out = out; this.arrived = true; this.tArr = this.t;
-    if (out === 'goal') { this.m.view.ball.squash(dir, 0, 0.32); audio.wall(0, 12); this.m.view.particles.burst(this.gx + dir * 1.5, y, b.z, 10, 4, 0.6, 0.18, ['#ffffff', '#cde'], 10, 0.5); }
+    if (out === 'goal') { this.m.view.ball.squash(dir, 0, 0.32); audio.net(1); this.m.view.particles.burst(this.gx + dir * 1.5, y, b.z, 10, 4, 0.6, 0.18, ['#ffffff', '#cde'], 10, 0.5); }
     this.announced = true; this.announce();
   }
 
