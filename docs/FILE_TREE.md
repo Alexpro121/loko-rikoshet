@@ -38,22 +38,28 @@ GAME-LOKO/
 │   │   └── telegram.js              Telegram Mini App: SDK, повний екран, поворот, «назад», вібрація, запрошення, хмарна копія
 │   ├── graphics/                    3D-вигляд; логіки матчу тут немає
 │   │   ├── ball.js                  BallView: видимий м'яч
+│   │   ├── boards.js                Boards: LED-борти, атлас кадрів партнерів і подій, шейдер переходів, режисер cue()
 │   │   ├── cinefx.js                CineFX: кінофокус у кат-сценах
 │   │   ├── gait.js                  Gait: процедурна хода (стопи, рівновага, ритм)
 │   │   ├── island.js                Island: острів у меню, стадіон за ярусами, потяг, кубки
 │   │   ├── logo.js                  одноразове завантаження емблеми для текстур
 │   │   ├── particles.js             Particles: пул частинок
+│   │   ├── partners/                офіційні логотипи партнерів для бортів, з Wikimedia Commons
+│   │   │   ├── kelme.svg            Kelme: лапа й напис (дописано width/height)
+│   │   │   ├── sense.svg            Sense Bank
+│   │   │   └── uz.svg               Укрзалізниця, знак «УЗ»
 │   │   ├── pitch.js                 buildPitch: газон, борти, ворота, сітки
 │   │   ├── player.js                Player: модель гравця, усі анімації в animate(), IK, пози воротаря
 │   │   ├── ragdoll.js               Ragdoll: падіння на точках Верле
 │   │   ├── stands.js                Stands: трибуни, глядачі, реакції натовпу, банери
 │   │   ├── surround.js              buildSurround: оточення поза трибунами
-│   │   ├── textures.js              canvas-текстури: атлас гравця, газон, борти, сітка, тінь, вивіски
+│   │   ├── textures.js              canvas-текстури: атлас гравця, газон, сітка, тінь, вивіски
 │   │   ├── train.js                 воксельні локомотив і вагони
 │   │   ├── tunnel.js                buildTunnel: тунель виходу команд
 │   │   ├── voxel.js                 VoxelBuilder: куби → один меш; shade, сідований rng
 │   │   └── weather.js               Weather: дощ і сніг
-│   ├── lab/                         лабораторія гравця, окрема сторінка
+│   ├── lab/                         лабораторія гравця й перегляд бортів, окремі сторінки
+│   │   ├── boards-lab.js            перегляд LED-бортів: камери, кнопки подій, рівні деталізації, window.boards
 │   │   ├── lab.css                  стилі лабораторії
 │   │   └── lab.js                   перегляд моделі й анімацій, заміри ходи, window.lab
 │   ├── match/                       правила й ШІ
@@ -110,9 +116,10 @@ GAME-LOKO/
 ├── CLAUDE.md                        старт для агента: правила й небезпечні місця
 ├── README.md                        опис гри, запуск, правила, онлайн
 ├── index.html                       сторінка гри: canvas #gl, контейнер #ui, підказка повернути екран
+├── boards.html                      сторінка перегляду LED-бортів
 ├── lab.html                         сторінка лабораторії гравця
 ├── package-lock.json                зафіксовані версії залежностей
 ├── package.json                     скрипти; залежності three, peerjs, шрифт Rubik; збирач vite
 ├── twa-manifest.json                обгортка для Google Play; домен ще заглушка ВАШ_ДОМЕН
-└── vite.config.js                   збірка: сторінки main і lab, окремий чанк three, base ./
+└── vite.config.js                   збірка: сторінки main, lab і boards, окремий чанк three, base ./
 ```

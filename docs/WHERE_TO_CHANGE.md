@@ -104,6 +104,8 @@
 | Завдання | Де |
 |---|---|
 | Поле, борти, ворота, сітка | `buildPitch` у `src/graphics/pitch.js`, рух сітки: `netBulge` |
+| Реклама й кадри на LED-бортах | малюнки `PAINT` і `LIVE`, ротація `POOL` у `src/graphics/boards.js`; перегляд у `boards.html` |
+| Як борти реагують на гру | `Boards.cue` і `Boards.step`; виклики `boards.cue` у `src/match/match.js` і `penalty.js` |
 | Трибуни й реакції глядачів | `src/graphics/stands.js` |
 | Час доби й світло | `MatchView.setEnv` у `src/match/view.js` |
 | Дощ і сніг | `src/graphics/weather.js` |
