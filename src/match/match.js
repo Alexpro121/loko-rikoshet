@@ -138,7 +138,7 @@ export class Match {
     this.game.renderer.toneMappingExposure = this.view.exposure || 1.1;
     this.introTgt = [this.mine, this.opp].map((arr) => arr.map((a) => ({ x: a.p.x, z: a.p.z })));
     this.introFlags = { wave: false, clap: false, cheer: false, roar: false, anthem: false, hs: false, fans: false };
-    this.rp = null; this.hl = null; this.clips = []; this.moments = []; this.walk.start(spec.club, spec.home);
+    this.rp = null; this.hl = null; this.clips = []; this.moments = []; this.walk.start(spec.club, spec.home); this.view.pitch.boards.cue('intro');
     for (const a of this.actors) { a.lane = null; a._st = 0; a.post = null; a._jr = Math.random(); a.p.gaze = true; a._ix = a._iz = undefined; }
     this.introEndAt = null; this.skipEnd = false; this._cx = undefined; this._camT = undefined; this.brk = null; this.endPairs = null; this.replay.clear();
     this.ui.hud.cine(true);
@@ -398,6 +398,7 @@ export class Match {
   onPost(nx, nz, impact) {
     this.deflectId = this.shotId; this.deflT = this.time;               // м'яч відскочив: це вже не удар, партнери знову тверді (updateSolidity)
     if (impact > 6) this.view.stands.react('gasp');
+    if (impact > 12) this.view.pitch.boards.cue('chance', { x: this.ball.x });
     if (impact > 12) { this.hitStop = Math.max(this.hitStop, 0.045); if (this.shotBy !== 0) this.markMoment('post'); }   // мить завмирання: дзвін штанги; момент — у підбірку тайму
     audio.post(impact); this.view.ball.squash(nx, nz, 0.3);
     this.view.particles.burst(this.ball.x, 0.6, this.ball.z, 8, 6, 0.5, 0.22, ['#ffffff', '#d9dcd8'], 10, 0.6);
@@ -460,6 +461,7 @@ export class Match {
       a.p.parry(); audio.thud(); if (speed > 18) this.view.stands.react('gasp');
       { const k = clamp(speed / 25, 0.3, 1.4); a.p.impulse(-0.9 * k, 2.0 * k, 0, -3 * k, -3 * k, 0.7 * k); if (speed > 22) this.game.addTrauma(0.05 + 0.04 * k); }   // м'яч б'є в руки чи тіло — тіло «віддає»
       if (speed > 20 && shotAt) this.markMoment('save');   // сильний удар відбито — у підбірку моментів тайму
+      if (speed > 18 && shotAt) this.view.pitch.boards.cue('chance', { x: a.p.x });   // і на бортах за цими воротами
       if (shotAt) this.floatAt(a.p.x, a.p.z, a.side > 0 ? 'ВРЯТУВАВ!' : 'ВОРОТАР!', a.side > 0 ? 'good' : 'warn');
       if (legBlock) { this.legDeflect(a, nx, nz); v.ball.squash(nx, nz, 0.22); this.planT = 0; this.deflectId = this.shotId; return true; }   // відскік порахували самі, world його не повторює
     } else {
@@ -1343,6 +1345,7 @@ export class Match {
     const scName = !byTeam ? 'Автогол' : sc && sc.info ? String(sc.info.name).split(' ').slice(-1)[0] : (mine ? (spec.home ? spec.home.name : 'Локомотив') : spec.club.name);
     this.scorers.push({ mine, name: scName, min: this.minuteLabel() });
     this.ui.hud.scored({ mine, name: scName, min: this.minuteLabel() });
+    v.pitch.boards.cue('goal', { home: mine, x: gx, a: this.score.me, b: this.score.opp, who: scName, min: this.minuteLabel() });   // борти: лише вигляд
     this.ui.hud.setScore(this.score.me, this.score.opp);
     this.ts = 0.28;
     this.game.sm.go('GOAL', { mine });
@@ -1373,6 +1376,7 @@ export class Match {
 
   // ------------------------------------------------------------------ головний цикл
   update(rawDt) {
+    this.view.pitch.boards.update(rawDt);                              // LED-борти живуть справжнім часом: приціл і пауза їх не сповільнюють
     if (this.phase === 'pens') { const pd = this.pens.update(rawDt); this.syncView(pd); this.pens.post(); return; }
     if (this.phase === 'paused') { if (!this.rp) this.syncView(0); return; }   // у повторі кадр уже виставив applyClip: живі пози його не перезаписують
     if (this.phase === 'break') { this.updateBreak(rawDt); return; }
@@ -1723,7 +1727,7 @@ export class Match {
     for (const a of [...this.mine, ...this.opp]) { a._ix = undefined; a._iz = undefined; }
     this.ui.hud.cine(false); this.setGaze(false); this.walk.hide();
     for (const a of this.actors) a.p.root.visible = true;
-    audio.crowd(0.7); this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true);
+    audio.crowd(0.7); this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true); this.view.pitch.boards.cue('play');
     // онлайн: розводить гість — підказка про приціл не нам
     this.ui.hud.hint(S.tutorial || (this.link && this.bs === 'held') ? null : (this.ui.useJoy() ? 'Час сповільнено: тягни джойстик у бік удару й відпусти' : 'Час сповільнено: відтягни від м’яча й відпусти'));
   }
@@ -1787,7 +1791,7 @@ export class Match {
     if (this.phase === 'pens' || this.phase === 'end' || this.phase === 'idle') return;
     this.cancelAim(); this.penRes = null; this.timeUp = false;
     this.clearCine();
-    this.pens = new Penalties(this); this.pens.start();
+    this.pens = new Penalties(this); this.pens.start(); this.view.pitch.boards.cue('pens');
   }
   /** Що важливо для ігрової камери (core/camera.js): м'яч, хто з ним, адресат паса, куди цілимось. Наші атакують +X. */
   camInfo(o) {
@@ -1841,7 +1845,7 @@ export class Match {
   /** Програти кліпи один за одним (стан гри відкладено; після — повернуто як був), потім done(). */
   playClips(list, title, done) {
     this.hl = { list, i: -1, title, done };
-    this.replay.saveLive();
+    this.replay.saveLive(); this.view.pitch.boards.cue('replay');
     this.nextClip();
   }
   nextClip() {
@@ -1870,7 +1874,7 @@ export class Match {
   }
   endClips() {
     const H = this.hl;
-    this.replay.restoreLive(); this.rp = null; this.hl = null; this.world.netPush = null;
+    this.replay.restoreLive(); this.rp = null; this.hl = null; this.world.netPush = null; this.view.pitch.boards.cue('replayEnd');
     this.ui.flash('rgba(255,255,255,.35)');
     if (H && H.done) H.done();
   }
@@ -1901,7 +1905,7 @@ export class Match {
     this.actors.forEach((a, i) => { a.place(from[i].x, from[i].z); if (!a.isGK && Math.random() < 0.5) a.p.gesture(1.8, [1, 2, 5, 6, 7, 8, 11, 12, 16][(Math.random() * 9) | 0]); });
     this.brk = { t: 0, n }; this.setGaze(true);
     this.phase = 'break';
-    this.view.stands.react('clap', { dur: 3 });
+    this.view.stands.react('clap', { dur: 3 }); this.view.pitch.boards.cue('break', { n, a: this.score.me, b: this.score.opp });
     this.ui.hud.cine(true, n === 2 ? 'ПЕРЕРВА' : null);
     this.takeMoments();
     if (this.clips.length) this.brk.hlAt = 3.4;                       // спершу табло з рахунком тайму, потім підбірка моментів
@@ -1929,7 +1933,7 @@ export class Match {
   endBreak() {
     this.actors.forEach((a, i) => { const to = this.brkTo[i]; a.place(to.x, to.z); a.p.yaw = to.yaw; });
     this.brk = null; this.phase = 'play'; this.readyT = 0; this.replay.clear(); this.setGaze(false);
-    this.ui.hud.cine(false); audio.whistle(true);
+    this.ui.hud.cine(false); audio.whistle(true); this.view.pitch.boards.cue('play');
   }
   breakCam() {
     const t = this.brk.t;
@@ -2982,7 +2986,7 @@ export class Match {
     }
     v.updateShadows(rx, rz, h);
     this.netBulge(dt);
-    v.stands.update(dt); v.weather.update(dt); v.surround.update(dt); v.pitch.decals.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
+    v.stands.update(dt); v.weather.update(dt); v.surround.update(dt); v.pitch.decals.update(dt);
     v.particles.update(dt);
     // кільце володіння — лише в живій грі (не в інтро, перерві, пенальті чи на фіналі)
     const live = (this.phase === 'paused' ? this.prevPhase : this.phase) === 'play';
@@ -3104,6 +3108,7 @@ export class Match {
     }
     this.assignEndRoles();
     if (win) this.view.stands.react('wave'); else if (outcome === 'loss') this.view.stands.react('groan');
+    this.view.pitch.boards.cue('end', { res: outcome, a: me, b: opp });
     if (this.holder) this.holder.manual = false;
     if (this.spec.online) {                                        // онлайн не чіпає кар'єру: нагороди — онлайн-клубу (session.js)
       this.result = { online: true, outcome, me, opp, spec, scorers: this.scorers.slice() };

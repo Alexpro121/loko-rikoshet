@@ -22,6 +22,7 @@ const GK_THROW = 1.25, MATE_R = 0.5;                    // MATE_R — радіу
 const STALE_MS = 1500;                                  // звук і частинки, старші за це (вкладка була у фоні), вже не грають
 const NET_SILENCE = 32;                                 // с показу гри без жодного кадру при живому з'єднанні: господар згорнув гру чи завис, матч не зараховуємо
 const CROWD_OK = ['goal', 'groan', 'gasp', 'wave', 'clap', 'flash', 'miss'];
+const BOARD_OK = new Set(['play', 'goal', 'chance', 'replay', 'replayEnd', 'break', 'end']);   // події LED-бортів від господаря (Boards.cue)
 const SWAP_SND = { goal: 'concede', concede: 'goal', win: 'lose', lose: 'win' };
 const SND_OK = new Set(['kick', 'wall', 'post', 'net', 'pass', 'save', 'whistle', 'horn', 'goal', 'concede', 'bell', 'rumble', 'slide', 'clap', 'thud', 'crowd', 'win', 'lose']);
 
@@ -44,7 +45,7 @@ export class GuestMatch {
   start(spec, hudSpec) {
     const v = this.view, g = this.game;
     this.solo.exit();
-    v.setup(spec, '433', spec.mySquad, spec.oppSquad);
+    v.setup(spec, '433', spec.mySquad, spec.oppSquad); v.pitch.boards.cue('intro');   // інтро гість починає сам: господар підключає пересилання вже після свого старту
     this.ref = null;                                                    // поза спокою — від господаря (повідомлення ref)
     this.solo.walk.hide(); v.particles.clear(); this.solo.world.netPush = null;
     for (const p of v.players) p.root.visible = false;               // до першого кадру нікого не видно
@@ -121,6 +122,15 @@ export class GuestMatch {
     }
     if (e[0] === 'squash') { if (Number.isFinite(e[1]) && Number.isFinite(e[2]) && Number.isFinite(e[3])) v.ball.squash(clamp(e[1], -1, 1), clamp(e[2], -1, 1), clamp(e[3], 0, 0.4)); return; }
     if (e[0] === 'trauma') { if (Number.isFinite(e[1])) this.game.addTrauma(clamp(e[1], 0, 0.4)); return; }
+    // борти: стадіон господаря, тож не дзеркалимо (як трибуни); чужі дані з мережі чистимо до чисел і коротких рядків
+    if (e[0] === 'board') {
+      if (!BOARD_OK.has(e[1])) return;
+      const r = e[2] && typeof e[2] === 'object' ? e[2] : {}, o = {};
+      for (const k of ['x', 'a', 'b', 'n']) if (Number.isFinite(r[k])) o[k] = clamp(r[k], -99, 99);
+      if (typeof r.home === 'boolean') o.home = r.home;
+      for (const k of ['who', 'min', 'res']) if (typeof r[k] === 'string') o[k] = r[k].slice(0, 24);
+      v.pitch.boards.cue(e[1], o); return;
+    }
     if (e[0] !== 'hud' || !Array.isArray(e[2])) return;
     const n = e[1], a = e[2];
     switch (n) {
@@ -170,7 +180,7 @@ export class GuestMatch {
     while (this.evq.length && (this.off === null || this.evq[0].ht <= rt)) {
       const q = this.evq.shift(), e = q.e;
       const stale = rt - q.ht > STALE_MS;
-      if (stale && Array.isArray(e) && (e[0] === 'fx' || e[0] === 'crowd' || e[0] === 'squash' || e[0] === 'trauma' || (e[0] === 'snd' && e[1] !== 'crowd'))) continue;   // рівень трибун — стан, решта — миттєві ефекти
+      if (stale && Array.isArray(e) && (e[0] === 'fx' || e[0] === 'crowd' || e[0] === 'squash' || e[0] === 'trauma' || (e[0] === 'snd' && e[1] !== 'crowd') || (e[0] === 'board' && e[1] === 'chance'))) continue;   // рівень трибун — стан, решта — миттєві ефекти
       this.applyEvent(e, stale);
     }
     const fr = this.frames;
@@ -193,7 +203,7 @@ export class GuestMatch {
     } else if (this.lagShown) hud.warn(null);
     this.lagShown = lag;
     v.stands.update(rawDt); v.weather.update(rawDt); v.surround.update(rawDt); v.pitch.decals.update(rawDt);
-    v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
+    v.pitch.boards.update(rawDt);
     v.particles.update(rawDt);
     this.solo.netBulge(rawDt);
     if (fr.length && rawDt > 0 && Math.hypot(this.bp.vx, this.bp.vz) > 20 && Math.random() < 0.6) { const b = this.bp; v.particles.emit(b.x, 0.25, b.z, (Math.random() - 0.5) * 1.2, 0.7, (Math.random() - 0.5) * 1.2, 0.3, 0.17, '#e8f2e4', 0, 1, 0, -1); }   // курява за м'ячем: її господар не шле, рахуємо самі

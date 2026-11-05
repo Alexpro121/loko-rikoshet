@@ -127,7 +127,7 @@ export class Game {
     if (!sp.show) return;
     sp.roar = Math.max(0, sp.roar - dt * 1.6);
     if (sp.ball) this.splashBallStep(dt);
-    v.stands.update(dt, this.time); v.surround.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
+    v.stands.update(dt); v.surround.update(dt); v.pitch.boards.update(dt);
     if (c.aspect !== this.w / this.h) { c.aspect = this.w / this.h; c.fov = c.aspect < 1.5 ? 50 : 40; c.updateProjectionMatrix(); }
     const sx = Math.sin(sp.t * 0.5) * 0.06;
     if (sp.ball) {

@@ -193,6 +193,7 @@ export class Penalties {
     const m = this.m, goal = this.out === 'goal', me = this.me;
     (me ? this.res.me : this.res.opp).push(goal);
     this.dots();
+    m.view.pitch.boards.cue('pen', { home: me, goal, pm: this.res.me, po: this.res.opp });
     const msg = { goal: 'ГОЛ!', save: me ? 'ВОРОТАР ВІДБИВ!' : 'ТИ ЗАХИСТИВ ВОРОТА!', miss: 'МИМО!', post: 'ШТАНГА!' }[this.out];
     m.ui.hud.goal(msg, '', goal ? (me ? 'me' : 'opp') : (me ? 'opp' : 'me'));
     const kp = this.kicker.p;

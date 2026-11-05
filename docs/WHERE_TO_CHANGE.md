@@ -106,6 +106,8 @@
 | Завдання | Де |
 |---|---|
 | Поле, борти, ворота, сітка | `buildPitch` у `src/graphics/pitch.js`, рух сітки: `netBulge` |
+| Реклама й кадри на LED-бортах | малюнки `PAINT` і `LIVE`, ротація `POOL` у `src/graphics/boards.js`; перегляд у `boards.html` |
+| Як борти реагують на гру | `Boards.cue` і `Boards.step`; виклики `boards.cue` у `src/match/match.js` і `penalty.js` |
 | Трибуни й реакції глядачів | `src/graphics/stands.js` |
 | Рухи глядачів у реакціях і співах | `crReact` і `crowdPos` у шейдері `CROWD_VS`, тривалість `DUR`, номер типу `RX`, згасання старої реакції `FADE` у `src/graphics/stands.js` |
 | Як натовп стежить за грою (погляд, напруга біля воріт) | `Stands.track` і блок напруги в `crowdPos` (`CROWD_VS`); реакція на промах і сейв: `missReact` у `src/match/cinema.js`, `saveReact` у `src/match/match.js` |
