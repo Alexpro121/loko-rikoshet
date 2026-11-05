@@ -7,7 +7,7 @@ import { appHidden, inTelegram } from '../core/telegram.js';
 import { I, crest, lokoCrest } from './icons.js';
 import { VOX } from './vox.js';
 import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact } from '../club.js';
-import { Hud } from './hud.js';
+import { Hud, fitText } from './hud.js';
 import { MapHud } from './minimap.js';
 import { playIntro } from './intro.js';
 import { splashHtml, runSplash } from './splash.js';
@@ -936,7 +936,7 @@ export class UI {
     const letters = [...d.title].map((ch, i) => `<span style="--i:${i}">${ch === ' ' ? '&nbsp;' : e(ch)}</span>`).join('');
     const COLS = ['#d4202c', '#1f8f3f', '#f6f4ec', '#ffc61a', '#3fb7d8'];
     const conf = win ? `<div class="rs-conf" aria-hidden="true">${Array.from({ length: 46 }, (_, i) => `<i style="--x:${(Math.random() * 100).toFixed(1)}%;--dx:${((Math.random() - 0.5) * 30).toFixed(1)}vw;--d:${(Math.random() * 3).toFixed(2)}s;--t:${(2.8 + Math.random() * 2.4).toFixed(2)}s;--r:${(Math.random() * 1080 - 540) | 0}deg;--s:${(0.6 + Math.random() * 0.9).toFixed(2)};--c:${COLS[i % COLS.length]}"></i>`).join('')}</div>` : '';
-    const goals = (mine) => (d.scorers || []).filter((g) => !!g.mine === mine).slice(0, 6).map((g, i) => `<li style="--i:${i}">${I.ball}<span>${e(g.name)}</span><em>${e(g.min)}</em></li>`).join('');
+    const goals = (mine) => (d.scorers || []).filter((g) => !!g.mine === mine).slice(0, 6).map((g, i) => `<li style="--i:${i}">${I.ball}<span>${e(g.name)}${g.og ? ' <i class="og">авт.</i>' : ''}</span><em>${e(g.min)}</em></li>`).join('');
     const gl = goals(true), go = goals(false);
     const chips = (d.chips || []).map(([c, ic, t], i) => `<div class="chip ${c}" style="--i:${i}">${ic}<span>${e(t)}</span></div>`).join('');
     const lines = (d.lines || []).map((l, i) => `<li style="--i:${i}"><span>${e(l.label)}</span>${l.text != null ? `<b>${e(l.text)}</b>` : `<b data-to="${l.value}">0</b>`}${l.coin ? I.coin : ''}${l.sub != null ? `<em>${e(l.sub)}</em>` : ''}</li>`).join('');
@@ -950,9 +950,9 @@ export class UI {
         <small class="rs-tag">${e(d.tag)}</small>
         <h1 class="rs-t" data-t="${e(d.title)}" aria-label="${e(d.title)}">${letters}</h1>
         <div class="rs-board">
-          <div class="rs-team me ${a > b ? 'w' : ''}"><span class="rs-cr">${d.me.crest}</span><b>${e(d.me.name)}</b></div>
+          <div class="rs-team me ${a > b ? 'w' : ''}"><span class="rs-cr">${d.me.crest}</span><b class="fit">${e(d.me.name)}</b></div>
           <div class="rs-score"><b class="${a > b ? 'w' : ''}">${a}</b><i>:</i><b class="${b > a ? 'w' : ''}">${b}</b></div>
-          <div class="rs-team opp ${b > a ? 'w' : ''}"><b>${e(d.opp.name)}</b><span class="rs-cr">${d.opp.crest}</span></div>
+          <div class="rs-team opp ${b > a ? 'w' : ''}"><b class="fit">${e(d.opp.name)}</b><span class="rs-cr">${d.opp.crest}</span></div>
         </div>
         ${pens}
         ${gl || go ? `<div class="rs-goals"><ul class="me">${gl}</ul><ul class="opp">${go}</ul></div>` : ''}
@@ -966,7 +966,7 @@ export class UI {
         <div class="rs-btns">${btns}</div>
       </div>
     </div>`;
-    const el = this.el.result; el.hidden = false; el.className = 'overlay result ' + o;
+    const el = this.el.result; el.hidden = false; el.className = 'overlay result ' + o; fitText(el);
     // каса: кожен рядок дораховується, коли виїхав; потім «Разом» і печатка
     const T = (ms, f) => this._resT.push(setTimeout(f, ms));
     el.querySelectorAll('.rs-lines b[data-to]').forEach((b, i) => T(1150 + i * 170, () => { countTo(b, +b.dataset.to, 520); audio.coin(Math.min(2, i)); }));

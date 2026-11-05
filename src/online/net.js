@@ -9,7 +9,7 @@ const PREFIX = 'lokorush-v1-';
 const TK_KEY = 'loko-online-tk';
 const FRAME_QUEUE = 16e3;                            // ~5 кадрів (250 мс): кадр — 3.2 КБ, 20/с, тобто 64 КБ/с. Далі черга лише старить картинку, свіжий кадр важливіший
 const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';     // без 0/O, 1/I — код легко продиктувати
-export const PROTO = 1;
+export const PROTO = 2;
 export const makeCode = () => Array.from({ length: 5 }, () => ALPH[(Math.random() * ALPH.length) | 0]).join('');
 export const cleanCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 

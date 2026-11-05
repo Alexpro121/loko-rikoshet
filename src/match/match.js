@@ -1,10 +1,10 @@
 // Match: уся логіка матчу: фази, ввід удару, м'яч, відбори, воротарі, голи, кат-сцени, нагороди. Огляд: docs/ARCHITECTURE.md.
 import * as THREE from 'three';
 import { PITCH, PHYS, FIXTURES, ACADEMY, KEEPERS, shotSkill } from '../config.js';
-import { CLUB, CHRONICLE } from '../club.js';
+import { CHRONICLE } from '../club.js';
 import { World } from '../physics/world.js';
 import { AimPath } from '../physics/aim.js';
-import { ground, BallPlan } from '../physics/ballmodel.js';
+import { ground, BallPlan, BALL } from '../physics/ballmodel.js';
 import { dribbleStep, keepBallIn } from './dribble.js';
 import { MatchView } from './view.js';
 import { Actor, Team } from './team.js';
@@ -21,6 +21,7 @@ import { diveKin, GK_STRIKE, angDiff } from '../graphics/player.js';
 import { evolveSpec, recordMatch } from '../state/rivals.js';
 import { ONLINE_AIM, ONLINE_GK } from '../online/profile.js';
 import { pathPoint } from '../core/camera.js';
+import { RingTone } from './ring.js';
 const { L, W, G, R } = PITCH;
 // інтро (кат-сцена виходу), с: A — проліт над стадіоном; B — вихід із тунелю; C — камера задкує перед колонами;
 // D — бічний телеоб'єктив; E — шикування; далі гімн і «п'ятірки» (HS_T): кожен гість проходить усю шеренгу господарів;
@@ -66,7 +67,7 @@ export class Match {
     this.ball = this.world.ball;
     this.ctx = { ball: this.ball, bs: 'ready', owner: 1, readyT: 0, opps: this.opp, all: this.actors };
     this.protectT = 0; this.receiverT = 0; this.passTarget = null; this.pressWarn = false;
-    this.slow = false; this.slowT = 0; this.beatT = 0; this.danger = 0;
+    this.slow = false; this.slowT = 0; this.beatT = 0; this.danger = 0; this.ringTone = new RingTone(); this.ringT = 0; this.ringQ = 0;
     this.kickoff = true; this.shotId = 0; this.slideT = 0; this.slideShotId = -1; this.slideTries = 0; this.slid = false;
     this.glideT = 0; this.glideX = 0; this.glideZ = 0; this.celeb = null; this.shooter = null; this.lastOppTaker = null;
 
@@ -125,15 +126,17 @@ export class Match {
     this.phase = 'intro'; this.introT = 0; this.skipAt = undefined; this.hitStop = 0; this.ts = 1; this.acc = 0;
     this.aiming = false; this.endT = 0; this.goalT = 0; this.resultSent = false;
     this.lastClock = -1;
-    this.holder = null; this.taker = null; this.shooter = null; this.lastOppTaker = null; this.saveId = -1; this.pauseWanted = false;   // ні автор, ні прохання про паузу не переходять із минулого матчу
+    this.holder = null; this.taker = null; this.shooter = null; this.lastOppTaker = null; this.saveId = -1; this.pauseWanted = false; this.floatT = -9;   // ні автор, ні прохання про паузу не переходять із минулого матчу
     this.firstKick = Math.random() < 0.5 ? 1 : -1;     // жереб: хто розводить 1-й тайм (далі — по черзі)
     this.formation(this.kickFor(1));
     const hud = this.ui.hud;
     hud.show(spec);
     hud.setScore(0, 0); hud.setTime(this.timeText(), false, this.halfText(), null); hud.addedTime(null); hud.setCoins(0);
     hud.warn(null); hud.hint(null);
-    if (on) hud.banner(spec.club.name, 'Онлайн-матч · ти граєш удома', 'Суперник: ' + spec.club.name);
-    else hud.banner(spec.club.name, spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of + (spec.final ? ' · ФІНАЛ' : ''), spec.note || CLUB.slogan);
+    { // представлення суперника: сила складів і наша форма (у кар'єрі ще «РЕВАНШ»)
+      const pw = (q) => Math.round(q.reduce((t, e) => t + ovr(e), 0) / q.length), rv = spec.rival;
+      hud.matchday(spec, on ? { pw: [pw(this.mySquad), pw(this.oppSq)] } : { pw: [pw(this.mySquad), pw(this.oppSq)], form: (S.form || []).slice(-5), revenge: !!(rv && rv.revenge) });
+    }
     audio.music('match'); audio.crowd(0.7);
     this.game.renderer.toneMappingExposure = this.view.exposure || 1.1;
     this.introTgt = [this.mine, this.opp].map((arr) => arr.map((a) => ({ x: a.p.x, z: a.p.z })));
@@ -152,6 +155,8 @@ export class Match {
    */
   formation(kick = 1) {
     this.pendKick = null; if (this.moments) this.takeMoments(true); this.replay.clear(); this.slaps.clear();   // перед очищенням запису — вирізати моменти
+    this.kBy = null; this.tch = null; this.tchIn = false; this.astFor = null; this.astBy = null;   // дотики минулого розіграшу не переходять через розведення
+    this.ui.hud.clearFloats(); this.formT = this.time;                  // написи минулого розіграшу не висять над новою розстановкою; floatAt мовчить ще 3.5 с
     const b = this.ball;
     b.x = 0; b.z = 0; b.vx = b.vz = 0;
     // м'яч, що ще «докочувався» до ніг попереднього власника, не тягнемо з собою (через це тайм починався не з центру)
@@ -403,7 +408,7 @@ export class Match {
     audio.post(impact); this.view.ball.squash(nx, nz, 0.3);
     this.view.particles.burst(this.ball.x, 0.6, this.ball.z, 8, 6, 0.5, 0.22, ['#ffffff', '#d9dcd8'], 10, 0.6);
     this.game.addTrauma(0.18);
-    this.floatAt(this.ball.x, this.ball.z, 'ШТАНГА!', 'warn');
+    this.floatAt(this.ball.x, this.ball.z, 'ШТАНГА!', 'warn', true);
     if (impact > 8) missReact(this, true);                              // штанга: реакція гравців (cinema.js)
   }
 
@@ -426,7 +431,9 @@ export class Match {
       const sp = clamp(7 + speed * 0.4, 9, 24);
       B.vx = Math.cos(ang) * sp; B.vz = Math.sin(ang) * sp; B.vy = rand(-1.5, 3); B.w = 0;
       a.p.header(); audio.thud(); this.view.ball.squash(nx, nz, 0.25);
+      const from = this.passer(a);                                       // навіс партнера, якого ніхто не зачепив: гольова передача
       this.shotBy = a.side > 0 ? 1 : -1; this.shotOnTarget = true; this.shotBounces = 0; this.shotId++; a.headId = this.shotId; this.planT = 0;
+      this.kicked(a); this.astFor = a; this.astBy = from;
       if (a.side > 0) { this.shooter = a; this.addXp(a, 8); } else this.lastOppTaker = a;
       this.clearReceivers();
       this.floatAt(a.p.x, a.p.z, 'ГОЛОВОЮ!', a.side > 0 ? 'good' : 'warn');
@@ -454,6 +461,7 @@ export class Match {
         a.noTrap = 0.45;
       }
     }
+    this.touched(a);                                                    // рикошет від тіла чи сейв: до зміни швидкості, бо тут ще видно, чи м'яч летів у створ
     if (a.isGK) {
       const shotAt = this.shotBy === -a.side, legBlock = (a.p.mode === 'gkshin' || a.p.mode === 'gkfoot') && speed > 5;                // удар суперника, а не свій пас чи вільний м'яч
       this.saveReact(a);
@@ -462,7 +470,7 @@ export class Match {
       { const k = clamp(speed / 25, 0.3, 1.4); a.p.impulse(-0.9 * k, 2.0 * k, 0, -3 * k, -3 * k, 0.7 * k); if (speed > 22) this.game.addTrauma(0.05 + 0.04 * k); }   // м'яч б'є в руки чи тіло — тіло «віддає»
       if (speed > 20 && shotAt) this.markMoment('save');   // сильний удар відбито — у підбірку моментів тайму
       if (speed > 18 && shotAt) this.view.pitch.boards.cue('chance', { x: a.p.x });   // і на бортах за цими воротами
-      if (shotAt) this.floatAt(a.p.x, a.p.z, a.side > 0 ? 'ВРЯТУВАВ!' : 'ВОРОТАР!', a.side > 0 ? 'good' : 'warn');
+      if (shotAt) this.floatAt(a.p.x, a.p.z, a.side > 0 ? 'ВРЯТУВАВ!' : 'ВОРОТАР!', a.side > 0 ? 'good' : 'warn', true);
       if (legBlock) { this.legDeflect(a, nx, nz); v.ball.squash(nx, nz, 0.22); this.planT = 0; this.deflectId = this.shotId; return true; }   // відскік порахували самі, world його не повторює
     } else {
       audio.wall(0, 8);
@@ -558,7 +566,6 @@ export class Match {
       const pm = clamp(0.5 + (sm - so) * 1.6 + 0.25 * (bm.sk.drib - bo.sk.tack), 0.08, 0.92);
       win = Math.random() < pm ? bm : bo;
       const lose = win === bm ? bo : bm; lose.noTrap = Math.max(lose.noTrap, 0.4); lose.p.hit();
-      this.floatAt(win.p.x, win.p.z, 'ВИГРАВ М’ЯЧ', win.side > 0 ? 'good' : 'warn');
     }
     const sp = Math.hypot(this.ball.vx, this.ball.vz);
     if (win.side > 0) this.trapMine(win, sp); else this.trapOpp(win, sp);
@@ -648,7 +655,7 @@ export class Match {
         else { h.manual = false; this.taker = null; h.p.dribble = false; this.placeBallAt(a, true); a.noTrap = 0; this.makeReady(a); a.p.receive(0, 4); }   // receive після makeReady: він скидає режим на idle
       } else {                                                     // вибив: м'яч відскакує вперед-убік — боротьба за нього
         const ang = fy + rand(-0.9, 0.9), sp = rand(5, 9);
-        this.looseBall(Math.sin(ang) * sp, Math.cos(ang) * sp);
+        this.looseBall(Math.sin(ang) * sp, Math.cos(ang) * sp); this.touched(a);
         a.noTrap = 0.15; audio.thud();
         this.floatAt(a.p.x, a.p.z, 'ВИБИВ!', vsMine ? 'warn' : 'good');
       }
@@ -657,7 +664,6 @@ export class Match {
       a.stun = 1.0; a.noTrap = 0.9; (a.side > 0 ? this.myTeam : this.oppTeam).missT = this.time;   // партнер не кидається слідом тієї ж миті (lungePause)
       if (Math.random() < 0.25) this.bump(a, h, 0.1); else a.p.beaten(h.p.x - a.p.x, h.p.z - a.p.z);   // обіграний: розгойдався на випаді, озирається за нападником
       if (vsMine) { this.floatAt(h.p.x, h.p.z, 'ЗАХИСТИВ М’ЯЧ!', 'good'); audio.pass(); this.addXp(h, 12); }
-      else this.floatAt(a.p.x, a.p.z, 'НЕ ДОТЯГНУВСЯ', 'warn');
     }
   }
 
@@ -675,6 +681,7 @@ export class Match {
     this.telegraph = false;
     b.vx = vx; b.vz = vz;
     this.bs = 'roll'; this.owner = 0; this.shotBy = 0; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.shotId++;
+    this.kBy = null;                                                    // вибитий м'яч — політ без удару: його автор не той, хто бив раніше
     this.ui.hud.setCard(null); this.ui.hud.warn(null);
   }
 
@@ -691,13 +698,14 @@ export class Match {
   trapMine(a, speed = 0) {
     if (a.cool > 0) return;
     if (a.isGK) this.saveReact(a, true);
-    if (this.shotBy === 1 && this.shooter && a !== this.shooter && this.bs === 'roll') { this.addXp(this.shooter, 10); this.addXp(a, 6); this.floatAt(a.p.x, a.p.z, 'ПАС!', 'good'); }
+    if (this.shotBy === 1 && this.shooter && a !== this.shooter && this.bs === 'roll') { this.addXp(this.shooter, 10); this.addXp(a, 6); if (this.bigPass(a)) this.floatAt(a.p.x, a.p.z, 'ПАС!', 'good', true); }
     const saved = a.isGK && this.bs === 'roll' && this.shotBy === -1;   // спіймав удар суперника; свій пас назад — це не сейв
+    this.astBy = this.passer(a); this.astFor = a; this.tch = a;
     if (saved) this.creditSave(a);
     const y0 = this.ball.y;                                             // висота до placeBallAt: ground її обнуляє, а від неї залежить прийом (стопа, стегно, груди)
     this.placeBallAt(a, true); audio.pass();
     a.p.setExpr('happy', 0.5);
-    if (a.isGK) { this.ball.y = y0; this.gkReceive(a, speed); ground(this.ball); if (saved && !a.footBall) this.floatAt(a.p.x, a.p.z, 'ВРЯТУВАВ!', 'good'); }   // воротар вибирає прийом за справжньою висотою: раніше завжди «кошик»
+    if (a.isGK) { this.ball.y = y0; this.gkReceive(a, speed); ground(this.ball); if (saved && !a.footBall) this.floatAt(a.p.x, a.p.z, 'ВРЯТУВАВ!', 'good', true); }   // воротар вибирає прийом за справжньою висотою: раніше завжди «кошик»
     this.view.ball.hop = clamp(y0, 0.3, 0.6);
     this.clearReceivers();
     this.makeReady(a);
@@ -709,7 +717,8 @@ export class Match {
     this.bs = 'ready'; this.owner = 1; this.readyT = 0; this.readyReal = 0; this.shotBy = 0; this.telegraph = false; this.shotWound = false;
     if (this.holder && this.holder !== a) this.holder.manual = false;
     if (this.holder && this.holder !== a) this.holder.p.setThreat(0, 0);
-    this.holder = a; a.manual = true;
+    this.holder = a; a.manual = true; this.tch = a;
+    if (this.astFor !== a) { this.astFor = a; this.astBy = null; }      // м'яч відібрав чи отримав на розведенні — без передачі
     if (!a.isGK || kickoff) a.p.setMode('idle');
     this.showCard(a);
     if (this.taker) { this.taker.manual = false; this.taker = null; }
@@ -724,6 +733,7 @@ export class Match {
     if (a.isGK) this.saveReact(a, true);
     this.pendKick = null; this.shotWound = false;
     const y0 = this.ball.y;                                             // висота до placeBallAt: ground її обнуляє
+    this.astBy = this.bs === 'roll' ? this.passer(a) : null; this.astFor = a; this.tch = a;
     this.placeBallAt(a, true);
     if (y0 > 0.3) this.view.ball.hop = Math.min(y0, 0.6);
     if (this.holder) this.holder.manual = false;
@@ -733,7 +743,7 @@ export class Match {
     if (!a.isGK) a.p.receive(y0, speed);                                // воротар приймає нижче (gkReceive): поза ногою скидала вже розпочату ловлю руками
     a.p.dribble = !a.isGK;
     this.netCmd = null; this.netAim = null; this.netWaitT = 0; this.netAuto = !!this.link && this.link.newPoss();
-    this.ui.hud.warn(this.link ? 'М’ЯЧ У СУПЕРНИКА' : 'КОНТРАТАКА!');
+    this.ui.hud.warn(this.link ? 'М’ЯЧ У СУПЕРНИКА' : null);          // у кар'єрі без напису: хто з м'ячем, і так показують семафор і кільце
     a.p.setExpr('angry', 1);
     if (a.isGK) { this.ball.y = y0; this.gkReceive(a, speed); ground(this.ball); if (!a.footBall) audio.save(); this.gkHoldT = a.footBall ? 0.3 : 0.7 + Math.random() * 0.4; }   // коротко: прийняв, притиснув — і грає далі
     this.aiming = false; this.hideAim();
@@ -945,7 +955,7 @@ export class Match {
     a.cool = 0.35; a.noTrap = 1.3; a.manual = false; this.taker = null; this.lastOppTaker = a; a.passT = this.time; this.passFrom = a; this.passFromT = this.time;
     best.receiver = true; this.passTarget = best; this.receiverT = 3.2;
     audio.pass();
-    this.bs = 'roll'; this.owner = 0; this.shotBy = -2; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.shotId++; this.ui.hud.setCard(null);
+    this.bs = 'roll'; this.owner = 0; this.shotBy = -2; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.shotId++; this.ui.hud.setCard(null); this.kicked(a);
     this.ui.hud.warn(null);
   }
 
@@ -1165,7 +1175,7 @@ export class Match {
     this.shotWound = false;
     a.cool = 0.35; a.noTrap = 1.3; a.manual = false; this.taker = null; this.lastOppTaker = a;
     audio.kick(0.8);
-    this.bs = 'roll'; this.owner = 0; this.shotBy = -1; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.shotId++; this.ui.hud.setCard(null);
+    this.bs = 'roll'; this.owner = 0; this.shotBy = -1; this.shotBounces = 0; this.looseT = 0; this.protectT = 0; this.shotId++; this.ui.hud.setCard(null); this.kicked(a);
     this.hideAim(); this.ui.hud.warn(null);
   }
 
@@ -1214,7 +1224,7 @@ export class Match {
     b.vx = vx * cs - vz * sn; b.vz = vx * sn + vz * cs; ground(b);
     a.p.dribble = false; a.cool = 0.35; a.noTrap = 1.4; a.manual = false; this.taker = null; this.lastOppTaker = a;
     audio.kick(pw);
-    this.bs = 'roll'; this.owner = 0; this.shotBounces = 0; this.looseT = 0; this.protectT = 2.2; this.shotId++; this.kickoff = false;
+    this.bs = 'roll'; this.owner = 0; this.shotBounces = 0; this.looseT = 0; this.protectT = 2.2; this.shotId++; this.kickoff = false; this.kicked(a);
     this.ui.hud.setCard(null); this.ui.hud.warn(null); this.hideAim();
     // у створ наших воріт — це удар (наш воротар реагує); інакше пас: свій найкращий на лінії м'яча біжить приймати
     const v = Math.hypot(b.vx, b.vz) || 1, ux = b.vx / v, uz = b.vz / v, zAt = ux < -0.05 ? b.z + uz * (-L - b.x) / ux : 99;
@@ -1279,7 +1289,7 @@ export class Match {
     const b = this.ball, sh = this.shot, h = this.holder;
     const j = rand(-1, 1) * this.kickErr(sh.power >= 0.45 ? h.sk.shoot : h.sk.pass), cs = Math.cos(j), sn = Math.sin(j);
     b.vx = sh.vx * cs - sh.vz * sn; b.vz = sh.vx * sn + sh.vz * cs; ground(b);
-    this.bs = 'roll'; this.owner = 0; this.shotBy = 1; this.shotBounces = 0; this.looseT = 0; this.ts = 1; this.shotId++; this.kickoff = false; this.ui.hud.setCard(null);
+    this.bs = 'roll'; this.owner = 0; this.shotBy = 1; this.shotBounces = 0; this.looseT = 0; this.ts = 1; this.shotId++; this.kickoff = false; this.ui.hud.setCard(null); this.kicked(h);
     this.glideT = 0;                                   // м'яч, що ще докочувався до ніг, більше не гальмується
     h.cool = 0.35; h.noTrap = 1.4; h.manual = false; this.protectT = 2.2; if (sh.power < 0.45) h.passT = this.time;
     h.p.setThreat(0, 0); this.shooter = h;
@@ -1294,6 +1304,37 @@ export class Match {
     if (sh.power > 0.85) { this.hitStop = Math.max(this.hitStop, 0.03); this.game.fovKick(1.4); }
     this.view.particles.burst(b.x, 0.3, b.z, 6, 3 + sh.power * 4, 0.45, 0.24, ['#8fb98a', '#f2f5ee'], 8, 0.5);
     this.view.ball.squash(sh.dirx, sh.dirz, 0.26);
+  }
+
+  // ------------------------------------------------------------------ дотики: хто забив, автогол, гольовий пас
+  // Правило (docs/ARCHITECTURE.md, «Автор гола й автогол»): гол того, хто востаннє торкнувся м'яча. Якщо це гравець команди,
+  // що пропустила, то гол усе одно нападника, коли м'яч у цьому польоті вдарив суперник і (а) торкнувся воротар (сейв, що
+  // влетів) або (б) польовий зачепив м'яч, який і так летів у створ. Інакше це автогол того, хто торкнувся. Геймплей не міняє.
+  /** Удар, пас, кидок чи удар головою: новий політ м'яча (shotId уже новий). */
+  kicked(a) { this.kBy = a; this.kId = this.shotId; this.tch = a; this.tchIn = false; this.kX = a.p.x; this.kZ = a.p.z; }
+  /** Дотик без нового польоту (рикошет від тіла, сейв, вибитий м'яч): tchIn — чи м'яч до дотику вже летів у ворота цього гравця. */
+  touched(a) { this.tch = a; this.tchIn = this.headingIn(-a.side); }
+  /** Партнер, чий пас у цьому польоті ніхто не зачепив дорогою до a, інакше null. */
+  passer(a) { const k = this.kBy; return k && k !== a && k.side === a.side && this.kId === this.shotId && this.tch === k ? k : null; }
+  /**
+   * Чи м'яч зараз летить у створ воріт на x = gs·L і дістане лінію сам: точка перетину між стовпами й під поперечиною
+   * (політ із тяжінням), а шлях до лінії коротший за гальмівний (drag і roll з PHYS; у повітрі м'яч гальмує менше, тож оцінка обережна).
+   */
+  headingIn(gs) {
+    const b = this.ball, vx = b.vx * gs;
+    if (vx < 0.5) return false;
+    const dx = L - b.x * gs, t = dx / vx, zAt = b.z + b.vz * t, yAt = b.y + (b.vy || 0) * t - 0.5 * BALL.g * t * t;
+    if (Math.abs(zAt) > G + R || yAt > PITCH.GOAL_H) return false;
+    const sp = Math.hypot(b.vx, b.vz), k = PHYS.drag, r = PHYS.roll;
+    return dx * sp / vx < sp / k - (r / (k * k)) * Math.log(1 + k * sp / r);
+  }
+  /** Кому зарахувати гол команди side (±1): by — автор (при og — автор автогола), null — невідомо. */
+  goalCredit(side) {
+    const t = this.tch, k = this.kBy && this.kId === this.shotId ? this.kBy : null;
+    if (!t) return { by: k && k.side === side ? k : null, og: false };
+    if (t.side === side) return { by: t, og: false };
+    if (k && k.side === side && (t.isGK || this.tchIn)) return { by: k, og: false };
+    return { by: t, og: true };
   }
 
   // ------------------------------------------------------------------ голи
@@ -1311,19 +1352,20 @@ export class Match {
     if (this.holder) this.holder.manual = false;
     if (this.taker) { this.taker.manual = false; this.taker = null; }
     const gx = side * (L + 1);
-    const sc = mine ? (this.shooter || this.mine[1]) : (this.lastOppTaker || this.opp[1]);
-    // автор лише в того, чия команда справді била (суперник: удар −1, пас −2). Інакше автогол: гол є, автора й досвіду немає
-    const byTeam = mine ? this.shotBy === 1 : this.shotBy < 0;
-    let gt;
+    // автор за останнім дотиком (goalCredit); автор автогола гола й досвіду не отримує, святкує тоді той, хто бив останнім
+    const cr = this.goalCredit(side), og = cr.og, by = cr.by;
+    const sc = !og && by ? by : mine ? (this.shooter || this.mine[1]) : (this.lastOppTaker || this.opp[1]);
+    let coins = 0, extra = '';
     if (mine) {
       this.score.me++; this.stats.goals++;
       const bn = this.shotBounces, mult = bn >= 2 ? Math.min(4, 1 + 0.5 * (bn - 1)) : 1;
       this.stats.combo = Math.max(this.stats.combo, mult);
       const c = Math.round(50 * spec.scale * mult);
       this.coins += c; this.ui.hud.setCoins(this.coins);
-      const si = byTeam ? this.mine.indexOf(this.shooter) : -1;
-      if (si >= 0) { this.addXp(this.shooter, 60 + (bn >= 2 ? 20 : 0)); this.goalsBy[si]++; }
-      gt = ['ГОЛ!', spec.online ? (bn >= 2 ? 'РИКОШЕТ ×' + mult : 'у сітці!') : (bn >= 2 ? 'РИКОШЕТ ×' + mult + ' · ' : '') + '+' + c, 'me'];
+      const si = !og && by ? this.mine.indexOf(by) : -1;
+      if (si >= 0) { this.addXp(by, 60 + (bn >= 2 ? 20 : 0)); this.goalsBy[si]++; }
+      if (bn >= 2) extra = 'РИКОШЕТ ×' + mult;
+      if (!spec.online) coins = c;
       v.stands.react('goal', { mine: true });
       for (let i = 0; i < this.opp.length; i++) this.opp[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 60, 11, 1.8, 0.4, ['#b3162a', '#117a4a', '#f1efe8', '#e8b923'], 12, 1.0);
@@ -1331,21 +1373,24 @@ export class Match {
       this.ui.flash('rgba(255,255,255,.4)');
     } else {
       this.score.opp++;
-      gt = ['ПРОПУСТИЛИ', spec.online ? 'суперник забив' : 'контратака спрацювала', 'opp']; v.stands.react('goal', { mine: false });
+      v.stands.react('goal', { mine: false });
       for (let i = 0; i < this.mine.length; i++) this.mine[i].p.sad(5);
       v.particles.burst(gx, 1.4, 0, 24, 8, 1.4, 0.35, ['#9ca3af', '#4b5563', '#f1efe8'], 12, 1.0);
       audio.concede(); this.game.addTrauma(0.4); vibrate(80);
     }
     // важливість гола: від неї — святкування, розпач суперника, трибуни, салют і підпис
-    const { I, tag } = this.goalImportance(mine);
+    const { I, tag, late } = this.goalImportance(mine);
     this.setupCelebration(mine, sc, side, I);
-    this.ui.hud.goal(gt[0], tag ? tag + ' · ' + gt[1] : gt[1], gt[2]);
+    const sn = (a) => (a && a.info ? String(a.info.name).split(' ').slice(-1)[0] : '');   // прізвище: так героя показує табло й так онлайн зараховує йому гол
+    const scName = by ? sn(by) : '', min = this.minuteLabel();
+    const ast = !og && by && this.astFor === by && this.astBy ? sn(this.astBy) : '';
+    this.ui.hud.goal({ mine, og, name: scName, min, ast, tag, late, extra, coins, gk: !!(og && by && by.isGK) });
     if (I > 0.55) { v.stands.react('goal', { mine, dur: 3.8 + 3 * I }); audio.crowd(1); this.walk.fireworks(3 + Math.round(4 * I)); this.game.addTrauma(0.25 * I); }
     this.periodGoals++;
-    const scName = !byTeam ? 'Автогол' : sc && sc.info ? String(sc.info.name).split(' ').slice(-1)[0] : (mine ? (spec.home ? spec.home.name : 'Локомотив') : spec.club.name);
-    this.scorers.push({ mine, name: scName, min: this.minuteLabel() });
-    this.ui.hud.scored({ mine, name: scName, min: this.minuteLabel() });
-    v.pitch.boards.cue('goal', { home: mine, x: gx, a: this.score.me, b: this.score.opp, who: scName, min: this.minuteLabel() });   // борти: лише вигляд
+    const listed = scName || (mine ? (spec.home ? spec.home.name : 'Локомотив') : spec.club.name);
+    this.scorers.push({ mine, name: listed, min, og });               // og: у картці «авт.», в онлайні такий гол героєві не зараховується (finish)
+    this.ui.hud.scored({ mine, name: listed, min, og });
+    v.pitch.boards.cue('goal', { home: mine, x: gx, a: this.score.me, b: this.score.opp, who: og ? 'Автогол' : listed, min });   // борти: лише вигляд
     this.ui.hud.setScore(this.score.me, this.score.opp);
     this.ts = 0.28;
     this.game.sm.go('GOAL', { mine });
@@ -1633,6 +1678,7 @@ export class Match {
    */
   skipIntroPart() {
     const t = this.introT;
+    this.ui.hud.matchday(null);                                          // картка суперника ховається від першого ж дотику
     if (t < 0.6 || t - (this.skipAt ?? -9) < 0.4) return;
     this.skipAt = t;
     const next = [A_END, B_END, C_END, D_END, E_END, HS_T].find((b) => b > t + 0.05);
@@ -1725,7 +1771,7 @@ export class Match {
     this.view.pitch.decals.fadeOut(); this.view.tunnel.userData.carpet.visible = false;   // доріжку прибрали — на газоні лише гра
     this.formation(this.kickFor(1));
     for (const a of [...this.mine, ...this.opp]) { a._ix = undefined; a._iz = undefined; }
-    this.ui.hud.cine(false); this.setGaze(false); this.walk.hide();
+    this.ui.hud.cine(false); this.ui.hud.matchday(null); this.setGaze(false); this.walk.hide();
     for (const a of this.actors) a.p.root.visible = true;
     audio.crowd(0.7); this.phase = 'play'; this.readyT = 0; this.slowT = 0; audio.whistle(true); this.view.pitch.boards.cue('play');
     // онлайн: розводить гість — підказка про приціл не нам
@@ -2352,13 +2398,14 @@ export class Match {
     if (Math.random() < p) {
       // вибив: м'яч летить подалі від своїх воріт, повільніше й зі зміщенням
       const dir = a.side > 0 ? 1 : -1, ang = rand(-0.7, 0.7), sp = clamp(speed * 0.45, 12, 22);
+      this.touched(a);
       b.vx = Math.cos(ang) * sp * dir; b.vz = Math.sin(ang) * sp;
       this.floatAt(a.p.x, a.p.z, 'ПІДКАТ! ВИБИВ', a.side > 0 ? 'good' : 'warn');
       audio.thud(); this.game.addTrauma(0.3); this.hitStop = Math.max(this.hitStop, 0.04); v.ball.squash(nx, nz, 0.3); if (a.side > 0) this.addXp(a, 25);
       v.particles.burst(a.p.x, 0.3, a.p.z, 12, 5, 0.6, 0.3, ['#4f7d3a', '#8fb98a', '#f1efe8'], 10, 0.8);
       this.shotBy = 0; this.protectT = 0; this.planT = 0; this.deflT = this.time;
     } else {
-      this.floatAt(a.p.x, a.p.z, 'ПРОСКОЧИВ', 'good'); audio.wall(0, 6);
+      audio.wall(0, 6);
     }
     return true;
   }
@@ -2654,22 +2701,23 @@ export class Match {
   /**
    * Важливість гола 0..1 — від неї залежить, наскільки бурхливе святкування й розпач суперника: сильніший суперник,
    * останні хвилини й доданий час, зрівняв чи вийшов уперед (а не просто збільшив відрив), фінал, золотий гол.
-   * Повертає { I, tag } — tag для підпису («НА ОСТАННІХ СЕКУНДАХ!», «ВІДІГРАЛИСЯ!»…).
+   * Повертає { I, tag, late } — ключі для напису гола (hud.goal): tag — upset, open, eq, lead; late — late (останні хвилини), added (доданий час).
    */
   goalImportance(mine) {
     const sp = this.spec, f = clamp(1 - this.clock / sp.time, 0, 1);
     const avg = (arr) => { let s = 0; for (let i = 1; i < arr.length; i++) s += arr[i].info ? ovr(arr[i].info) : 60; return s / (arr.length - 1); };
     const gap = mine ? avg(this.opp) - avg(this.mine) : avg(this.mine) - avg(this.opp);
     const us = mine ? this.score.me : this.score.opp, them = mine ? this.score.opp : this.score.me, d = us - them;
-    let I = 0.25 + clamp(gap / 12, -0.1, 0.25), tag = '';
-    if (gap > 4) tag = 'ПРОТИ ФАВОРИТА';
-    if (d === 0) { I += 0.22; tag = 'ВІДІГРАЛИСЯ!'; }
-    else if (d === 1) { I += them > 0 || f > 0.5 ? 0.25 : 0.12; if (them > 0) tag = 'ВИХІД УПЕРЕД!'; }
+    let I = 0.25 + clamp(gap / 12, -0.1, 0.25), tag = '', late = '';
+    if (gap > 4) tag = 'upset';
+    else if (us === 1 && them === 0) tag = 'open';
+    if (d === 0) { I += 0.22; tag = 'eq'; }
+    else if (d === 1) { I += them > 0 || f > 0.5 ? 0.25 : 0.12; if (them > 0) tag = 'lead'; }
     else if (d >= 3) I -= 0.15;
-    if (f > 0.85) { I += 0.35 * (f - 0.85) / 0.15; if (f > 0.93) tag = 'НА ОСТАННІХ ХВИЛИНАХ!'; }
-    if (this.timeUp) { I += 0.25; tag = 'У ДОДАНИЙ ЧАС!'; }
+    if (f > 0.85) { I += 0.35 * (f - 0.85) / 0.15; if (f > 0.93) late = 'late'; }
+    if (this.timeUp) { I += 0.25; late = 'added'; }
     if (sp.final) I += 0.12;
-    return { I: clamp(I, 0, 1), tag };
+    return { I: clamp(I, 0, 1), tag, late };
   }
 
   /**
@@ -2988,14 +3036,18 @@ export class Match {
     this.netBulge(dt);
     v.stands.update(dt); v.weather.update(dt); v.surround.update(dt); v.pitch.decals.update(dt);
     v.particles.update(dt);
-    // кільце володіння — лише в живій грі (не в інтро, перерві, пенальті чи на фіналі)
+    // кільце під м'ячем — лише в живій грі (не в інтро, перерві, пенальті чи на фіналі). Колір за станом (RingTone, ring.js):
+    // наш м'яч — вільно, зона удару чи тиск; м'яч у суперника — тьмяне червоне, лише коли він у зоні удару по наших воротах
     const live = (this.phase === 'paused' ? this.prevPhase : this.phase) === 'play';
-    if (!live) { v.ring.visible = false; v.band.visible = false; }
+    if (!live) { v.band.visible = false; this.ringTone.update(v.ring, 1, 0, 0, 0, b.x, b.z, this.time); }
+    else if (this.bs !== 'aim') {
+      const mode = this.bs === 'ready' ? 1 : this.bs === 'held' && this.taker && !this.taker.isGK ? -1 : 0;
+      if ((this.ringT -= dt) <= 0) { this.ringT = 0.16; this.ringQ = mode > 0 ? shotQuality(b.x, b.z, 1, this.opp).q : mode < 0 ? shotQuality(b.x, b.z, -1, this.mine).q : 0; }   // ~6 разів на секунду
+      if (mode > 0) v.band.visible = false;
+      this.ringTone.update(v.ring, dt, mode, this.danger, this.ringQ, b.x, b.z, this.time);
+    }
     if (live && this.bs === 'ready') {
       const pr = this.danger;
-      const k = 1.15 + Math.sin(this.time * (5 + pr * 8)) * 0.12;
-      v.ring.visible = true; v.band.visible = false; v.ring.material.color.setHSL(0.36 * (1 - pr * pr), 0.55 + 0.3 * pr, 0.65 - 0.1 * pr);
-      v.ring.position.set(b.x, 0.07, b.z); v.ring.scale.setScalar(k);
       if (pr > 0.62 && !this.pressWarn) { this.pressWarn = true; this.ui.hud.warn('ТИСК! БИЙ ЗАРАЗ'); }
       else if (pr < 0.45 && this.pressWarn) { this.pressWarn = false; this.ui.hud.warn(null); }
     } else if (this.pressWarn) { this.pressWarn = false; if (this.bs !== 'held') this.ui.hud.warn(null); }
@@ -3021,7 +3073,25 @@ export class Match {
     }
   }
 
-  floatAt(x, z, text, kind) { this.game.floatWorld(x, 1.9, z, text, kind); }
+  /**
+   * Напис над полем. Дрібні події не частіше ніж раз на 1.6 с гри, щоб не мигтіли одна за одною; key — важлива подія
+   * (штанга, сейв, сильний пас), її показуємо завжди. Лише вигляд: на гру не впливає.
+   */
+  floatAt(x, z, text, kind, key = false) {
+    // лише в живій грі: не в святкуванні, повторі, на розведенні й перші 3.5 с після нього (камера ще їде з кат-сцени, а відбір одразу після розведення написи лише засмічує)
+    if (this.phase !== 'play' || this.game.sm.name !== 'MATCH' || this.bs === 'net' || this.kickoff || this.time - (this.formT ?? -9) < 3.5) return;
+    if (!key && this.time - (this.floatT ?? -9) < 1.6) return;
+    this.floatT = this.time; this.game.floatWorld(x, 1.9, z, text, kind);
+  }
+  /** Пас, вартий напису: довгий (від 26 од.) або вперед за спину щонайменше трьом суперникам. Рахує від точки удару (kicked). */
+  bigPass(a) {
+    const len = Math.hypot(a.p.x - this.kX, a.p.z - this.kZ);
+    if (len >= 26) return true;
+    if (a.p.x - this.kX < 6) return false;
+    let n = 0;
+    for (let i = 1; i < this.opp.length; i++) { const x = this.opp[i].p.x; if (x > this.kX && x < a.p.x) n++; }
+    return n >= 3;
+  }
 
   // ------------------------------------------------------------------ завершення
   pause() { if (this.link) return; if (this.phase === 'play' || this.phase === 'intro' || this.phase === 'pens' || this.phase === 'break') { this.prevPhase = this.phase; this.phase = 'paused'; this.cancelAim(); audio.crowd(0.2); } }

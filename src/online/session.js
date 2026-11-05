@@ -205,7 +205,7 @@ export class Online {
     this.state = 'result';
     if (this.link) { this.link.uninstall(); }
     if (r.void) return (r.rew = null);
-    const mine = (r.scorers || []).filter((s) => s.mine).map((s) => s.name);
+    const mine = (r.scorers || []).filter((s) => s.mine && !s.og).map((s) => s.name);   // автогол суперника — наш гол, але не гол героя-однофамільця
     r.rew = applyResult(r.outcome, r.me, this.oppRating ?? 1000, mine);
     if (this.net && !r.forfeit) this.hello();                // новий рейтинг і рівень — для реваншу й картки в лобі
     return r.rew;
@@ -213,7 +213,7 @@ export class Online {
   guestEnd(m) {
     const n = (v) => Math.max(0, Math.min(99, Math.round(+v) || 0));
     const me = n(m.opp), opp = n(m.me);
-    const scorers = (Array.isArray(m.scorers) ? m.scorers : []).slice(0, 40).map((s) => ({ name: plain(s && s.name).slice(0, 24), min: plain(s && s.min).slice(0, 8), mine: !(s && s.mine) }));
+    const scorers = (Array.isArray(m.scorers) ? m.scorers : []).slice(0, 40).map((s) => ({ name: plain(s && s.name).slice(0, 24), min: plain(s && s.min).slice(0, 8), mine: !(s && s.mine), og: !!(s && s.og) }));
     this.g.sm.go('RESULT', { online: true, outcome: me > opp ? 'win' : me < opp ? 'loss' : 'draw', me, opp, spec: this.hudSpec, scorers });
   }
 

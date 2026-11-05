@@ -3,6 +3,27 @@ import { I, crest, lokoCrest } from './icons.js';
 import { KIT_LOKO } from '../config.js';
 import { esc } from '../online/profile.js';
 
+/** Світлий колір форми: на ньому темний текст. */
+const light = (h) => { const n = parseInt(String(h).slice(1, 7), 16) || 0; return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150; };
+// чип ситуації гола: [коли забили ми, коли забили нам]; ключі ставить Match.goalImportance
+const GOAL_TAG = { upset: ['ПРОТИ ФАВОРИТА', ''], open: ['РАХУНОК ВІДКРИТО', 'РАХУНОК ВІДКРИТО'], eq: ['ВІДІГРАЛИСЯ', 'СУПЕРНИК ЗРІВНЯВ'], lead: ['ВИХІД УПЕРЕД', 'СУПЕРНИК ПОПЕРЕДУ'] };
+const GOAL_LATE = { late: 'НА ОСТАННІХ ХВИЛИНАХ', added: 'У ДОДАНИЙ ЧАС' };
+export const GOAL_KEYS = { tag: Object.keys(GOAL_TAG), late: Object.keys(GOAL_LATE) };   // перевірка подій онлайн-гостя
+
+/**
+ * Довга назва (клуб, прізвище) пишеться повністю: шрифт .fit зменшується, доки текст не влізе (до половини),
+ * а якщо й так не влазить — переноситься на другий рядок. Кличеться раз після вставки розмітки, не щокадру.
+ */
+export function fitText(root) {
+  for (const el of root.querySelectorAll('.fit')) {
+    el.style.fontSize = ''; el.classList.remove('wrap');
+    const w = el.clientWidth, sw = el.scrollWidth;
+    if (!w || sw <= w + 1) continue;
+    el.style.fontSize = parseFloat(getComputedStyle(el).fontSize) * Math.max(0.5, (w - 1) / sw) + 'px';
+    if (el.scrollWidth > el.clientWidth + 1) el.classList.add('wrap');
+  }
+}
+
 /** HUD матчу: чистий HTML/CSS поверх канвасу. Оновлюються лише змінені значення. */
 export class Hud {
   constructor(root) {
@@ -28,18 +49,20 @@ export class Hud {
   <div class="warn" id="h-warn" hidden></div>
   <div class="combo" id="h-combo" hidden></div>
   <div class="banner" id="h-banner" hidden><div class="banner-in"><small id="h-ban-sub"></small><h2 id="h-ban-t"></h2><em id="h-ban-note"></em></div></div>
-  <div class="goaltxt" id="h-goal" hidden><h1 id="h-goal-t"></h1><p id="h-goal-s"></p></div>
+  <div class="goaltxt" id="h-goal" hidden></div>
+  <div class="mday" id="h-mday" hidden></div>
   <div class="hint" id="h-hint" hidden><i class="hand"></i><span id="h-hint-t"></span></div>
   <div class="pcard" id="h-pcard" hidden></div>
   <div class="floats" id="h-floats"></div>
 </section>`);
     const q = (id) => root.querySelector('#' + id);
     this.el = q('hud');
-    this.t = { title: q('h-title'), time: q('h-time'), coins: q('h-coins'), me: q('h-sc-me'), opp: q('h-sc-opp'), oppName: q('h-opp-name'), crestMe: q('h-crest-me'), crestOpp: q('h-crest-opp'), warn: q('h-warn'), combo: q('h-combo'), banner: q('h-banner'), banT: q('h-ban-t'), banS: q('h-ban-sub'), banN: q('h-ban-note'), goal: q('h-goal'), goalT: q('h-goal-t'), goalS: q('h-goal-s'), hint: q('h-hint'), hintT: q('h-hint-t'), floats: q('h-floats'), mid: root.querySelector('#h-bug'), half: q('h-half'), pcard: q('h-pcard') };
+    this.t = { title: q('h-title'), time: q('h-time'), coins: q('h-coins'), me: q('h-sc-me'), opp: q('h-sc-opp'), oppName: q('h-opp-name'), crestMe: q('h-crest-me'), crestOpp: q('h-crest-opp'), warn: q('h-warn'), combo: q('h-combo'), banner: q('h-banner'), banT: q('h-ban-t'), banS: q('h-ban-sub'), banN: q('h-ban-note'), goal: q('h-goal'), mday: q('h-mday'), hint: q('h-hint'), hintT: q('h-hint-t'), floats: q('h-floats'), mid: root.querySelector('#h-bug'), half: q('h-half'), pcard: q('h-pcard') };
     this.t.sig = q('h-sig'); this._sig = '';
     Object.assign(this.t, { prog: q('h-prog'), tmM: this.t.time.querySelector('.tm-m'), tmS: this.t.time.querySelector('.tm-s'), extra: q('h-extra'), extraN: q('h-extra-n'), extraT: q('h-extra-t'), bgoal: q('h-bug-goal'), bgoalT: q('h-bug-goal-t'), scard: q('h-scard') });
     this.floatEls = [];
-    for (let i = 0; i < 10; i++) { const d = document.createElement('div'); d.className = 'float'; d.hidden = true; this.t.floats.appendChild(d); this.floatEls.push(d); }
+    // напис, що дограв, ховаємо зовсім: інакше після display:none (кінець матчу, новий старт) браузер програє його анімацію знову на старому місці
+    for (let i = 0; i < 10; i++) { const d = document.createElement('div'); d.className = 'float'; d.hidden = true; d.addEventListener('animationend', () => { d.hidden = true; }); this.t.floats.appendChild(d); this.floatEls.push(d); }
     this.fi = 0; this.last = { time: '', me: -1, opp: -1, coins: -1 };
     this.tm = {};
     this.t.crestMe.innerHTML = lokoCrest();
@@ -61,7 +84,43 @@ export class Hud {
     this.t.crestOpp.innerHTML = spec.club.crest || crest(spec.club.kit, spec.club.name.slice(0, 2));
     this.last = { time: '', me: -1, opp: -1, coins: -1 };
   }
-  hide() { if (this.onHide) this.onHide(); this.cine(false); this.el.hidden = true; this.clearGoal(); this.warn(null); this.hint(null); this.t.banner.hidden = true; }
+  hide() { if (this.onHide) this.onHide(); this.cine(false); this.el.hidden = true; this.clearFloats(); this.clearGoal(); this.matchday(null); this.warn(null); this.hint(null); this.t.banner.hidden = true; }
+
+  /**
+   * Представлення суперника на виході команд: дві панелі в кольорах форм з'їжджаються до «VS»; на нашій ще форма (останні 5).
+   * spec — як у show (spec.home — свій онлайн-клуб); x — { form, revenge, pw: [ми, вони] }.
+   * Лише transform/opacity; ховається сама за ~4 с або від першого дотику (той самий дотик пропускає й кадр інтро). null — сховати.
+   */
+  matchday(spec, x = {}) {
+    const el = this.t.mday;
+    clearTimeout(this.tm.mday); clearTimeout(this.tm.mdayOut); clearTimeout(this.tm.mdayHide);
+    if (this._mdOff) { window.removeEventListener('pointerdown', this._mdOff, true); this._mdOff = null; }
+    if (!spec) {
+      if (el.hidden || el.classList.contains('out')) return;
+      el.classList.add('out'); this.tm.mdayOut = setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 380);
+      return;
+    }
+    const H = spec.home, c = spec.club, e = esc, on = !!(spec.online || (H && H.online));   // у гостя spec — hudSpec без online, але клуби з matchClub
+    const side = (cls, name, city, cr, kit, rows) => {
+      const m = kit && kit.main || '#254e9c', s2 = kit && kit.second || '#f1efe8';
+      return `<div class="md-side ${cls}" style="--k:${m};--k2:${s2};--kt:${light(m) ? '#0c1311' : '#f6f4ec'}"><div class="md-un">
+        <span class="md-cr">${cr}</span><div class="md-name"><b class="fit">${e(name)}</b><small>${e(city || '')}</small>${rows}</div></div></div>`;
+    };
+    const pw = (i) => (x.pw ? `<em class="md-pw">сила <b>${x.pw[i]}</b></em>` : '');
+    const form = x.form && x.form.length ? `<i class="md-form" title="Останні матчі">${x.form.map((r) => `<u class="${r === 'W' ? 'w' : r === 'D' ? 'd' : 'l'}"></u>`).join('')}</i>` : '';
+    const me = side('me', H ? H.name : 'Локомотив', H ? H.city : 'Київ', this.t.crestMe.innerHTML, H ? H.kit : KIT_LOKO, pw(0) + form);
+    const op = side('opp', c.name, c.city, this.t.crestOpp.innerHTML, c.kit, pw(1));
+    const tag = on ? 'ОНЛАЙН-МАТЧ' : e(spec.leagueName);
+    const no = on ? '' : `<span>матч ${spec.no} з ${spec.of}</span>`;
+    el.innerHTML = `<div class="md-in">
+      <div class="md-top"><b>${tag}</b>${no}${spec.final ? '<span class="fin">ФІНАЛ</span>' : ''}${x.revenge ? '<span class="rev">РЕВАНШ</span>' : ''}</div>
+      <div class="md-row">${me}<div class="md-vs"><b>VS</b></div>${op}</div>
+    </div>`;
+    el.classList.remove('out'); el.hidden = false; fitText(el);
+    this._mdOff = () => this.matchday(null);
+    this.tm.mday = setTimeout(() => window.addEventListener('pointerdown', this._mdOff, true), 400);   // дотик, що запустив матч, картку не ховає
+    this.tm.mdayHide = setTimeout(() => this.matchday(null), 4600);
+  }
 
   /** Рахунок: цифра прокручується, як на табло стадіону — стара їде вгору, нова падає згори; блок спалахує кольором команди. */
   setScore(me, opp) {
@@ -108,11 +167,12 @@ export class Hud {
     this.t.extraN.textContent = '+' + n; e.hidden = false;
     e.classList.remove('show'); void e.offsetWidth; e.classList.add('show');
   }
-  /** Під табло виїжджає смужка «ГОЛ · Прізвище 34'» у кольорі команди, що забила. */
+  /** Під табло виїжджає смужка «ГОЛ · Прізвище 34'» у кольорі команди, що забила; автогол — «АВТОГОЛ · Прізвище» (og). */
   scored(g) {
     const el = this.t.bgoal;
     this.t.bgoalT.textContent = g.name + ' ' + g.min;
-    el.className = 'bug-goal ' + (g.mine ? 'me' : 'opp'); el.hidden = false;
+    el.querySelector('b').textContent = g.og ? 'АВТОГОЛ' : 'ГОЛ';
+    el.className = 'bug-goal ' + (g.mine ? 'me' : 'opp') + (g.og ? ' og' : ''); el.hidden = false;
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(this.tm.bgoal); this.tm.bgoal = setTimeout(() => { el.classList.add('out'); this.tm.bgoal = setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 450); }, 9000);
   }
@@ -120,20 +180,20 @@ export class Hud {
   scoreCard(d, dur = 3.5) {
     const sp = this.spec, el = this.t.scard;
     if (!sp) return;
-    const list = (mine) => d.scorers.filter((g) => g.mine === mine).map((g, i) => `<li style="--i:${i}">${esc(g.name)} <em>${g.min}</em></li>`).join('');
+    const list = (mine) => d.scorers.filter((g) => g.mine === mine).map((g, i) => `<li style="--i:${i}">${esc(g.name)}${g.og ? ' <i class="og">авт.</i>' : ''} <em>${esc(g.min)}</em></li>`).join('');
     el.innerHTML = `<div class="sc-in ${d.final ? 'final' : ''}">
       <div class="sc-top"><b>${d.title}</b><span>${sp.leagueName} · матч ${sp.no}</span></div>
       <div class="sc-row">
-        <div class="sc-team me"><span class="sc-cr">${this.t.crestMe.innerHTML}</span><b>${this.meName || 'Локомотив'}</b></div>
+        <div class="sc-team me"><span class="sc-cr">${this.t.crestMe.innerHTML}</span><b class="fit">${esc(this.meName || 'Локомотив')}</b></div>
         <div class="sc-score"><b>${d.me}</b><i></i><b>${d.opp}</b></div>
-        <div class="sc-team opp"><b>${sp.club.name}</b><span class="sc-cr">${this.t.crestOpp.innerHTML}</span></div>
+        <div class="sc-team opp"><b class="fit">${esc(sp.club.name)}</b><span class="sc-cr">${this.t.crestOpp.innerHTML}</span></div>
       </div>
       ${d.pens ? `<div class="sc-pens">Пенальті ${d.pens.me} : ${d.pens.opp}</div>` : ''}
       <div class="sc-goals"><ul class="me">${list(true)}</ul><ul class="opp">${list(false)}</ul></div>
       ${d.note ? `<div class="sc-note">${d.note}</div>` : ''}
     </div>`;
     el.style.setProperty('--opp', sp.club.kit.main);
-    el.hidden = false; el.classList.remove('out'); void el.offsetWidth;
+    el.hidden = false; el.classList.remove('out'); fitText(el);
     clearTimeout(this.tm.scard); this.tm.scard = setTimeout(() => { el.classList.add('out'); this.tm.scard = setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 500); }, dur * 1000);
   }
   /** Семафор: зелений «вперед» — м'яч у нас, червоний «стоп» — у суперника, жовтий — вільний. */
@@ -171,10 +231,40 @@ export class Hud {
     b.hidden = false; b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
     clearTimeout(this.tm.banner); this.tm.banner = setTimeout(() => { b.hidden = true; }, 2300);
   }
-  goal(title, sub, kind) {
-    const g = this.t.goal;
-    this.t.goalT.textContent = title; this.t.goalS.textContent = sub;
-    g.className = 'goaltxt ' + kind; g.hidden = false;
+  /**
+   * Напис гола з погляду того, хто дивиться: великий заголовок у центрі (згасає за ~3 с) і плашка автора внизу, як у трансляції.
+   * d: { mine, og, name, min, ast, tag, late, extra, coins, gk } — mine: забила наша команда (при og — це суперник зрізав у свої);
+   * name — прізвище автора (при og — автора автогола), ast — хто віддав пас, tag/late — ключі GOAL_TAG/GOAL_LATE.
+   * Серія пенальті: { pen: 'goal'|'save'|'miss'|'post', mine (б'є наш), name, min, series }.
+   */
+  goal(d) {
+    const g = this.t.goal, e = esc, crMe = this.t.crestMe.innerHTML, crOpp = this.t.crestOpp.innerHTML;
+    let kind, title, label, sub = '', cr, ribbon = '';
+    const chips = [];
+    if (d.pen) {
+      const good = (d.pen === 'goal') === !!d.mine;
+      kind = good ? 'me' : 'opp'; label = 'ПЕНАЛЬТІ'; cr = d.mine ? crMe : crOpp;
+      title = d.pen === 'goal' ? (d.mine ? 'ГОЛ!' : 'ЗАБИЛИ') : d.pen === 'save' ? (d.mine ? 'ВІДБИВ' : 'ТИ ВІДБИВ!') : d.pen === 'miss' ? 'МИМО!' : 'ШТАНГА!';
+      if (d.series) chips.push(['', 'серія ' + d.series]);
+    } else {
+      const mine = !!d.mine, own = mine !== !!d.og;                            // own — автор із нашої команди
+      kind = (mine ? 'me' : 'opp') + (d.og ? ' og' : '');
+      title = d.og ? (mine ? 'АВТОГОЛ!' : 'АВТОГОЛ') : mine ? 'ГОЛ!' : 'ПРОПУСТИЛИ';
+      label = d.og ? 'АВТОГОЛ' : 'ГОЛ';
+      cr = own ? crMe : crOpp;
+      sub = d.og ? (d.gk ? 'воротар — у власні ворота' : 'зрізав у власні ворота') : d.ast ? 'пас: ' + d.ast : '';
+      const t = GOAL_TAG[d.tag]; if (t && t[mine ? 0 : 1]) chips.push(['tag', t[mine ? 0 : 1]]);
+      if (d.extra) chips.push(['', d.extra]);
+      if (d.coins) chips.push(['coin', '+' + d.coins]);
+      ribbon = GOAL_LATE[d.late] || '';
+      if (ribbon) kind += ' late';
+    }
+    const who = d.name || (cr === crMe ? this.meName || 'Локомотив' : this.spec ? this.spec.club.name : '');
+    g.innerHTML = `<div class="gt-mid">${ribbon ? `<div class="gt-late"><span>${ribbon}</span></div>` : ''}
+      <h1 class="gt-t" aria-label="${title}">${[...title].map((ch, i) => `<s style="--i:${i}">${ch === ' ' ? '&nbsp;' : ch}</s>`).join('')}</h1>
+      ${chips.length ? `<div class="gt-chips">${chips.map(([c, t], i) => `<span class="${c}" style="--i:${i}">${e(t)}${c === 'coin' ? I.coin : ''}</span>`).join('')}</div>` : ''}</div>
+      <div class="gt-plate"><div class="gt-card"><i class="gt-lab">${label}</i><div class="gt-row"><span class="gt-cr">${cr}</span><div class="gt-who"><b class="fit">${e(who)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div><em>${e(d.min || '')}</em></div></div></div>`;
+    g.className = 'goaltxt ' + kind; g.hidden = false; fitText(g);
     this.goalLive = true; this.el.classList.remove('bug-off');               // гол: табло лишається на екрані з новим рахунком
   }
   clearGoal() { this.t.goal.hidden = true; this.goalLive = false; if (this.el.classList.contains('cine-on')) this.el.classList.add('bug-off'); }
@@ -199,6 +289,8 @@ export class Hud {
     el.innerHTML = `<b class="pc-ovr ${c.tier}">${c.ovr}</b><div class="pc-info"><span class="pc-name">${esc(c.name)}</span><small>№${c.num} · ${c.role}</small>${c.bars.map((b) => `<div class="pc-bar"><em>${b[0]}</em><i><u style="width:${b[1]}%"></u></i><s>${b[1]}</s></div>`).join('')}</div>`;
   }
 
+  /** Прибрати всі дрібні написи одразу: розведення після гола чи тайму, кінець матчу. */
+  clearFloats() { for (const d of this.floatEls) d.hidden = true; }
   float(x, y, text, kind = '') {
     const d = this.floatEls[this.fi]; this.fi = (this.fi + 1) % this.floatEls.length;
     d.hidden = false; d.className = 'float ' + kind; d.textContent = text;

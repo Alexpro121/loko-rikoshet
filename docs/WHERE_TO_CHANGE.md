@@ -62,7 +62,7 @@
 | Перерва | `startBreak`, `updateBreak` |
 | Як м'яч поводиться в сітці після гола | `net`, `NET_BACK`, `NET_OUT` у `src/physics/world.js` |
 | Що вважати сейвом, досвід воротаря | `creditSave`, `onBody`, `trapMine` у `src/match/match.js` |
-| Автор гола, автогол | `byTeam` в `onGoal`, `goalsBy` у `src/match/match.js` |
+| Автор гола, автогол, гольовий пас | `goalCredit`, `kicked`, `touched`, `passer`, `headingIn` у `src/match/match.js`; голи в картки: `goalsBy`; онлайн: фільтр `og` у `Online.finish` |
 | Коли суддя свистить кінець тайму | `calmBall`, `ballFlying` у `src/match/match.js` |
 | Межі штрафного | `PITCH.BOX_D`, `PITCH.BOX_W` у `src/config.js` |
 | Напрям і пунктир удару ШІ | `aimCounter`, `counterPath` у `src/match/match.js` |
@@ -153,6 +153,11 @@
 | Пауза | `UI.pause` |
 | Екран результату | `showResult`, `renderResult` |
 | Табло й написи в матчі | `src/ui/hud.js`; для онлайну також `HUD_FWD` і `applyEvent` |
+| Напис гола, автогола й пенальті | `Hud.goal`, тексти `GOAL_TAG`, `GOAL_LATE` у `src/ui/hud.js`; ключі ставить `goalImportance`; стилі `.gt-*` у `src/style.css` |
+| Кільце під м'ячем: кольори, пороги, пульс | `RingTone` у `src/match/ring.js`; вхідні дані: `danger` (`updateDanger`), `shotQuality` у кінці `Match.syncView` і в `GuestMatch.header` |
+| Дрібні написи подій (ВІДБІР, ВРЯТУВАВ, ПАС, ШТАНГА) | текст і частота: `floatAt` (лише в живій грі й не раніше 3.5 с після розстановки `formT`, пауза 1.6 с, `key` — завжди; `Hud.clearFloats` на розведенні), коли писати «ПАС!»: `bigPass` у `src/match/match.js`; вигляд: `.float`, `@keyframes rise`, `.combo` у `src/style.css` |
+| Представлення суперника перед матчем | `Hud.matchday`; дані дають `Match.start` і `GuestMatch.start`; стилі `.md-*` у `src/style.css` |
+| Довгі назви клубів і прізвища без трикрапки | `fitText` у `src/ui/hud.js` і клас `.fit` (картка суперника, напис гола, табло рахунку, екран результату) |
 | Мінімапа: вигляд, лінії | `Minimap` у `src/ui/minimap.js` (`bake` для поля, `drawBallPath`, `drawRuns`, `SAMPLE`, `BALL_CAP`) |
 | Зразок мінімапи в налаштуваннях | `DemoMatch` у `src/ui/minimap-demo.js`; схема екрана: `planHtml`, `SPOTS` у `src/ui/minimap.js` |
 | Мінімапа: місце, розмір, обхід HUD | `MapHud.compute`, зони `.z-*` у `src/style.css`; поля `map*` у `SETTINGS_DEFAULT`; вкладка `map` у `renderSettings` |
