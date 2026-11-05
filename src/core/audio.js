@@ -7,7 +7,7 @@ import { tgHaptic } from './telegram.js';
 import { Bank, LOOP_LEN, MARGIN } from './audio-bank.js';
 import { loadPerf } from './perf.js';
 
-const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const clamp01 = (x) => (x > 1 ? 1 : x > 0 ? x : 0);   // NaN дає 0: AudioParam кидає виняток на нескінченні числа
 const VOICES = 26;                                     // скільки одноразових голосів разом; понад це тихі звуки пропускаємо
 const BED = 0.62, TENSE = 0.5, CHANT = 0.34;           // рівні шарів натовпу при crowd(1)
 const MUS = 0.26;                                      // рівень музики меню
@@ -24,6 +24,7 @@ export class AudioEngine {
     this.timer = 0;
     this.wakeUntil = 0;
     this.want = 'off';
+    this.padUntil = 0; this.padOsc = null;
     this.tOff = 0;                                     // зсув часу для рендеру сцени в OfflineAudioContext
     this.offline = false;
     this.seed = 0x2f6e2b1;
@@ -92,15 +93,21 @@ export class AudioEngine {
     const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
     const lite = this.lite = opts.lite === undefined ? loadPerf(coarse).level <= 1 : opts.lite;
     if (!opts.offline && !opts.forceOn) this.bank.mono = coarse;   // телефон і Telegram: WebView тісний, а динамік один. Моно вдвічі легше в пам'яті
-    this.revOut = gain(0.8, this.world);
+    // Простір один, входів два: ефекти мовчать із вимикачем ефектів, музика з вимикачем музики. Вихід повз обидва, інакше вимкнена музика
+    // й початок матчу лишали б її відлуння ще на 14 с, а вимкнені ефекти забирали б простір у музики.
+    this.revOut = gain(0.8, harsh);
+    let core;
     if (lite) {
-      this.revIn = c.createBiquadFilter(); this.revIn.type = 'lowpass'; this.revIn.frequency.value = 1900;
-      for (const [sec, v] of [[0.083, 0.3], [0.147, 0.24]]) { const d = c.createDelay(0.3); d.delayTime.value = sec; this.revIn.connect(d); d.connect(gain(v, this.revOut)); }
+      core = c.createBiquadFilter(); core.type = 'lowpass'; core.frequency.value = 1900;
+      for (const [sec, v] of [[0.083, 0.3], [0.147, 0.24]]) { const d = c.createDelay(0.3); d.delayTime.value = sec; core.connect(d); d.connect(gain(v, this.revOut)); }
     } else {
       this.rev = c.createConvolver(); this.rev.buffer = this.makeIR(c);
-      this.revIn = gain(1, this.rev);
+      core = gain(1, this.rev);
       this.rev.connect(this.revOut);
     }
+    this.revIn = gain(S.settings.sfx || this.forceOn ? 1 : 0, core);
+    this.musSend = gain(1.45, core);                   // після гучності музики: 0.38 при MUS 0.26
+    this.mus.connect(this.musSend);
     const len = c.sampleRate;
     this.noise = c.createBuffer(1, len, c.sampleRate);
     const d = this.noise.getChannelData(0);
@@ -130,6 +137,7 @@ export class AudioEngine {
     if (!this.ctx) return;
     const t = this.ctx.currentTime, st = S.settings;
     this.sfx.gain.setTargetAtTime(st.sfx || this.forceOn ? 1 : 0, t, 0.02);
+    this.revIn.gain.setTargetAtTime(st.sfx || this.forceOn ? 1 : 0, t, 0.02);
     this.mus.gain.setTargetAtTime(st.music || this.forceOn ? 1 : 0, t, 0.05);
     if (st.sfx || this.forceOn) this.syncCrowd(); else this.stopLayers();   // вимкнений звук не тримає петель
   }
@@ -435,20 +443,26 @@ export class AudioEngine {
     const c = this.ctx;
     if (!c) return;
     const t = this.clock(), on = this.level > 0.005 && (S.settings.sfx || this.forceOn);
-    if (!on) { for (const k in this.layers) this.layers[k].gain.gain.setTargetAtTime(0, t, tc); this.synthGain.gain.setTargetAtTime(0, t, tc); this.stopTimer(); return; }
+    if (!on) { for (const k in this.layers) this.aim(this.layers[k].gain, 0, t, tc); this.aim(this.synthGain, 0, t, tc); this.stopTimer(); return; }
     const boost = this.boostUntil > this.clock() ? this.boost : 0, ten = clamp01(this.tension + boost);
     const lv = this.level * this.duck, hasBed = this.bank.has('crowd-bed');
     this.ensureLayer('crowd-bed'); this.ensureLayer('bed2'); this.ensureLayer('crowd-tense');
     const bed = hasBed ? lv * BED * (1 - 0.3 * ten) : 0;
-    this.layers['crowd-bed'].gain.gain.setTargetAtTime(bed * (this.lite ? 1 : 0.86), t, tc);
-    this.layers.bed2.gain.gain.setTargetAtTime(bed * this.bed2Mix, t, tc);
-    this.layers['crowd-tense'].gain.gain.setTargetAtTime(this.bank.has('crowd-tense') ? lv * TENSE * ten * ten : 0, t, tc);
+    this.aim(this.layers['crowd-bed'].gain, bed * (this.lite ? 1 : 0.86), t, tc);
+    this.aim(this.layers.bed2.gain, bed * this.bed2Mix, t, tc);
+    this.aim(this.layers['crowd-tense'].gain, this.bank.has('crowd-tense') ? lv * TENSE * ten * ten : 0, t, tc);
     const chant = this.bank.has('crowd-chant') ? lv * CHANT * this.chantLv * (1 - 0.6 * ten) : 0;
     if (chant > 0.001) this.ensureLayer('crowd-chant');
-    this.layers['crowd-chant'].gain.gain.setTargetAtTime(chant, t, tc);
+    this.aim(this.layers['crowd-chant'].gain, chant, t, tc);
     // шум лише поки немає запису
     this.ensureSynth(!hasBed);
-    this.synthGain.gain.setTargetAtTime(hasBed ? 0 : lv * 0.09, t, tc);
+    this.aim(this.synthGain, hasBed ? 0 : lv * 0.09, t, tc);
+  }
+  /** Нова ціль гучності лише коли вона справді змінилась: 4 записи на секунду за годину гри це десятки тисяч подій у таймлайні параметра, а WebView може їх не прибирати. */
+  aim(node, v, t, tc) {
+    const old = node.aimed;
+    if (old !== undefined && Math.abs(v - old) < 0.004 + old * 0.02 && (v > 0 || old === 0)) return;
+    node.aimed = v; node.gain.setTargetAtTime(v, t, tc);
   }
   /** Запустити петлю, якщо є запис. Зупинені петлі не їдять процесор, тож у меню їх немає. */
   ensureLayer(key) {
@@ -488,18 +502,19 @@ export class AudioEngine {
   swapQuiet(key) {
     const L = this.layers[key];
     this.bank.swap(key, () => this.rnd()).then((buf) => {
-      if (!buf || this.layers[key] !== L || this.level <= 0.005) return;
+      if (!buf || this.level <= 0.005 || !this.isQuiet(key)) return;   // поки декодували, шар могли вже підняти: новий запис заграє при наступному запуску
       this.dropVoice(L, 0); this.startVoice(key, buf, 0);
     });
   }
+  isQuiet(key) { return (key === 'crowd-tense' ? this.tension < 0.04 && !(this.boostUntil > this.clock() && this.boost > 0) : this.chantLv < 0.01) && this.layers[key].gain.gain.value < 0.01; }
   /** Зміна поєднань, 4 рази на секунду з track. */
   tick() {
     const t = this.clock();
     if (this.level <= 0.005) return;
     if (!this.nextRot) this.nextRot = t + 25 + this.rnd() * 20;
     if (t > this.nextRot) this.rotateBed();
-    if (this.tension < 0.04 && t > this.nextTense) { this.nextTense = t + 40 + this.rnd() * 40; this.swapQuiet('crowd-tense'); }
-    if (this.chantLv < 0.01 && t > this.nextChant) { this.nextChant = t + 30 + this.rnd() * 30; this.swapQuiet('crowd-chant'); }
+    if (t > this.nextTense && this.isQuiet('crowd-tense')) { this.nextTense = t + 40 + this.rnd() * 40; this.swapQuiet('crowd-tense'); }
+    if (t > this.nextChant && this.isQuiet('crowd-chant')) { this.nextChant = t + 30 + this.rnd() * 30; this.swapQuiet('crowd-chant'); }
   }
   ensureSynth(want) {
     if (want && !this.synthSrc) {
@@ -528,6 +543,7 @@ export class AudioEngine {
   track(bx, bz, bvx, bvz, cx, cz, tx, tz, L) {
     const dx = bx - cx, dz = bz - cz, n = Math.hypot(tx, tz) || 1, rx = -tz / n, rz = tx / n;
     const side = dx * rx + dz * rz, d = Math.hypot(dx, dz), p = side / 38;
+    if (!(d >= 0)) return;                             // NaN у положенні м'яча не має дійти до панорами: вона кине виняток посеред кадру
     this.pan = p < -0.55 ? -0.55 : p > 0.55 ? 0.55 : p;
     const f = (d - 22) / 48; this.far = f < 0 ? 0 : f > 1 ? 1 : f;
     if (!this.ctx) return;
@@ -550,21 +566,25 @@ export class AudioEngine {
     clearInterval(this.timer); this.timer = 0;
     const t = this.ctx.currentTime;
     this.musMix.gain.setTargetAtTime(mode === 'menu' ? MUS : 0, t, mode === 'menu' ? 0.8 : 0.35);
+    this.endPad(t + 1.5);                              // старий акорд не доспівує під новим: швидкий вихід із матчу дав би два одразу
+    this.padUntil = 0;
     if (mode !== 'menu') return;
     this.step = 0; this.nextT = t + 0.1;
     this.timer = setInterval(() => this.schedule(), 300);
     this.schedule();
   }
-  /** Один акорд на 4 такти. Вузли створюємо лише наперед на ~1 с; вимкнена музика чи зупинений контекст не створюють нічого (CR-13). */
+  /** Один акорд на 4 такти. Вузли створюємо наперед лише на такт; вимкнена музика чи зупинений контекст не створюють нічого (CR-13). */
   schedule() {
     const c = this.ctx;
     if (!c || c.state !== 'running' || !(S.settings.music || this.forceOn)) { if (c) this.nextT = Math.max(this.nextT, c.currentTime); return; }
+    if (this.nextT < c.currentTime) this.nextT = c.currentTime + 0.05;   // після довгого завислого кадру не наздоганяємо: усі пропущені такти заграли б разом
     while (this.nextT < c.currentTime + 1) this.playBar(this.nextT - c.currentTime);
   }
-  /** Такт (4 долі по 0.86 с): у міжгір'ї акордів рідкі м'які ноти клавіш; style міняє лише сторінка прослуховування. */
+  /** Такт (4 долі по 0.86 с): під акордом рідкі м'які ноти клавіш; style міняє лише сторінка прослуховування. */
   playBar(when) {
     const beat = 0.86, bar = this.step, chordI = Math.floor(bar / 4) % PROG.length, ch = PROG[chordI];
-    if (bar % 4 === 0) this.padChord(ch, when, beat * 16);
+    // акорд на початку четвірки, а також одразу, якщо він уже відзвучав: музику могли ввімкнути посеред четвірки
+    if (bar % 4 === 0 || this.ctx.currentTime + when >= this.padUntil) { const dur = beat * 4 * (4 - (bar % 4)); this.padChord(ch, when, dur); this.padUntil = this.ctx.currentTime + when + dur; }
     if (this.musicStyle !== 'pad') {
       for (let b = 0; b < 4; b++) {
         if (this.rnd() < (b === 0 ? 0.75 : 0.38)) {
@@ -580,23 +600,24 @@ export class AudioEngine {
     const c = this.ctx, t = c.currentTime + when;
     const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.3;
     lp.frequency.setValueAtTime(520, t); lp.frequency.linearRampToValueAtTime(820, t + dur * 0.5); lp.frequency.linearRampToValueAtTime(480, t + dur);
-    const g = c.createGain(), r = c.createGain();
-    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.075, t + 2.6);
+    const g = c.createGain(), keep = [];
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.075, t + Math.min(2.6, dur * 0.3));
     g.gain.setValueAtTime(0.075, t + dur - 2.2); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.6);
-    r.gain.value = 0.35;
-    lp.connect(g); g.connect(this.musMix); g.connect(r); r.connect(this.revIn);
+    lp.connect(g); g.connect(this.musMix);
     for (let i = 0; i < ch.length; i++) {
       for (const d of [-5, 5]) {
         const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = ch[i]; o.detune.value = d;
-        o.connect(lp); o.start(t); o.stop(t + dur + 0.7);
+        o.connect(lp); o.start(t); o.stop(t + dur + 0.7); keep.push(o);
       }
     }
+    this.padOsc = keep;
   }
+  endPad(at) { const p = this.padOsc; if (!p) return; this.padOsc = null; for (let i = 0; i < p.length; i++) { try { p[i].stop(at); } catch (_) { /* вже зупинено */ } } }
   /** Клавіша з повстю: основний тон згасає довго, обертони швидко, м'який удар молоточка. */
   key(f, when, vol) {
     const c = this.ctx, t = c.currentTime + when;
-    const g = c.createGain(), r = c.createGain(); r.gain.value = 0.42;
-    g.connect(this.musMix); g.connect(r); r.connect(this.revIn);
+    const g = c.createGain();
+    g.connect(this.musMix);
     const part = [[1, 1, 2.4], [2, 0.32, 1.1], [3, 0.1, 0.5], [4.01, 0.04, 0.24]];
     for (let i = 0; i < part.length; i++) {
       const o = c.createOscillator(), e = c.createGain(), P = part[i];
@@ -608,7 +629,7 @@ export class AudioEngine {
   }
 }
 
-// Fmaj7 → Am7 → Dm9 → Csus/G: без «ввідного» тяжіння, тож не набридає й не потребує розв'язки
+// Fmaj7 → Am7 → Dm7 → Gsus4: без вирішення в тоніку, тож не набридає й не потребує розв'язки
 const PROG = [
   [87.31, 174.61, 261.63, 329.63, 440],
   [110, 164.81, 261.63, 329.63, 392],

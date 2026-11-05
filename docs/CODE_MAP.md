@@ -24,13 +24,13 @@
 - **Bank** :28
   constructor:29, has:43, count:44, load:47, loadAll:66, fetchBuf:75, prepare:86, take:96, swap:108, pick:120
 
-## src/core/audio.js (624 рядків)
+## src/core/audio.js (645 рядків)
 
 AudioEngine: гібрид. Натовп, удар, свисток, сітка, стовп, рукавиці це справжні записи (audio-bank.js), тонкі шари, інтерфейс
 
-- Експорти: audio:619, vibrate:621
+- Експорти: audio:640, vibrate:642
 - **AudioEngine** :15
-  constructor:16, rnd:41, jit:42, chance:43, clock:44, gate:46, unlock:48, attach:62, makeIR:113, applySettings:129, suspend:137, resume:139, live:144, claim:148, tone:156, hiss:170, mallet:185, sample:195, kick:219, pass:231, wall:239, post:249, net:261, save:270, thud:277, slide:283, clap:290, revPing:293, whistle:303, horn:318, goal:335, concede:344, crowdReact:353, win:371, lose:376, bell:381, rumble:383, click:386, back:387, coin:389, buy:394, deny:395, slowmo:398, beat:409, buildCrowd:417, crowd:423, lift:432, syncCrowd:434, ensureLayer:454, startVoice:460, dropVoice:468, rotateBed:476, swapQuiet:488, tick:496, ensureSynth:504, stopTimer:512, stopLayers:516, slotReady:520, chant:522, track:528, music:545, schedule:559, playBar:565, padChord:579, key:596
+  constructor:16, rnd:42, jit:43, chance:44, clock:45, gate:47, unlock:49, attach:63, makeIR:120, applySettings:136, suspend:145, resume:147, live:152, claim:156, tone:164, hiss:178, mallet:193, sample:203, kick:227, pass:239, wall:247, post:257, net:269, save:278, thud:285, slide:291, clap:298, revPing:301, whistle:311, horn:326, goal:343, concede:352, crowdReact:361, win:379, lose:384, bell:389, rumble:391, click:394, back:395, coin:397, buy:402, deny:403, slowmo:406, beat:417, buildCrowd:425, crowd:431, lift:440, syncCrowd:442, aim:462, ensureLayer:468, startVoice:474, dropVoice:482, rotateBed:490, swapQuiet:502, isQuiet:509, tick:511, ensureSynth:519, stopTimer:527, stopLayers:531, slotReady:535, chant:537, track:543, music:561, schedule:577, playBar:584, padChord:599, endPad:615, key:617
 
 ## src/core/camera.js (312 рядків)
 
@@ -191,12 +191,12 @@ Weather: дощ і сніг на InstancedMesh.
 - **Weather** :9
   constructor:10, setDensity:24, set:29, update:34
 
-## src/lab/audio-old.js (115 рядків)
+## src/lab/audio-old.js (119 рядків)
 
 Старий синтез (до оновлення звуку) для порівняння на сторінці прослуховування. У гру не потрапляє.
 
 - **OldAudio** :2
-  attach:3, clock:21, tone:22, hiss:33, kick:44, wall:45, coin:53, pass:58, save:59, whistle:60, horn:69, goal:81, concede:82, bell:83, rumble:84, click:85, back:86, buy:87, deny:88, win:89, lose:90, slowmo:91, beat:95, slide:96, clap:97, thud:98, crowd:99, post:101, net:102, crowdReact:103, renderMusic:105
+  attach:3, clock:21, tone:22, hiss:33, kick:44, wall:45, coin:53, pass:58, save:59, whistle:60, horn:69, goal:81, concede:82, bell:83, rumble:84, click:85, back:86, buy:87, deny:88, win:89, lose:90, slowmo:91, beat:95, slide:96, clap:97, thud:98, crowd:99, post:101, net:102, crowdReact:103, renderMusic:105, startMusic:106, scheduleMusic:108
 
 ## src/lab/lab.css (34 рядків)
 

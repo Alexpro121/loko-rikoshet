@@ -141,8 +141,8 @@ let oldMusicTimer = 0;
 function stopOldMusic() { clearInterval(oldMusicTimer); oldMusicTimer = 0; }
 function playOldMusic(mode) {
   stopAll(); ensureCtx();
-  let next = 0;
-  oldMusicTimer = setInterval(() => { if (next < ctx.currentTime + 1) { const w = Math.max(0, next - ctx.currentTime); eng.old.renderMusic(mode, 1, w); next = ctx.currentTime + w + 1; } }, 200);
+  eng.old.startMusic();
+  oldMusicTimer = setInterval(() => eng.old.scheduleMusic(mode, ctx.currentTime + 0.5), 100);
 }
 
 // --- заміри ---
@@ -174,7 +174,7 @@ const TESTS = [
   ['натовп: гул 0.7', (e) => { e.crowd(0.7); }, 8], ['натовп: напруга', (e) => { e.crowd(0.7); if (e instanceof AudioEngine) { e.tension = 1; e.syncCrowd(0.01); } }, 8],
   ['збіг: гол+гул+свисток', (e) => { e.crowd(0.8); at(e, 1, (x) => { x.goal(); x.whistle(true); x.kick(1); }); }, 6],
   ['збіг: удар+стовп+ох+свисток', (e) => { e.crowd(0.8); at(e, 1, (x) => { x.kick(1); x.post(28); x.crowdReact('gasp'); x.whistle(false); }); }, 4],
-  ['музика меню', (e, c) => { if (e instanceof AudioEngine) { for (let i = 0; i < 6; i++) e.playBar(i * 3.44); } else e.renderMusic('menu', 20); }, 20],
+  ['музика меню', (e) => { if (e instanceof AudioEngine) { for (let i = 0; i < 6; i++) e.playBar(i * 3.44); } else e.renderMusic('menu', 20); }, 20],
 ];
 async function measure(onRow) {
   const rows = [];

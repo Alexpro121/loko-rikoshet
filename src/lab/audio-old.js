@@ -101,11 +101,15 @@ export class OldAudio {
   post(impact = 16) { this.wall(5, impact); }
   net() { this.wall(0, 12); }
   crowdReact() {}
-  /** Старий секвенсор музики: планує dur секунд, починаючи через when секунд. */
-  renderMusic(mode, dur, when = 0) {
+  /** Старий секвенсор музики: один проміжок для офлайн-заміру. */
+  renderMusic(mode, dur) { this.startMusic(); this.scheduleMusic(mode, this.clock() + dur); }
+  startMusic() { this.mS = 0; this.mT = this.clock() + 0.05; }
+  /** Спланувати ноти до моменту until, продовжуючи мелодію з того самого місця. */
+  scheduleMusic(mode, until) {
     const bpm = mode === 'match' ? 126 : 104, dt = 60 / bpm / 4, scale = [220, 261.6, 293.7, 329.6, 392, 440, 523.3, 587.3];
     const pat = [0, 2, 4, 2, 5, 4, 2, 3, 0, 2, 4, 6, 5, 4, 2, 1];
-    for (let s = 0, w = when; w < when + dur; s++, w += dt) {
+    for (; this.mT < until; this.mS++, this.mT += dt) {
+      const s = this.mS, w = this.mT - this.clock();
       if (s % 4 === 0) this.tone('sine', 110, 55, 0.14, 0.5, w, this.mus);
       if (s % 4 === 2) this.hiss(5200, 1.5, 0.03, 0.12, w, 'highpass', this.mus);
       if (s % 8 === 3 || s % 8 === 5) this.hiss(2600, 2, 0.025, 0.09, w, 'bandpass', this.mus);

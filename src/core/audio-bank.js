@@ -108,7 +108,7 @@ export class Bank {
   async swap(slot, rnd) {
     const urls = this.urls[slot];
     if (this.all) return this.pick(slot, rnd);
-    if (this.busy[slot] || !this.ctx || !urls || urls.length < 2) return null;
+    if (this.busy[slot] || !this.ctx || !urls || urls.length < 2 || this.next[slot] === undefined) return null;   // load до цього слота ще не дійшов
     this.busy[slot] = true;
     const buf = await this.fetchBuf(urls[this.next[slot]++ % urls.length], slot);
     this.busy[slot] = false;
