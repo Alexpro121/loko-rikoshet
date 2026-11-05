@@ -1183,7 +1183,9 @@ export class Player {
         this.bodyYaw += clamp(angDiff(this.bodyYaw, by), -2 * wmax, 2 * wmax);
       }
     }
-    this.body.rotation.y = this.bodyYaw;
+    // усі три осі: повтор пише в body кватерніон, і за курсу понад ±90° Ейлер стає x=π, y=π−θ, z=π. Запис лише y лишав x і z,
+    // тож після першого повтору модель дивилась дзеркально до bodyYaw: на екрані гравці бігали боком і задом
+    this.body.rotation.set(0, this.bodyYaw, 0);
     const turn = dt > 0 ? angDiff(prevYaw, this.bodyYaw) / dt : 0;
     const acc = dt > 0 ? (speed - (this.pSpeed || 0)) / dt : 0; this.pSpeed = speed;
     this.accL = (this.accL || 0) + (clamp(acc, -25, 25) - (this.accL || 0)) * Math.min(1, dt * 8);
@@ -2064,7 +2066,9 @@ export class Player {
     // груди повертаються до гри до ~45°, голова ще до ~65° — озирається через плече
     if (!this.rag) {
       const d = angDiff(this.bodyYaw, this.yawF ?? this.yaw), tw = Math.sign(d) * Math.max(0, Math.abs(d) - 0.12);
-      leanY += clamp(0.5 * tw, -0.8, 0.8); hdY += clamp(0.55 * tw, -1.1, 1.1);
+      // польовий гравець не скручується в поясі на понад ~25°: решту кута добирає голова. Воротар без змін (hitbox)
+      if (this.look.gk) { leanY += clamp(0.5 * tw, -0.8, 0.8); hdY += clamp(0.55 * tw, -1.1, 1.1); }
+      else { leanY += clamp(0.32 * tw, -0.44, 0.44); hdY += clamp(0.7 * tw, -1.1, 1.1); }
     }
 
     // ---- згладжування: кожен суглоб — пружина з критичним загасанням (неперервні і кут, і швидкість: без ривків і без перельоту).
@@ -2096,7 +2100,7 @@ export class Player {
     // рука, що б'є «п'ять», — швидкий м'язовий рух: жорстка пружина без запізнення (інакше долоні лише «підтягуються»)
     spring('armA', armA, aw, az); spring('armB', armB, aw, az); spring('elbA', elbA, aw + 4, firm ? 0.9 : 0.5); spring('elbB', elbB, aw + 4, firm ? 0.9 : 0.5);
     spring('twA', twA, 16, 0.7); spring('twB', twB, 16, 0.7); spring('sdA', sdA, 20); spring('sdB', sdB, 20); spring('spread', spread, 16, 0.6); spring('drop', drop, 15, 0.7);
-    const lwk = G ? 30 : 12; spring('leanX', leanX, lwk, 0.6); spring('leanY', leanY, lwk, 0.6); spring('leanZ', leanZ, lwk, 0.6);   // у вільному русі тулуб уже має власну динаміку
+    const lwk = G ? 30 : 12, lwz = this.look.gk ? 0.6 : 0.85; spring('leanX', leanX, lwk, lwz); spring('leanY', leanY, lwk, lwz); spring('leanZ', leanZ, lwk, lwz);   // у вільному русі тулуб уже має власну динаміку
     spring('tiltX', tiltX, 14, 0.8); spring('tiltZ', tiltZ, 14, 0.8);
     spring('pelX', pelX, 18, 0.7); spring('pelY', pelY, 18, 0.7); spring('pelZ', pelZ, 18, 0.7);
     const hw = G ? 30 : 11; spring('hdX', hdX, hw, 0.55); spring('hdY', hdY, hw, 0.55); spring('hdZ', hdZ, hw, 0.55);
@@ -2135,9 +2139,13 @@ export class Player {
     // у вільному русі це вже робить фізика ходи, тут — для всіх скриптових дій
     const sec = (this.sec ??= { tr: { a: 0, v: 0 }, trZ: { a: 0, v: 0 }, hd: { a: 0, v: 0 }, aA: { a: 0, v: 0 }, aB: { a: 0, v: 0 }, sq: { a: 0, v: 0 }, ay: 0, af: 0, al: 0 });
     const ws = 1 - lw, aUp = sec.ay, aF = sec.af + this.aLong, aL = this.aLat;
-    const trS = oscS(sec.tr, 9, 0.4, ws * (-aF * 0.9 + Math.max(0, aUp) * 0.25) / 0.35) , trZ = oscS(sec.trZ, 8, 0.45, ws * (aL * 0.7) / 0.35);
-    const hdS = oscS(sec.hd, 12, 0.45, ws * (-aF * 0.5 + aUp * 0.3) / 0.25);
-    const aAS = oscS(sec.aA, 10, 0.35, ws * (-aF / 0.45 + aUp * 0.4)), aBS = oscS(sec.aB, 10.5, 0.35, ws * (-aF / 0.45 + aUp * 0.4));
+    // польовий гравець у діях (прийом, удар) не гойдається: маятник тулуба майже без перельоту, сила вчетверо менша й кут обмежений.
+    // Раніше прийом на бігу гнув спину на −11..+34°, хоча поза просить ~2°. Воротар без змін: його капсули читає hitbox
+    const gkS = this.look.gk, trK = gkS ? 1 : 0.28, trL = gkS ? 9 : 0.13;
+    const trS = clamp(oscS(sec.tr, gkS ? 9 : 10, gkS ? 0.4 : 0.9, ws * trK * (-aF * 0.9 + Math.max(0, aUp) * 0.25) / 0.35), -trL, trL), trZ = clamp(oscS(sec.trZ, gkS ? 8 : 10, gkS ? 0.45 : 0.9, ws * trK * (aL * 0.7) / 0.35), -trL, trL);
+    const hdS = oscS(sec.hd, 12, gkS ? 0.45 : 0.8, ws * (gkS ? 1 : 0.5) * (-aF * 0.5 + aUp * 0.3) / 0.25);
+    const armK = gkS ? 1 : 0.6, armZ = gkS ? 0.35 : 0.6;
+    const aAS = oscS(sec.aA, 10, armZ, ws * armK * (-aF / 0.45 + aUp * 0.4)), aBS = oscS(sec.aB, 10.5, armZ, ws * armK * (-aF / 0.45 + aUp * 0.4));
     const sa = firm ? 0.2 : 1; this.armL.rotation.x -= aAS * sa; this.armR.rotation.x -= aBS * sa;
     this.lean.rotation.set(S.leanX * 0.55 + trS * 0.5, S.leanY * 0.45, S.leanZ * 0.6 + trZ * 0.5);
     this.thorax.rotation.set(S.leanX * 0.45 + trS * 0.5, S.leanY * 0.55, S.leanZ * 0.4 + trZ * 0.5);

@@ -105,6 +105,17 @@ export class World {
       {
         const len = Math.sqrt(l2) || 1e-6, nx = -dz / len, nz = dx / len;
         const d0 = (x0 - x1) * nx + (z0 - z1) * nz, d1 = (s.x - x1) * nx + (s.z - z1) * nz;
+        // м'яч уже торкається лінії (притиснутий у ногах: L − R дає 0.1599…, менше за r). Центр перетнув її за крок: лишаємо на своєму
+        // боці. Без цього відскок нижче виштовхнув би м'яч за стінку, а біля штанги страховка його вже не повертає
+        if (Math.abs(d0) < r && d0 * d1 < 0) {
+          const t = d0 / (d0 - d1), cx = x0 + (s.x - x0) * t, cz = z0 + (s.z - z0) * t, along = ((cx - x1) * dx + (cz - z1) * dz) / l2;
+          if (along >= 0 && along <= 1) {
+            const sd = d0 > 0 ? 1 : -1, qx = nx * sd, qz = nz * sd, vn = s.vx * qx + s.vz * qz;
+            s.x = cx + qx * r; s.z = cz + qz * r;
+            if (vn < 0) { const e = sg[i + 4]; bounce(s, qx, qz, vn, e, e > 0.5 ? PHYS.wallMu : 0); if (-vn > 1.5) { hit = 1; if (cb && cb.wall) this.wallHit(s, cb, qx, qz, -vn, e); } }
+            continue;
+          }
+        }
         if (Math.abs(d0) >= r && (d0 > 0 ? d1 < r : d1 > -r)) {
           const sd = d0 > 0 ? 1 : -1, t = (d0 - sd * r) / (d0 - d1);
           const cx = x0 + (s.x - x0) * t, cz = z0 + (s.z - z0) * t, along = ((cx - x1) * dx + (cz - z1) * dz) / l2;
@@ -165,6 +176,7 @@ export class World {
         if (e2 > 1e-8) {
           const fx = x0 - ps[i], fz = z0 - ps[i + 1], rc = rr * 0.999, b = fx * ex + fz * ez, c = fx * fx + fz * fz - rc * rc, disc = b * b - e2 * c;   // трохи всередині — відскок нижче спрацює напевно
           if (c > 0 && disc > 0) { const t = (-b - Math.sqrt(disc)) / e2; if (t >= 0 && t <= 1) { s.x = x0 + ex * t; s.z = z0 + ez * t; } }
+          else if (c <= 0 && b < 0) { s.x = x0; s.z = z0; }                // м'яч із ніг уже впритул до стовпа й летить у нього: відскок нижче, а не проліт крізь стовп
         }
       }
       const dx = s.x - ps[i], dz = s.z - ps[i + 1], rr = r + ps[i + 2], d2 = dx * dx + dz * dz;
@@ -178,11 +190,15 @@ export class World {
         }
       }
     }
-    if (inGoal) this.net(s, h);
+    if (inGoal && Math.abs(s.x) > L) this.net(s, h);                     // борт чи стовп лишили м'яч на полі: сітка його не чіпає
     if (dyn) this.players(s, cb, x0, z0, y0);
     // страховка від тунелювання й виштовхування тілом за межу: м'яч на свій бік і швидкість від борту (інакше він їде вздовж лінії всередині борту)
-    const inMouth = Math.abs(s.z) < G + 0.4;
-    if (!inMouth && Math.abs(s.x) > L) { const q = s.x > 0 ? 1 : -1; s.x = q * (L - r); if (s.vx * q > 0) s.vx *= -PHYS.wallE; }
+    if (Math.abs(s.x) > L) {
+      const q = s.x > 0 ? 1 : -1, a0 = x0 * q, a1 = s.x * q;
+      // з поля за лінію м'яч заходить лише між стовпами, рахуємо за точкою перетину; той, що вже за лінією, тримає сітка
+      const zc = a0 <= L ? z0 + (s.z - z0) * (L - a0) / (a1 - a0) : s.z, lim = a0 <= L ? G : G + 0.4;
+      if (Math.abs(zc) >= lim) { s.x = q * (L - r); s.z = zc; if (s.vx * q > 0) s.vx *= -PHYS.wallE; }
+    }
     if (Math.abs(s.z) > W + 0.1 && Math.abs(s.x) <= L) { const q = s.z > 0 ? 1 : -1; s.z = q * (W - r); if (s.vz * q > 0) s.vz *= -PHYS.wallE; }
     const over = Math.abs(s.x) + Math.abs(s.z) - (L + W - CH);           // за зрізом кута: відрізок непрозорий і ззовні, сам м'яч не повернеться
     if (over > 0) {

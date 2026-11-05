@@ -77,6 +77,7 @@
 | Новий режим воротаря | також `GK_MODES` у `src/graphics/player.js`, `GK_ANIMS` у `src/lab/lab.js` |
 | Біг, кроки, стопи | `src/graphics/gait.js`, таблиця `HUMAN`, `Gait.update` |
 | Поворот корпусу на бігу | `Player.hipTurn` |
+| Нахил і бовтання тіла польового гравця | `LEAN_*` у `src/graphics/gait.js`; у діях маятники `sec` і скручування `leanY` у `Player.animate` |
 | Падіння | `Player.knock`, `src/graphics/ragdoll.js` |
 | Руки й ноги дістають ціль | `solveReach`, `handsIK`, `plantFeet`, `solveArms` |
 | Стрибок воротаря | `gkDive`, `planDive`, `diveKin`; накриття грудьми вперед: `gkSmother`, `diveFwd`, `FWD_K`; ривки рук: `capQ` у `handsIK`, `armGuard` |

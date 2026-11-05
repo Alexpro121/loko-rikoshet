@@ -23,7 +23,8 @@ import * as THREE from 'three';
  * 4в. Задній хід (бекпедал, до ~4 м/с): короткі часті кроки без польоту, стопа стає на передню частину й перекочується
  *    на п'ятку, коліна м'якші, тулуб трохи вперед (центр мас над носками), руки махають менше. Швидше — гравець
  *    розвертає таз і біжить (це вирішує корпус у player.js), тож хода бачить звичайний біг.
- * 5. Нахил тіла — кут сили реакції опори atan(a / (g + aᵥ)) уперед-назад і вбік. Тулуб, руки, таз і голова — затухаючі
+ * 5. Нахил тіла — кут сили реакції опори atan(a / (g + aᵥ)) уперед-назад і вбік; у польового гравця лише його частка (LEAN_*),
+ *    щоб тіло не бовталось від кожної зміни курсу. Тулуб, руки, таз і голова — затухаючі
  *    осцилятори з інерцією: руки гасять кутовий момент ніг і на різкій зупинці летять уперед, тулуб «клює» на
  *    приземленні, голова стабілізує погляд.
  */
@@ -31,11 +32,14 @@ import * as THREE from 'three';
 const G = 9.8, DEG = Math.PI / 180;
 const FYLIM = 0.9;                                                         // стопа ставиться не далі ~50° від курсу корпусу (рад)
 const TW_IN = 0.42, TW_OUT = 0.7;                                          // межі кручення стопи відносно таза (рад): всередину / назовні
+const LEAN_PK = 0.35, LEAN_PF = 0.2, LEAN_PB = 0.09;                       // нахил польового гравця вперед-назад: частка кута сили опори й межі (рад)
+const LEAN_RK = 0.42, LEAN_RM = 0.17;                                      // нахил убік у повороті: частка кута й межа (~10°)
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (t) => t * t * (3 - 2 * t);
 const minJerk = (u) => u * u * u * (10 - 15 * u + 6 * u * u);     // траєкторія мінімального ривка: старт і фініш без швидкості
 const mod1 = (x) => x - Math.floor(x);
+const dead = (a, d) => (a > d ? a - d : a < -d ? a + d : 0);       // мертва зона без стрибка на її межі
 const angDiff = (a, b) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 
 /** Виміряні показники бігу й ходи людини (нога ~0.93 м), v у м/с. */
@@ -106,9 +110,10 @@ export class Gait {
     // крок тіло відлітало від опорної стопи на ~0.2 м і таз провалювався на 25–30 см (на 60 Гц — на 2–3 см)
     const n = dt > 0.0185 && this._px !== undefined && Math.abs(st.x - this._px) + Math.abs(st.z - this._pz) < 1.2 ? Math.min(6, Math.ceil(dt / 0.0175)) : 1;
     if (n > 1) {
-      const x1 = st.x, z1 = st.z, y1 = st.yaw, yT1 = st.yawT, dyw = angDiff(this._py, y1), dyT = yT1 === undefined ? 0 : angDiff(this._pyT ?? this._py, yT1), h = dt / n;
+      // минуле положення беремо в локальні: step може викликати reset (стопа задалеко), а той обнуляє _px, і наступний підкрок дав би NaN у x
+      const x0 = this._px, z0 = this._pz, y0 = this._py, yT0 = this._pyT ?? y0, x1 = st.x, z1 = st.z, y1 = st.yaw, yT1 = st.yawT, dyw = angDiff(y0, y1), dyT = yT1 === undefined ? 0 : angDiff(yT0, yT1), h = dt / n;
       for (let i = 1; i < n; i++) {
-        const k = i / n; st.x = this._px + (x1 - this._px) * k; st.z = this._pz + (z1 - this._pz) * k; st.yaw = this._py + dyw * k; if (yT1 !== undefined) st.yawT = (this._pyT ?? this._py) + dyT * k;
+        const k = i / n; st.x = x0 + (x1 - x0) * k; st.z = z0 + (z1 - z0) * k; st.yaw = y0 + dyw * k; if (yT1 !== undefined) st.yawT = yT0 + dyT * k;
         this.step(st, h);
       }
       st.x = x1; st.z = z1; st.yaw = y1; st.yawT = yT1;
@@ -397,8 +402,11 @@ export class Gait {
     // ---- нахил усього тіла з сили реакції опори
     const pitchT = clamp(Math.atan2(st.aLong, G + this.ayS), -0.35, 0.5);
     const rollT = clamp(-Math.atan2(st.aLat, G), -0.45, 0.45);
-    const pitch = osc(this.pitch, 0.6 * pitchT, 6, 0.85, dt);               // нахил наростає за ~0.4 с, без ривка
-    const roll = osc(this.roll, rollT, 5, 0.85, dt);
+    // польовий гравець тримається зібрано: повний кут сили опори давав завал усього тіла на 25° убік від звичайної зміни курсу
+    // і 37° уперед на старті. Дрібне смикання напряму ШІ (мертва зона) нахилу не дає, вертикальні поштовхи кроку в нього не йдуть,
+    // а загасання критичне: тіло не перелітає нахил і не гойдається назад. Воротар без змін: його капсули читає hitbox
+    const pitch = st.gk ? osc(this.pitch, 0.6 * pitchT, 6, 0.85, dt) : osc(this.pitch, clamp(LEAN_PK * Math.atan2(dead(st.aLong, 1), G), -LEAN_PB, LEAN_PF), 8, 1, dt);
+    const roll = st.gk ? osc(this.roll, rollT, 5, 0.85, dt) : osc(this.roll, clamp(-LEAN_RK * lerp(0.4, 1, sp) * Math.atan2(dead(st.aLat, 1.5), G), -LEAN_RM, LEAN_RM), 7, 1, dt);
     // тулуб — перевернутий маятник на тазі (центр мас ~0.35 м над стегнами): м'язи тримають робочий нахил
     // (6° підтюпцем → 15° на спринті), а прискорення таза його розгойдують: θ'' = (aᵥ·sinθ − aₓ·cosθ) / l.
     // Приземлення (гальмування + удар знизу) — тулуб «клює» вперед; поштовх — випрямляється.

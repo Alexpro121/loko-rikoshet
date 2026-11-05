@@ -2907,6 +2907,8 @@ export class Match {
         const zl = W - v.ball.rad; gp.z = Math.max(-zl, Math.min(zl, gp.z));
         // у воротах межі немає: м'яч біля бічної сітки не вискакує за лінію
         if (Math.abs(gp.z) > G - 0.2 && Math.abs(b.x) <= L) { const xl = L - v.ball.rad; gp.x = Math.max(-xl, Math.min(xl, gp.x)); }
+        const cut = (Math.abs(gp.x) + Math.abs(gp.z) - (L + W - PITCH.CH)) * Math.SQRT1_2 + v.ball.rad;   // зріз кута: збільшений м'яч не заходить у щит
+        if (cut > 0) { const k = cut * Math.SQRT1_2; gp.x -= Math.sign(gp.x) * k; gp.z -= Math.sign(gp.z) * k; }
       }
     }
     v.updateShadows(rx, rz, h);
