@@ -142,6 +142,7 @@ GAME-LOKO/
 │   │   ├── config.js                налаштування з оточення
 │   │   ├── db.js                    SQLite і міграції схеми
 │   │   ├── maintenance.js           нічне обслуговування: прострочені сесії, копія бази
+│   │   ├── peerguard.js             захист сервера кімнат PeerJS від перебору кодів: ліміт з'єднань і OFFER з адреси
 │   │   ├── rules.js                 правила гри (клуб, герої, нагороди й Ело, квести) з коду гри із заглушками браузера
 │   │   ├── server.js                запуск API і PeerJS
 │   │   ├── telegram.js              перевірка підпису Telegram (initData)
@@ -150,10 +151,11 @@ GAME-LOKO/
 │   │   ├── api.test.js              тести API: node --test
 │   │   ├── bot.test.js              тести бота й розміру віджетів
 │   │   ├── hub.test.js              онлайн-хаб: два клієнти через клуб, матч, квести, чергу й таблицю
-│   │   └── maintenance.test.js      тести нічного обслуговування
+│   │   ├── maintenance.test.js      тести нічного обслуговування
+│   │   └── peerguard.test.js        тести ліміту з'єднань і OFFER до PeerJS
 │   ├── README.md                    що вміє сервер, запуск і встановлення
 │   ├── package-lock.json            зафіксовані версії залежностей сервера
-│   └── package.json                 залежність peer; скрипти start і test
+│   └── package.json                 залежності peer і ws; скрипти start і test
 ├── store/
 │   ├── PLAY_STORE.md                інструкція випуску в Google Play і тексти лістингу
 │   ├── TELEGRAM.md                  інструкція випуску в Telegram, список перевірки й тексти для BotFather

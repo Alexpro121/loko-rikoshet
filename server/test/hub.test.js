@@ -9,7 +9,7 @@ import { openDb } from '../src/db.js';
 import { createApp } from '../src/app.js';
 import { signInitData } from '../src/telegram.js';
 import * as baseRules from '../src/rules.js';
-import { ALONE_SEC, SETTLE_SEC, PAIR_SEC } from '../src/hub/match.js';
+import { ALONE_SEC, SETTLE_SEC, PAIR_SEC, PAIR_DAY, MIN_REPORT_SEC } from '../src/hub/match.js';
 
 const BOT = '123456:TEST-TOKEN';
 const ORIGIN = 'https://alexpro121.github.io';
@@ -53,7 +53,7 @@ function device(over = {}) {
   return {
     club: { name: c.club.name, city: c.club.city, flag: c.club.flag, gk: c.club.gk, form: c.club.form },
     heroes: c.heroes.map((e) => ({ name: e.name, num: e.num, role: e.role, line: e.line, stats: e.stats, skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard, rar: e.rar, trait: e.trait, id: e.id, xp: e.xp, lvl: e.lvl, apps: e.apps, goals: e.goals })),
-    base: { coins: 500, rating: 1000, lvl: 1, xp: 0, rec: { w: 0, d: 0, l: 0 }, goals: 0, games: 0, ...over },
+    base: { coins: 500, rating: 1000, lvl: 1, xp: 0, rec: { w: 10, d: 5, l: 5 }, goals: 0, games: 20, ...over },   // 20 матчів: межі перенесення не заважають
   };
 }
 const ledger = (db, id) => db.prepare('SELECT delta, reason FROM coin_ledger WHERE player_id = ? ORDER BY id').all(id).map((r) => [r.delta, r.reason]);
@@ -72,17 +72,28 @@ test('клуб: перенесення з межами, далі лише виг
   const s = await start();
   try {
     const t = await s.login(1, 'Аня');
-    const dev = device({ coins: 999999, rating: 5000 });
-    dev.heroes[3].stats.pace = 400; dev.heroes[3].lvl = 500; dev.heroes[3].xp = 1e9;
+    // накрутка в localStorage: межі відносно заявлених матчів, порушення обрізаються й пишуться у flags
+    const dev = device({ coins: 999999, rating: 5000, lvl: 50, goals: 900, games: 10, rec: { w: 30, d: 0, l: 0 } });
+    dev.heroes[3].stats.pace = 400; dev.heroes[3].rar = 'c'; dev.heroes[3].lvl = 500; dev.heroes[3].xp = 1e9;
     const first = await s.call('POST', '/club/save', dev, t);
     assert.equal(first.status, 200);
     const c = first.body.club;
-    assert.equal(c.coins, 20000); assert.equal(c.rating, 2400);
-    assert.equal(c.heroes[3].stats.pace, 99); assert.equal(c.heroes[3].lvl, 99);
+    assert.equal(c.games, 10); assert.deepEqual(c.rec, { w: 10, d: 0, l: 0 });
+    assert.equal(c.coins, 300 + 200 * 10); assert.equal(c.rating, 1000 + 40 * 10);
+    assert.equal(c.lvl, 1 + 5); assert.equal(c.goals, 150);
+    assert.equal(c.heroes[3].stats.pace, rules.RARITY.c.base + 28 + 10); assert.equal(c.heroes[3].lvl, 99);
     assert.ok(c.heroes[3].xp < rules.xpNeed(99));
     assert.deepEqual(c.heroes.map((e) => e.id), dev.heroes.map((e) => e.id));
     for (const k of ['club', 'heroes', 'xp', 'rec', 'goals', 'games', 'coins', 'rating', 'lvl']) assert.ok(k in c, k);
-    assert.deepEqual(ledger(s.db, 1), [[20000, 'import']]);
+    assert.deepEqual(ledger(s.db, 1), [[2300, 'import']]);
+    const fl = s.db.prepare("SELECT kind, json FROM flags WHERE player_id = 1").all();
+    assert.equal(fl.length, 1); assert.equal(fl[0].kind, 'import');
+    for (const k of ['coins', 'rating', 'lvl', 'goals', 'rec', 'stats']) assert.ok(k in JSON.parse(fl[0].json), k);
+    // чесний свіжий клуб нічого не втрачає (легенда до 90 навичок)
+    const tf = await s.login(5, 'Чесний'), honest = device({ coins: 300, games: 0, rec: { w: 0, d: 0, l: 0 } });
+    const got = (await s.call('POST', '/club/save', honest, tf)).body.club;
+    assert.deepEqual(got.heroes.map((e) => e.stats), honest.heroes.map((e) => e.stats));
+    assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM flags WHERE player_id = 5').get().n, 0);
 
     // другий виклик: base і навички ігноруються, обмін польових героїв приймається, назва змінюється
     const next = device({ coins: 1 });
@@ -92,7 +103,7 @@ test('клуб: перенесення з межами, далі лише виг
     sw[5].stats.pace = 99;
     const upd = (await s.call('POST', '/club/save', { ...next, heroes: sw }, t)).body.club;
     assert.equal(upd.club.name, 'НОВІ'); assert.equal(upd.club.form, '442');
-    assert.equal(upd.coins, 20000);
+    assert.equal(upd.coins, 2300);
     assert.deepEqual(upd.heroes.map((e) => e.id), sw.map((e) => e.id));
     assert.equal(upd.heroes[5].stats.pace, c.heroes[5].stats.pace);
     assert.deepEqual(upd.heroes.map((e) => e.role), rules.slotsOf('442').map((x) => x.name));
@@ -106,7 +117,7 @@ test('клуб: перенесення з межами, далі лише виг
     const v = upd.heroes[2].stats.shoot;
     const tr = (await s.call('POST', '/club/train', { hero: 2, stat: 'shoot' }, t)).body;
     assert.equal(tr.hero.stats.shoot, v + 1);
-    assert.equal(tr.coins, 20000 - rules.trainPrice(v));
+    assert.equal(tr.coins, 2300 - rules.trainPrice(v));
     assert.equal((await s.call('POST', '/club/train', { hero: 11, stat: 'shoot' }, t)).body.error, 'bad_hero');
 
     const sc = (await s.call('POST', '/club/scout', { hero: 7 }, t)).body;
@@ -127,10 +138,13 @@ test('клуб: перенесення з межами, далі лише виг
   } finally { await s.close(); }
 });
 
-async function pair(s, code = 'ABCDE', mode = 'friend') {
+/** Господар відкриває матч, гість приходить за квитком; play — пройшов час матчу (звіт раніше — розбіжність). */
+async function pair(s, code = 'ABCDE', mode = 'friend', play = true) {
   const h = await s.call('POST', '/match/start', { code, role: 'host', mode }, s.th);
-  const g = await s.call('POST', '/match/start', { code, role: 'guest', mode }, s.tg);
+  assert.match(h.body.ticket, /^[A-Za-z0-9_-]{16,64}$/);
+  const g = await s.call('POST', '/match/start', { role: 'guest', mode, ticket: h.body.ticket }, s.tg);
   assert.equal(h.body.matchId, g.body.matchId);
+  if (play) s.tick(MIN_REPORT_SEC);
   return h.body.matchId;
 }
 async function two(s) {
@@ -139,6 +153,84 @@ async function two(s) {
   s.cg = (await s.call('POST', '/club/save', device({ rating: 1000 }), s.tg)).body.club;
 }
 const surname = (n) => n.split(' ').slice(-1)[0];
+
+test('матч за квитком: код кімнати нічого не дає, квиток одноразовий, гість не може бути господарем', async () => {
+  const s = await start();
+  try {
+    await two(s);
+    const t3 = await s.login(30, 'Чужий');
+    await s.call('POST', '/club/save', device(), t3);
+    const h = (await s.call('POST', '/match/start', { code: 'ABCDE', role: 'host', mode: 'friend' }, s.th)).body;
+    // за кодом без квитка не зайти
+    assert.equal((await s.call('POST', '/match/start', { code: 'ABCDE', role: 'guest', mode: 'friend' }, t3)).body.error, 'bad_ticket');
+    assert.equal((await s.call('POST', '/match/start', { role: 'guest', ticket: 'x'.repeat(24) }, t3)).body.error, 'bad_ticket');
+    assert.equal((await s.call('POST', '/match/start', { role: 'guest', ticket: h.ticket }, s.th)).body.error, 'self');
+    // квиток у базі лише хешем
+    assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM matches WHERE ticket_hash = ?').get(h.ticket).n, 0);
+    const g = (await s.call('POST', '/match/start', { role: 'guest', ticket: h.ticket }, s.tg)).body;
+    assert.equal(g.matchId, h.matchId);
+    // реконект того самого гостя — той самий матч; чужий з тим самим квитком — відмова
+    assert.equal((await s.call('POST', '/match/start', { role: 'guest', ticket: h.ticket }, s.tg)).body.matchId, h.matchId);
+    assert.equal((await s.call('POST', '/match/start', { role: 'guest', ticket: h.ticket }, t3)).body.error, 'bad_ticket');
+    // квиток живе PAIR_SEC; повтор старту господаря дає той самий матч із новим квитком
+    const h2 = (await s.call('POST', '/match/start', { code: 'BBBBB', role: 'host' }, s.th)).body;
+    const h3 = (await s.call('POST', '/match/start', { code: 'BBBBB', role: 'host' }, s.th)).body;
+    assert.equal(h3.matchId, h2.matchId); assert.notEqual(h3.ticket, h2.ticket);
+    assert.equal((await s.call('POST', '/match/start', { role: 'guest', ticket: h2.ticket }, s.tg)).body.error, 'bad_ticket');
+    s.tick(PAIR_SEC + 1);
+    assert.equal((await s.call('POST', '/match/start', { role: 'guest', ticket: h3.ticket }, s.tg)).body.error, 'bad_ticket');
+    // чужі Telegram ID не потрапляють у відповіді матчу
+    s.tick(MIN_REPORT_SEC);
+    await s.call('POST', '/match/result', { matchId: h.matchId, me: 1, opp: 0 }, s.th);
+    const r = await s.call('POST', '/match/result', { matchId: h.matchId, me: 0, opp: 1 }, s.tg);
+    assert.ok(!JSON.stringify(r.body).includes('"10"') && !/\b(host_id|guest_id|player_id)\b/.test(JSON.stringify(r.body)));
+  } finally { await s.close(); }
+});
+
+test('фарм пари: надто швидкий звіт — розбіжність, понад 3 матчі за добу без рейтингу, голи в монетах до 8', async () => {
+  const s = await start();
+  try {
+    await two(s);
+    // звіт раніше 200 с після парування
+    let id = await pair(s, 'AAAAA', 'friend', false);
+    s.tick(MIN_REPORT_SEC - 10);
+    await s.call('POST', '/match/result', { matchId: id, me: 5, opp: 0 }, s.th);
+    let r = (await s.call('POST', '/match/result', { matchId: id, me: 0, opp: 5 }, s.tg)).body;
+    assert.equal(r.state, 'disputed'); assert.equal(r.club.rating, 1000);
+    assert.deepEqual(s.db.prepare('SELECT kind FROM flags WHERE player_id = 10').all().map((f) => f.kind), ['fast']);
+    // голи в монетах до 8
+    id = await pair(s, 'BBBBB');
+    await s.call('POST', '/match/result', { matchId: id, me: 20, opp: 0 }, s.th);
+    r = (await s.call('POST', '/match/result', { matchId: id, me: 0, opp: 20 }, s.tg)).body;
+    const rh = (await s.call('GET', '/match/' + id, null, s.th)).body;
+    assert.equal(rh.rew.coins, 120 + 8 * 15);
+    // ще два рейтингові (технічний теж рахується), четвертий за добу — лише за участь
+    id = await pair(s, 'CCCCC');
+    await s.call('POST', '/match/result', { matchId: id, me: 0, opp: 3, forfeit: 'me' }, s.tg);
+    id = await pair(s, 'DDDDD');
+    await s.call('POST', '/match/result', { matchId: id, me: 1, opp: 0 }, s.th);
+    await s.call('POST', '/match/result', { matchId: id, me: 0, opp: 1 }, s.tg);
+    const before = (await s.call('GET', '/me', null, s.th)).body.club;
+    id = await pair(s, 'EEEEE');
+    await s.call('POST', '/match/result', { matchId: id, me: 2, opp: 0 }, s.th);
+    r = (await s.call('POST', '/match/result', { matchId: id, me: 0, opp: 2 }, s.tg)).body;
+    assert.equal(r.state, 'done'); assert.equal(r.limited, true); assert.equal(r.rew.coins, 30); assert.equal(r.rew.dR, 0);
+    const after = (await s.call('GET', '/match/' + id, null, s.th)).body.club;
+    assert.equal(after.rating, before.rating); assert.equal(after.coins, before.coins + 30); assert.equal(after.games, before.games);
+    assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM flags WHERE kind = 'pair'").get().n, 2);
+    assert.equal(PAIR_DAY, 3);
+    // наступної київської доби пара знову грає на рейтинг
+    s.tick(86400);
+    id = await pair(s, 'FFFFF');
+    await s.call('POST', '/match/result', { matchId: id, me: 1, opp: 0 }, s.th);
+    r = (await s.call('POST', '/match/result', { matchId: id, me: 0, opp: 1 }, s.tg)).body;
+    assert.equal(r.limited, false); assert.ok(r.rew.dR < 0);
+    for (const p of [10, 20]) {
+      const coins = (await s.call('GET', '/me', null, p === 10 ? s.th : s.tg)).body.club.coins;   // /me ще й зараховує незабрані квести
+      assert.equal(sumLedger(s.db, p), coins);
+    }
+  } finally { await s.close(); }
+});
 
 test('матч: дзеркальні звіти дають монети, Ело, досвід і голи героям обом', async () => {
   const s = await start();
@@ -167,9 +259,9 @@ test('матч: дзеркальні звіти дають монети, Ело,
     assert.equal(rh.club.coins, 500 + 150);
     assert.equal(rh.club.heroes[9].goals, 2);
     assert.equal(r2.club.heroes[10].goals, 1);
-    assert.deepEqual(rh.club.rec, { w: 1, d: 0, l: 0 });
-    assert.deepEqual(r2.club.rec, { w: 0, d: 0, l: 1 });
-    assert.equal(rh.club.games, 1);
+    assert.deepEqual(rh.club.rec, { w: 11, d: 5, l: 5 });
+    assert.deepEqual(r2.club.rec, { w: 10, d: 5, l: 6 });
+    assert.equal(rh.club.games, 21);
     assert.equal(sumLedger(s.db, 10), rh.club.coins);
     assert.equal(sumLedger(s.db, 20), r2.club.coins);
     assert.equal((await s.call('GET', '/me', null, s.th)).body.live, null);
@@ -236,7 +328,8 @@ test('матч: розбіжність, вихід, мовчання гостя,
     r = (await s.call('GET', '/match/' + id, null, s.tg)).body;
     assert.equal(r.state, 'done'); assert.deepEqual(r.score, [3, 0]);
 
-    // гість звітував рахунок, господар зник: через 15 хв поразка господарю
+    // гість звітував рахунок, господар зник: через 15 хв поразка господарю (наступна доба: ліміт пари не заважає)
+    s.tick(86400);
     id = await pair(s, 'EEEEE');
     await s.call('POST', '/match/result', { matchId: id, me: 2, opp: 2 }, s.tg);
     s.tick(SETTLE_SEC); s.app.sweep();
@@ -248,16 +341,19 @@ test('матч: розбіжність, вихід, мовчання гостя,
     s.tick(SETTLE_SEC); s.app.sweep();
     assert.equal((await s.call('GET', '/match/' + id, null, s.th)).body.state, 'void');
 
-    // без пари 30 с: solo, сервер його не рахує
+    // без гостя PAIR_SEC: solo, сервер його не рахує
     const solo = (await s.call('POST', '/match/start', { code: 'GGGGG', role: 'host', mode: 'friend' }, s.th)).body.matchId;
     s.tick(PAIR_SEC + 1);
     assert.equal((await s.call('POST', '/match/result', { matchId: solo, me: 5, opp: 0 }, s.th)).body.state, 'solo');
     // реванш у тій самій кімнаті — новий матч
-    const a = await pair(s, 'HHHHH'), b = await pair(s, 'HHHHH');
+    const a = await pair(s, 'HHHHH', 'friend', false), b = await pair(s, 'HHHHH', 'friend', false);
     assert.notEqual(a, b);
 
     // журнал монет сходиться з клубами
-    for (const p of [10, 20]) assert.equal(sumLedger(s.db, p), (await s.call('GET', '/me', null, p === 10 ? s.th : s.tg)).body.club.coins);
+    for (const p of [10, 20]) {
+      const coins = (await s.call('GET', '/me', null, p === 10 ? s.th : s.tg)).body.club.coins;   // /me ще й зараховує незабрані квести
+      assert.equal(sumLedger(s.db, p), coins);
+    }
   } finally { await s.close(); }
 });
 
@@ -266,7 +362,7 @@ test('черга: пара за рейтингом, господар той, х�
   try {
     await two(s);
     const t3 = await s.login(30, 'Далекий');
-    await s.call('POST', '/club/save', device({ rating: 1900 }), t3);
+    await s.call('POST', '/club/save', device({ rating: 1800 }), t3);
     // гравець 30 далеко за рейтингом: чекає
     const w = (await s.call('POST', '/queue', { code: 'QQQQQ' }, t3)).body;
     assert.equal(w.state, 'wait');
@@ -277,8 +373,10 @@ test('черга: пара за рейтингом, господар той, х�
     const h = (await first).body;
     assert.equal(g.state, 'paired'); assert.equal(g.role, 'guest'); assert.equal(g.code, 'HHHHH');
     assert.equal(h.role, 'host'); assert.equal(h.code, 'HHHHH');
-    assert.deepEqual(h.opp, { id: 20, name: s.cg.club.name, rating: 1000 });
-    assert.equal(g.opp.id, 10);
+    assert.equal(h.opp.name, s.cg.club.name); assert.equal(h.opp.rating, 1000);
+    assert.match(h.opp.id, /^[A-Za-z0-9_-]{12}$/); assert.match(g.opp.id, /^[A-Za-z0-9_-]{12}$/);
+    assert.notEqual(h.opp.id, g.opp.id);
+    assert.ok(!JSON.stringify([h, g]).includes('20') || h.opp.id.includes('20'));
     assert.equal((await s.call('GET', '/queue/stats', null, s.th)).body.searching, 1);
 
     // гравець 30 повторює запит, як клієнт (інакше випав би з черги через 20 с)
@@ -287,13 +385,21 @@ test('черга: пара за рейтингом, господар той, х�
     s.tick(15); await poll30();
     s.tick(11);
     // після 40 с 30-й годиться будь-кому, але avoid не зводить
-    assert.equal((await s.call('POST', '/queue', { code: 'HHHHH', avoid: [30] }, s.th)).body.state, 'wait');
-    await s.call('POST', '/queue/leave', {}, s.th);
+    // непрозорий id гравця 30 береться з пари, як у клієнта: спершу 20 зводиться з ним, потім 10 його уникає
     const any = (await s.call('POST', '/queue', { code: 'GGGGG' }, s.tg)).body;
-    assert.equal(any.state, 'paired'); assert.equal(any.opp.id, 30);
+    assert.equal(any.state, 'paired'); assert.equal(any.opp.rating, 1800);
+    const pid30 = any.opp.id;
+    assert.equal((await s.call('POST', '/queue', { code: 'QQQQQ' }, t3)).body.state, 'paired');
+    assert.equal((await s.call('POST', '/queue', { code: 'QQQQQ' }, t3)).body.state, 'wait');
+    s.tick(15); await poll30();
+    s.tick(15); await poll30();
+    s.tick(11); await poll30();
+    assert.equal((await s.call('POST', '/queue', { code: 'HHHHH', avoid: [pid30] }, s.th)).body.state, 'wait');
+    await s.call('POST', '/queue/leave', {}, s.th);
+    assert.equal((await s.call('POST', '/queue', { code: 'HHHHH' }, s.th)).body.state, 'paired');
 
     const top = (await s.call('GET', '/top?limit=2', null, s.th)).body;
-    assert.deepEqual(top.list.map((e) => e.rating), [1900, 1100]);
+    assert.deepEqual(top.list.map((e) => e.rating), [1800, 1100]);
     assert.deepEqual(top.list.map((e) => e.place), [1, 2]);
     assert.deepEqual(top.me, { place: 2, rating: 1100 });
   } finally { await s.close(); }
@@ -340,7 +446,7 @@ test('паки магазину: ціна з PACKS, рідкість за шан
   const s = await start();
   try {
     const t = await s.login(1, 'Аня');
-    const c = (await s.call('POST', '/club/save', device({ coins: 20000 }), t)).body.club;
+    const c = (await s.call('POST', '/club/save', device({ coins: 20000, games: 100, rec: { w: 100, d: 0, l: 0 } }), t)).body.club;
     const ep = (await s.call('POST', '/club/pack', { hero: 4, pack: 'epic' }, t)).body;
     assert.equal(ep.coins, 20000 - rules.PACKS.epic.price);
     assert.ok(['e', 'l'].includes(ep.hero.rar));

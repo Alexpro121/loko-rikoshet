@@ -1,8 +1,12 @@
 // Клуб гравця на сервері: перше збереження переносить клуб із пристрою, далі сервер приймає лише вигляд і тактику,
 // а монети, рейтинг, навички й досвід рахує сам (тренування, скаут, матчі). Формули беремо з гри (rules.js).
 
-const IMPORT_COINS = 20000;               // захист від накрутки при перенесенні
-const IMPORT_RATING = 2400;
+// Перенесення з пристрою: прогрес не більший, ніж дають заявлені матчі (localStorage можна наредагувати). Порушення
+// обрізаємо й пишемо у flags як 'import'.
+const IMPORT_COINS = 20000, COINS_PER_GAME = 200, START_COINS = 300;
+const IMPORT_RATING = 2400, RATING_PER_GAME = 40, START_RATING = 1000;
+const GOALS_PER_GAME = 15;
+const STAT_SPREAD = 28;                   // свіжий герой: база рідкості + розкид і риса, не більше +28 (легенда до 90)
 const MAX_LVL = 99;
 const MAX_COUNT = 1e6;
 const HERO_ID = /^[A-Za-z0-9_-]{1,24}$/;
@@ -44,28 +48,49 @@ export function clubRoutes(ctx) {
     return { w, hs };
   }
 
-  /** Перший виклик: клуб пристрою з прогресом base у межах захисту від накрутки. */
+  /**
+   * Перший виклик: клуб пристрою з прогресом base у межах заявлених матчів. Повертає { s, cut }: cut — що обрізано
+   * ({ поле: [заявлено, прийнято] }), для журналу підозрілого.
+   */
   function importClub(body) {
     const { w, hs } = clean(body);
     const b = body.base && typeof body.base === 'object' ? body.base : {};
+    const cut = {};
+    const lim = (name, v, max) => { if (v > max) { cut[name] = [v, max]; return max; } return v; };
+    // матчі: w + d + l = games; зайве знімаємо з перемог, далі нічиїх; недостача зменшує games
+    const r0 = b.rec && typeof b.rec === 'object' ? b.rec : {};
+    const rec = { w: int(r0.w, 0, MAX_COUNT, 0), d: int(r0.d, 0, MAX_COUNT, 0), l: int(r0.l, 0, MAX_COUNT, 0) };
+    let games = int(b.games, 0, MAX_COUNT, 0);
+    const sum = rec.w + rec.d + rec.l;
+    if (sum > games) {
+      let over = sum - games;
+      cut.rec = [{ ...rec }, null];
+      for (const k of ['w', 'd', 'l']) { const t = Math.min(rec[k], over); rec[k] -= t; over -= t; }
+      cut.rec[1] = { ...rec };
+    } else if (sum < games) { cut.games = [games, sum]; games = sum; }
+    const statMax = (rar) => Math.min(99, (rules.RARITY[rar] || rules.RARITY.c).base + STAT_SPREAD + games);
     const ids = new Set();
+    let stats = 0;
     const heroes = w.heroes.map((e, i) => {
       const h = hs[i] && typeof hs[i] === 'object' ? hs[i] : {};
       let id = typeof h.id === 'string' && HERO_ID.test(h.id) && !ids.has(h.id) ? h.id : '';
       while (!id || ids.has(id)) id = 'h' + Math.floor(Math.random() * 1e9).toString(36);
       ids.add(id);
+      const mx = statMax(e.rar);
+      for (const k in e.stats) if (e.stats[k] > mx) { e.stats[k] = mx; stats++; }
       const lvl = int(h.lvl, 1, MAX_LVL, 1);
-      return { ...e, id, lvl, xp: int(h.xp, 0, rules.xpNeed(lvl) - 1, 0), apps: int(h.apps, 0, MAX_COUNT, 0), goals: int(h.goals, 0, MAX_COUNT, 0) };
+      return { ...e, id, lvl, xp: int(h.xp, 0, rules.xpNeed(lvl) - 1, 0), apps: Math.min(games, int(h.apps, 0, MAX_COUNT, 0)), goals: Math.min(GOALS_PER_GAME * games, int(h.goals, 0, MAX_COUNT, 0)) };
     });
-    const lvl = int(b.lvl, 1, MAX_LVL, 1);
-    const rec = b.rec && typeof b.rec === 'object' ? b.rec : {};
-    return {
+    if (stats) cut.stats = [stats, 'навичок обрізано до бази рідкості + ' + STAT_SPREAD + ' + матчі'];
+    const lvl = lim('lvl', int(b.lvl, 1, MAX_LVL, 1), 1 + Math.ceil(games / 2));
+    const s = {
       v: 1, nm: 1, club: w.club, heroes,
       lvl, xp: int(b.xp, 0, rules.clubXpNeed(lvl) - 1, 0),
-      coins: int(b.coins, 0, IMPORT_COINS, 300), rating: int(b.rating, 0, IMPORT_RATING, 1000),
-      rec: { w: int(rec.w, 0, MAX_COUNT, 0), d: int(rec.d, 0, MAX_COUNT, 0), l: int(rec.l, 0, MAX_COUNT, 0) },
-      goals: int(b.goals, 0, MAX_COUNT, 0), games: int(b.games, 0, MAX_COUNT, 0),
+      coins: lim('coins', int(b.coins, 0, MAX_COUNT, START_COINS), Math.min(IMPORT_COINS, START_COINS + COINS_PER_GAME * games)),
+      rating: lim('rating', int(b.rating, 0, MAX_COUNT, START_RATING), Math.min(IMPORT_RATING, START_RATING + RATING_PER_GAME * games)),
+      rec, goals: lim('goals', int(b.goals, 0, MAX_COUNT, 0), GOALS_PER_GAME * games), games,
     };
+    return { s, cut };
   }
 
   /**
@@ -120,7 +145,8 @@ export function clubRoutes(ctx) {
         // клуб, створений POST /club і ще не зіграний, замінює клуб із пристрою
         const fresh = !have || (!have.imported && !have.games);
         if (fresh) {
-          const s = importClub(body);
+          const { s, cut } = importClub(body);
+          if (Object.keys(cut).length) ctx.flag(p.id, 'import', cut);
           const { coins, rating, lvl, ...data } = s;
           if (have) { store(p.id, s); q.imported.run(sec(), p.id); } else q.add.run(p.id, JSON.stringify(data), coins, rating, lvl, sec(), sec());
           ledger(p.id, coins - (have ? have.coins : 0), 'import');

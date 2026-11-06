@@ -73,6 +73,22 @@ const MIGRATIONS = [
      got_at INTEGER,
      PRIMARY KEY (player_id, period, id)
    );`,
+  // безпека хабу: гість приходить у матч за одноразовим квитком господаря, а не за кодом кімнати;
+  // flags — журнал підозрілого для власника (обрізане перенесення, розбіжності, фарм пари, надто швидкі звіти)
+  `ALTER TABLE matches ADD COLUMN ticket_hash TEXT;
+   ALTER TABLE matches ADD COLUMN ticket_exp INTEGER;
+   ALTER TABLE matches ADD COLUMN paired_at INTEGER;
+   ALTER TABLE matches ADD COLUMN rated INTEGER NOT NULL DEFAULT 0;
+   CREATE INDEX matches_ticket ON matches(ticket_hash);
+   CREATE TABLE flags (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     player_id INTEGER NOT NULL REFERENCES players(id),
+     kind TEXT NOT NULL,                -- import | disputed | pair | fast
+     at INTEGER NOT NULL,
+     json TEXT NOT NULL DEFAULT '{}'
+   );
+   CREATE INDEX flags_player ON flags(player_id);
+   CREATE INDEX flags_at ON flags(at);`,
 ];
 
 export function openDb(file) {

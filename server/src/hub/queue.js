@@ -10,10 +10,11 @@ const DISPUTE_SEC = 3600;                 // після розбіжності �
 const AVOID_MAX = 20;
 
 export function queueRoutes(ctx, club, match, waitMs) {
-  const { db, auth, readJson, HttpError, now } = ctx;
-  const Q = new Map();                    // id гравця → { id, code, avoid, rating, name, since, seen, waiter, paired }
+  const { db, auth, readJson, HttpError, now, pid } = ctx;
+  const Q = new Map();                    // id гравця → { id, pid, code, avoid (pid), rating, name, since, seen, waiter, paired }
   const disputed = db.prepare(`SELECT 1 FROM matches WHERE state = 'disputed' AND ended_at >= ?
     AND ((host_id = ? AND guest_id = ?) OR (host_id = ? AND guest_id = ?)) LIMIT 1`);
+  const banned = db.prepare('SELECT banned FROM players WHERE id = ?');   // забанений під час очікування в пару не йде
 
   const searching = () => { let n = 0; for (const e of Q.values()) if (!e.paired) n++; return n; };
   const win = (e, t) => {
@@ -21,27 +22,28 @@ export function queueRoutes(ctx, club, match, waitMs) {
     return w >= ANY_MS ? Infinity : Math.min(WIN_MAX, WIN0 + WIN_STEP * Math.floor(w / WIN_EVERY));
   };
 
-  /** Віддати гравцеві пару: з черги він виходить. */
+  /** Віддати гравцеві пару: якщо він зараз чекає, одразу; інакше пара лежить до його наступного запиту (до GONE_MS). */
   function give(e) {
+    if (!e.waiter) return;
     Q.delete(e.id);
-    if (e.waiter) e.waiter(e.paired);
+    e.waiter(e.paired);
   }
   /** Найкраща пара для e: найближчий за рейтингом, далі той, хто довше чекає. Господар — хто чекав довше. */
   function tryPair(e, t) {
     let best = null, bestD = Infinity;
     const recent = Math.floor(t / 1000) - DISPUTE_SEC;
     for (const o of Q.values()) {
-      if (o === e || o.paired || e.avoid.has(o.id) || o.avoid.has(e.id)) continue;
+      if (o === e || o.paired || e.avoid.has(o.pid) || o.avoid.has(e.pid)) continue;
       const d = Math.abs(o.rating - e.rating);
       if (d > Math.max(win(e, t), win(o, t))) continue;
       if (d > bestD || (d === bestD && o.since >= best.since)) continue;
-      if (disputed.get(recent, e.id, o.id, o.id, e.id)) continue;
+      if (disputed.get(recent, e.id, o.id, o.id, e.id) || banned.get(o.id).banned) continue;
       best = o; bestD = d;
     }
     if (!best) return false;
     const [host, guest] = best.since <= e.since ? [best, e] : [e, best];
-    host.paired = { state: 'paired', role: 'host', code: host.code, opp: { id: guest.id, name: guest.name, rating: guest.rating } };
-    guest.paired = { state: 'paired', role: 'guest', code: host.code, opp: { id: host.id, name: host.name, rating: host.rating } };
+    host.paired = { state: 'paired', role: 'host', code: host.code, opp: { id: guest.pid, name: guest.name, rating: guest.rating } };
+    guest.paired = { state: 'paired', role: 'guest', code: host.code, opp: { id: host.pid, name: host.name, rating: host.rating } };
     give(best);
     return true;
   }
@@ -62,12 +64,12 @@ export function queueRoutes(ctx, club, match, waitMs) {
       sweep(t);
       let e = Q.get(p.id);
       if (e && e.paired) { Q.delete(p.id); return e.paired; }
-      const avoid = new Set((Array.isArray(b.avoid) ? b.avoid : []).slice(0, AVOID_MAX).map(Number).filter(Number.isFinite));
+      const avoid = new Set((Array.isArray(b.avoid) ? b.avoid : []).slice(0, AVOID_MAX).map(String).filter((v) => /^[A-Za-z0-9_-]{12}$/.test(v)));   // непрозорі id із opp.id
       if (e) {
         if (e.waiter) e.waiter({ state: 'wait', searching: searching() });   // старий запит того самого гравця завершуємо
         Object.assign(e, { code, avoid, rating: s.rating, name: s.club.name });
       } else {
-        e = { id: p.id, code, avoid, rating: s.rating, name: s.club.name, since: t, seen: t, waiter: null, paired: null };
+        e = { id: p.id, pid: pid(p.id), code, avoid, rating: s.rating, name: s.club.name, since: t, seen: t, waiter: null, paired: null };
         Q.set(p.id, e);
       }
       e.seen = t;

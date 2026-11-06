@@ -30,6 +30,7 @@ export const TRAITS = profile.TRAITS;
 export const fromWire = (w) => profile.fromWire(w);
 export const trainPrice = (v) => profile.trainPrice(v);
 export const SCOUT_PRICE = profile.SCOUT_PRICE;
+export const RARITY = profile.RARITY;
 export const clubXpNeed = (l) => profile.clubXpNeed(l);
 export const xpNeed = (l) => squad.xpNeed(l);
 export const newHero = (slot, used, rar) => profile.newHero(slot, used, rar);   // rar не задано — рідкість за шансом скаута

@@ -9,6 +9,7 @@ import { createApp } from './app.js';
 import * as rules from './rules.js';
 import { createBot } from './bot/index.js';
 import { scheduleMaintenance } from './maintenance.js';
+import { guardedWss } from './peerguard.js';
 
 const PEERS_MAX = 1000;                   // одночасних гравців у сервері кімнат: далі нові отримують відмову, а не гальмують усіх
 
@@ -26,7 +27,8 @@ api.headersTimeout = 15_000;
 api.requestTimeout = 15_000;
 api.listen(config.port, config.host, () => console.log(`API гри: ${config.host}:${config.port}`));
 
-PeerServer({ port: config.peerPort, host: config.host, path: '/', proxied: true, allow_discovery: false, concurrent_limit: PEERS_MAX });
+// перебір кодів кімнат: обмеження нових з'єднань і спроб з'єднатися з адреси (peerguard.js)
+PeerServer({ port: config.peerPort, host: config.host, path: '/', proxied: true, allow_discovery: false, concurrent_limit: PEERS_MAX, createWebSocketServer: guardedWss({ behindProxy: config.behindProxy }) });
 console.log(`PeerJS: ${config.host}:${config.peerPort}`);
 
 const stopMaintenance = scheduleMaintenance(db, join(config.dataDir, 'backups'));

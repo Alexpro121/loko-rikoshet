@@ -1,6 +1,6 @@
 // HTTP API гри: вхід через Telegram, профіль онлайн-клубу, паролі до ретранслятора.
 // Гроші й рейтинг змінює лише сервер: клієнт просить дію, сервер перевіряє й записує.
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { verifyInitData } from './telegram.js';
 import { turnCredentials } from './turn.js';
 import { tx } from './db.js';
@@ -58,6 +58,7 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
     club: db.prepare('SELECT data, coins, rating, lvl FROM clubs WHERE player_id = ?'),
     addClub: db.prepare('INSERT INTO clubs (player_id, data, coins, rating, lvl, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
     ledger: db.prepare('INSERT INTO coin_ledger (player_id, delta, reason, at) VALUES (?, ?, ?, ?)'),
+    flag: db.prepare('INSERT INTO flags (player_id, kind, at, json) VALUES (?, ?, ?, ?)'),
   };
 
   function rateLimited(ip, bucket, max) {
@@ -82,7 +83,12 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
   const ledger = (id, delta, reason) => { if (delta) q.ledger.run(id, delta, reason, sec()); };
 
   // онлайн-хаб: частини додають свої маршрути; features — те, що клієнт може ввімкнути
-  const ctx = { db, rules, auth, readJson, HttpError, sec, now, tx, ledger, newClub, questsAfter: null };
+  /** Журнал підозрілого для власника: import (обрізане перенесення), disputed, pair (фарм пари), fast (надто швидкий звіт). */
+  const flag = (id, kind, data) => q.flag.run(id, kind, sec(), JSON.stringify(data || {}));
+  // Telegram ID інших гравців назовні не віддаємо: замість нього стабільний непрозорий id (HMAC секрету сервера)
+  const pidKey = config.idSecret || config.botToken;
+  const pid = (id) => createHmac('sha256', pidKey).update('pid:' + id).digest('base64url').slice(0, 12);
+  const ctx = { db, rules, auth, readJson, HttpError, sec, now, tx, ledger, flag, pid, newClub, questsAfter: null };
   const hub = rules ? (() => {
     const club = clubRoutes(ctx);
     const match = matchRoutes(ctx, club);

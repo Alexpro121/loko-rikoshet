@@ -27,7 +27,7 @@ export function questRoutes(ctx) {
   /** Монети клубу за квест (у транзакції). false — клубу немає. */
   function pay(playerId, period, id, c) {
     if (!q.hasClub.get(playerId)) return false;
-    q.got.run(sec(), playerId, period, id);
+    if (q.got.run(sec(), playerId, period, id).changes !== 1) return false;   // уже забрано: монети вдруге не даємо
     q.coins.run(c, sec(), playerId);
     ledger(playerId, c, `quest:${period}:${id}`);
     return true;
@@ -92,7 +92,7 @@ export function questRoutes(ctx) {
         const r = q.row.get(p.id, period, id);
         if (!r || r.p < d.n) throw new HttpError(409, 'not_done');
         if (r.got_at != null) throw new HttpError(409, 'claimed');
-        if (!pay(p.id, period, id, d.c)) throw new HttpError(409, 'no_club');
+        if (!pay(p.id, period, id, d.c)) throw new HttpError(409, q.hasClub.get(p.id) ? 'claimed' : 'no_club');
         return { coins: d.c, total: q.hasClub.get(p.id).coins };
       });
     },
