@@ -315,7 +315,9 @@ export class UI {
     switch (a) {
       case 'start': if (this.el.splash.classList.contains('out')) return;   // другий дотик подвійного тапу: екран уже ховається
         if (this.started) { audio.click(); this.hideSplash(); return; }   // екран повернула підказка iPhone: заставку вдруге не граємо
-        this.started = true; this.game.acquireWake(); audio.unlock(); g.enterFullscreen(); this.hideSplash(); audio.click(); g.ensureMatch(); playIntro(this.root, () => { audio.music('menu'); this.showMenu(); }); return;
+        // музика меню, замовлена ще при завантаженні, інакше заграла б з unlock під заставкою; острів під непрозорою заставкою не малюється (introOn)
+        this.started = true; this.game.acquireWake(); audio.music('off'); audio.unlock(); g.enterFullscreen(); this.hideSplash(); audio.click(); g.ensureMatch();
+        this.introOn = true; playIntro(this.root, () => { this.introOn = false; audio.music('menu'); this.showMenu(); }); return;
       case 'play': return this.menuTap();
       case 'test-coins': if (!TEST_MODE) return; S.coins += 10000; commit(); audio.coin(3); this.toast('+10 000 монет (тест)'); return;
       case 'pens': { const mm = g.match; if (!mm) return; audio.click(); this.el.pause.hidden = true; if (mm.phase === 'paused') mm.resume(); mm.startPens(); return; }

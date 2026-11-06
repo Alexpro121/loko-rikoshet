@@ -134,9 +134,10 @@ function scene() {
 
 // ---------- текстури диму: клуб із викривленого фрактального шуму, білий згори з легкою тінню знизу ----------
 const fr = (x) => { const v = Math.sin(x) * 43758.5453; return v - Math.floor(v); };   // сталий «випадок»: кожен показ однаковий
-function smokeTex(kind, seed) {
-  const S = 96, cv = document.createElement('canvas'); cv.width = cv.height = S;
-  const g = cv.getContext('2d'), im = g.createImageData(S, S), px = im.data;
+/** Пікселі RGBA однієї текстури S×S. Текст функції йде у воркер, тому все потрібне лежить усередині, ззовні вона нічого не бере. */
+function smokePx(kind, seed, S) {
+  const fr = (x) => { const v = Math.sin(x) * 43758.5453; return v - Math.floor(v); };
+  const px = new Uint8ClampedArray(S * S * 4);
   const h = (x, y) => fr(x * 127.1 + y * 311.7 + seed * 74.7);
   const sm = (t) => t * t * (3 - 2 * t);
   const vn = (x, y) => {
@@ -155,11 +156,29 @@ function smokeTex(kind, seed) {
     for (let c = 0; c < 3; c++) px[i + c] = col[0][c] + (col[1][c] - col[0][c]) * t;
     px[i + 3] = Math.pow(Math.max(0, Math.min(1, dens * 1.35)), 1.15) * 255;
   }
-  g.putImageData(im, 0, 0);
-  return cv.toDataURL();
+  return px;
 }
-let TEX = null;                                                  // малюються раз за сесію
-const textures = () => TEX || (TEX = { smoke: [1, 2, 3].map((s) => smokeTex('smoke', s)), steam: [4, 5, 6].map((s) => smokeTex('steam', s)), lit: [7, 8].map((s) => smokeTex('lit', s)) });
+const TS = 96, TLIST = [['smoke', 1], ['smoke', 2], ['smoke', 3], ['steam', 4], ['steam', 5], ['steam', 6], ['lit', 7], ['lit', 8]];
+const WORK = 'const px=' + smokePx + ';onmessage=async(e)=>{const S=e.data.S,o=[];for(const[k,s]of e.data.list){const p=px(k,s,S);'
+  + 'if(self.OffscreenCanvas){const c=new OffscreenCanvas(S,S);c.getContext("2d").putImageData(new ImageData(p,S,S),0,0);o.push(await c.convertToBlob())}else o.push(p)}postMessage(o)}';
+const texUrl = (p) => { const c = document.createElement('canvas'); c.width = c.height = TS; c.getContext('2d').putImageData(new ImageData(p, TS, TS), 0, 0); return c.toDataURL(); };
+let TEX = null;
+/** Текстури диму, раз за сесію. Шум рахує воркер ще під екраном ЛОКО РАШ: у потоці сторінки це пів секунди фризу в першому кадрі
+ *  заставки. Без воркера рахуємо по одній текстурі між кадрами. */
+function textures() {
+  if (TEX) return TEX;
+  const pack = (u) => ({ smoke: u.slice(0, 3), steam: u.slice(3, 6), lit: u.slice(6) });
+  TEX = new Promise((res) => {
+    const slow = () => { const u = []; const one = () => { u.push(texUrl(smokePx(...TLIST[u.length], TS))); if (u.length < TLIST.length) setTimeout(one, 30); else res(pack(u)); }; setTimeout(one, 30); };
+    let w;
+    try { w = new Worker(URL.createObjectURL(new Blob([WORK], { type: 'text/javascript' }))); } catch (_) { slow(); return; }
+    w.onmessage = (e) => { w.terminate(); res(pack(e.data.map((d) => (d instanceof Blob ? URL.createObjectURL(d) : texUrl(d))))); };
+    w.onerror = () => { w.terminate(); slow(); };
+    w.postMessage({ S: TS, list: TLIST });
+  });
+  return TEX;
+}
+if (typeof Worker !== 'undefined' && !matchMedia('(prefers-reduced-motion: reduce)').matches) textures();   // одразу при завантаженні гри
 
 /** Частка часу, коли крива cubic-bezier(e) доходить до частки шляху p. */
 function timeAt(e, p) {
@@ -227,10 +246,10 @@ export function playIntro(root, done) {
   el.innerHTML = scene() + '<button class="li-skip" type="button" aria-label="Пропустити">ПРОПУСТИТИ ›</button>';
   root.appendChild(el);
   const $ = (s) => el.querySelector(sel(s)), $$ = (s) => [...el.querySelectorAll(sel(s))];
-  const live = [], T = [];
+  const live = [], T = [], Q = [];
   const A = (node, kf, o) => { const a = node.animate(kf, o); live.push(a); return a; };
   const each = (s, kf, o) => $$(s).forEach((node) => A(node, kf, o));
-  const at = (ms, fn) => T.push(setTimeout(fn, ms));
+  const at = (ms, fn) => Q.push([ms, fn]);                        // годинники звуку стартують разом з анімаціями (go)
   let finished = false;
   const end = () => {
     if (finished) return; finished = true;
@@ -242,11 +261,10 @@ export function playIntro(root, done) {
   el.addEventListener('click', end);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) {   // без руху: лише готовий герб
     $('#tdark').remove(); $('#railExt').remove();
-    at(1600, end);
+    T.push(setTimeout(end, 1600));
     return;
   }
-  const tex = textures();
-  $$('.sp').forEach((im, i) => { const l = tex[im.dataset.k]; im.setAttribute('href', l[i % l.length]); });
+  textures().then((tex) => { if (!finished) $$('.sp').forEach((im, i) => { const l = tex[im.dataset.k]; im.setAttribute('href', l[i % l.length]); }); });
 
   const run = { duration: D, delay: LT, easing: 'linear', fill: 'both' };
   const sample = (n, fn) => Array.from({ length: n + 1 }, (_, i) => fn(i / n));
@@ -375,4 +393,25 @@ export function playIntro(root, done) {
   at(ARR + 240, () => audio.hiss(1500, 0.6, 0.8, 0.05));
   at(SH + 200, () => audio.bell());
   at(SH + 1350, end);
+
+  // 5. старт. Перший показ кожного виду деталей (маска, градієнт, дим) GPU зустрічає збиранням програм малювання: хвилі фризу
+  //    по ~0,3 с посеред виїзду. Тому поруч ставимо невидиму копію герба, де видно все, і тримаємо анімації на першому кадрі
+  //    (герб стоїть, локомотив ще в глибині тунелю), доки кадри не підуть рівно. Тоді копію прибираємо й пускаємо рух.
+  //    До LT - 300 (перший серпанок фари) кадр і так нерухомий, тож час очікування зараховуємо в цю паузу, а не додаємо до неї.
+  for (const a of live) a.pause();
+  const warm = document.createElement('div');
+  warm.className = 'li-warm'; warm.innerHTML = scene(); el.appendChild(warm);
+  const t0 = performance.now(); let prev = t0, calm = 0;
+  const go = (now) => {
+    const k = Math.min(LT - 300, now - t0);
+    warm.remove();
+    for (const a of live) { a.currentTime = k; a.play(); }
+    for (const [ms, fn] of Q) T.push(setTimeout(fn, ms - k));
+  };
+  const wait = (now) => {
+    if (finished) return;
+    calm = now - prev < 70 ? calm + 1 : 0; prev = now;
+    if (calm >= 3 || now - t0 > 1500) go(now); else requestAnimationFrame(wait);
+  };
+  requestAnimationFrame(wait);
 }
