@@ -5,6 +5,8 @@
 // Пінг раз на секунду дає затримку (RTT) і пульс: обрив — понад 8 с тиші, лише якщо й саме з'єднання вже не «connected».
 // Тишу кадрів при живому з'єднанні (господар згорнув гру) ловить гість: guest.js, NET_SILENCE.
 
+import { peerServer, iceServers } from './server.js';
+
 const PREFIX = 'lokorush-v1-';
 const TK_KEY = 'loko-online-tk';
 const FRAME_QUEUE = 16e3;                            // ~5 кадрів (250 мс): кадр — 3.2 КБ, 20/с, тобто 64 КБ/с. Далі черга лише старить картинку, свіжий кадр важливіший
@@ -37,9 +39,18 @@ async function loadPeer() {
   return PeerCls;
 }
 
-function openPeer(Peer, id) {
+/** Свій сервер гри (src/online/server.js) знайомить гравців і дає ретранслятор; без нього публічний PeerJS. */
+async function peerConfig() {
+  const own = peerServer();
+  if (!own) return PEER_CFG;
+  const [stunG, stunCf, publicTurn] = PEER_CFG.config.iceServers;
+  return { ...own, config: { iceServers: [stunG, stunCf, ...(await iceServers()), publicTurn] }, debug: 0 };
+}
+
+async function openPeer(Peer, id) {
+  const cfg = await peerConfig();
   return new Promise((res, rej) => {
-    const p = id ? new Peer(id, PEER_CFG) : new Peer(PEER_CFG);
+    const p = id ? new Peer(id, cfg) : new Peer(cfg);
     const to = setTimeout(() => { rej(Object.assign(new Error('timeout'), { type: 'timeout' })); try { p.destroy(); } catch (_) { /* ignore */ } }, 12000);
     // лише до відкриття: пізніша помилка (сервер кімнат моргнув, збій WebRTC) не має знищувати peer разом із живим з'єднанням
     const onErr = (e) => { clearTimeout(to); try { p.destroy(); } catch (_) { /* ignore */ } rej(e); };

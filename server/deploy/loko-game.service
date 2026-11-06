@@ -1,0 +1,24 @@
+[Unit]
+Description=LOKO RUSH: сервер гри (API і PeerJS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=loko-game
+Group=loko-game
+WorkingDirectory=/opt/loko-game/app/server
+EnvironmentFile=/etc/loko-game/env
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=3
+# Гра ділить сервер із ботом LOKO: обмеження не дають їй забрати всю пам'ять і процесор
+MemoryMax=512M
+CPUQuota=150%
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/loko-game/data
+
+[Install]
+WantedBy=multi-user.target

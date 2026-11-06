@@ -87,6 +87,7 @@ GAME-LOKO/
 │   │   ├── net.js                   Net: кімната за кодом, PeerJS/WebRTC, канали ctl і st, пінг, реконект
 │   │   ├── profile.js               онлайн-клуб: герої, прапор, рейтинг, збереження OP, esc і plain
 │   │   ├── screen.js                OnlineScreen: вкладка «Онлайн» (розмітка й кнопки)
+│   │   ├── server.js                сервер гри для онлайну: SERVER_URL, вхід через Telegram, PeerJS і ретранслятор
 │   │   └── session.js               Online: кімната → лобі → матч → результат → реванш, обриви
 │   ├── physics/                     м'яч і зіткнення
 │   │   ├── aim.js                   AimPath: симуляція прицілу; AimDots: пунктир
@@ -112,6 +113,27 @@ GAME-LOKO/
 │   ├── config.js                    константи: поле, фізика, ліги, схеми, трансфери, академія, камери, налаштування
 │   ├── main.js                      точка входу гри
 │   └── style.css                    усі стилі гри; використовує змінні --u і --fs-*
+├── server/                          сервер гри (Node.js 24): вхід через Telegram, онлайн-клуби, PeerJS, coturn
+│   ├── deploy/
+│   │   ├── Caddyfile                HTTPS і проксі: API та PeerJS на /p/
+│   │   ├── install.sh               встановлення на Ubuntu: Node, Caddy, coturn, служба, фаєрвол, Litestream
+│   │   ├── litestream.yml           безперервна копія бази в R2 чи B2
+│   │   ├── loko-game.service        служба systemd з обмеженням пам'яті
+│   │   ├── turnserver.conf          ретранслятор coturn з тимчасовими паролями
+│   │   └── update.sh                оновлення сервера до свіжого коду
+│   ├── src/
+│   │   ├── app.js                   маршрути API, сесії, CORS, обмеження частоти входу
+│   │   ├── config.js                налаштування з оточення
+│   │   ├── db.js                    SQLite і міграції схеми
+│   │   ├── rules.js                 правила гри з src/online/profile.js із заглушками браузера
+│   │   ├── server.js                запуск API і PeerJS
+│   │   ├── telegram.js              перевірка підпису Telegram (initData)
+│   │   └── turn.js                  тимчасові паролі coturn
+│   ├── test/
+│   │   └── api.test.js              тести сервера: node --test
+│   ├── README.md                    що вміє сервер, запуск і встановлення
+│   ├── package-lock.json            зафіксовані версії залежностей сервера
+│   └── package.json                 залежність peer; скрипти start і test
 ├── store/
 │   ├── PLAY_STORE.md                інструкція випуску в Google Play і тексти лістингу
 │   ├── TELEGRAM.md                  інструкція випуску в Telegram, список перевірки й тексти для BotFather

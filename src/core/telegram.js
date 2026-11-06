@@ -20,6 +20,8 @@ const quiet = (fn) => { try { fn(); } catch (_) { /* старіша версія
 const isMobile = () => /android|ios/.test(tg.platform);
 
 export const inTelegram = () => !!tg;
+/** Підписані дані запуску для входу на сервер гри; порожньо поза Telegram. */
+export const tgInitData = () => (tg && typeof tg.initData === 'string' ? tg.initData : '');
 /** Як document.hidden, але ще й згорнутий у Telegram застосунок: там сторінка може лишатись «видимою». */
 export const appHidden = () => document.hidden || inactive;
 

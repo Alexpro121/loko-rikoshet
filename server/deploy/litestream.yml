@@ -1,0 +1,12 @@
+# Безперервна копія бази гри в S3-сумісне сховище (Cloudflare R2 чи Backblaze B2).
+# Ключі доступу Litestream бере з оточення: LITESTREAM_ACCESS_KEY_ID і LITESTREAM_SECRET_ACCESS_KEY.
+dbs:
+  - path: @DB@
+    replicas:
+      - type: s3
+        bucket: @BUCKET@
+        path: loko-game
+        endpoint: @ENDPOINT@
+        force-path-style: true
+        retention: 720h
+        snapshot-interval: 24h
