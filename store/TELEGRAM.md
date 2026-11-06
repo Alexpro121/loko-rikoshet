@@ -28,6 +28,9 @@ https://alexpro121.github.io/loko-rikoshet/
 
 ## 3. Увімкнути запрошення через Telegram
 
+Зроблено: бот `@lokorush_bot`, `BOT_LINK = 'https://t.me/lokorush_bot'`. Посилання `?startapp` працюють лише після кроку 2.3 (Main Mini App у BotFather).
+
+
 Заміни `BOT_LINK` на початку `src/core/telegram.js`:
 
 ```js

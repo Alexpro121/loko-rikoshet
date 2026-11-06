@@ -169,4 +169,4 @@ sleep 3
 systemctl is-active --quiet loko-game && echo "loko-game працює" || { journalctl -u loko-game -n 30 --no-pager; exit 1; }
 systemctl is-active --quiet coturn && echo "coturn працює" || { journalctl -u coturn -n 30 --no-pager; exit 1; }
 curl -fsS "http://127.0.0.1:${PORT}/health" && echo
-echo "Готово ($(git -C "$APP/app" log --oneline -1)). Перевірте ззовні: https://$DOMAIN/health"
+echo "Готово ($(sudo -u "$USER_NAME" git -C "$APP/app" log --oneline -1)). Перевірте ззовні: https://$DOMAIN/health"

@@ -4,7 +4,7 @@ const SDK = 'https://telegram.org/js/telegram-web-app.js?64';
 const SDK_WAIT = 5000;                                          // telegram.org не відповів: гра стартує без нього
 const BG = '#0b3d2a';
 /** Посилання на бота для запрошень, наприклад 'https://t.me/loko_rush_bot'. Порожнє: у запрошенні звичайна адреса сайту. */
-const BOT_LINK = '';
+const BOT_LINK = 'https://t.me/lokorush_bot';
 
 const CLOUD_KEYS = ['loko-rikoshet-save-v1', 'loko-online-v1']; // що копіюємо в хмару; порядок входить у формат meta.n
 const SYNC_KEY = 'loko-tg-sync-v1';                             // локальна мітка останньої синхронізації: { at, sig }

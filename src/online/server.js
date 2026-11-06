@@ -5,7 +5,7 @@
 import { tgInitData } from '../core/telegram.js';
 
 /** Адреса сервера гри, наприклад 'https://api.приклад.ua'. Порожня: сервер не використовується. */
-export const SERVER_URL = '';
+export const SERVER_URL = 'https://2-29-117-47.sslip.io';
 const API_WAIT = 4000;                    // повільний сервер не має тримати старт онлайну
 const DOWN_MS = 60_000;                   // скільки не чіпати сервер після збою
 const SESSION_KEY = 'loko-server-session';
