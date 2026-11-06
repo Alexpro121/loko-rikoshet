@@ -40,14 +40,14 @@ CamDirector: ігрова камера матчу за пресетами CAM_PR
 - **CamDirector** :50
   constructor:51, snap:65, add:67, nearest:70, collect:85, need:122, needOne:131, solve:137, bounds:152, update:174, keepIn:298
 
-## src/core/game.js (631 рядків)
+## src/core/game.js (651 рядків)
 
 Game: рендерер, сцена меню, стейт-машина MENU/MATCH/GOAL/RESULT, головний цикл, ввід, камера матчу, якість.
 
 - Експорти: gfxFail:28
 - Внутрішні функції: springStep:22
 - **Game** :38
-  constructor:39, cineFlat:88, ensureMatch:100, startSplash:103, splashView:119, updateSplash:125, splashBall:150, splashBallStep:167, splashRoar:186, stopSplash:188, warmShaders:201, buildStates:214, play:255, toMenu:259, quitMatch:260, onStadiumUpgraded:262, resize:267, basePixelRatio:278, applyPixelRatio:287, resMin:298, fixedLevel:301, setLevel:303, qualityChanged:310, levelDown:320, governor:335, onGlLost:378, onGlRestored:385, onVisibility:391, updateMenuCam:398, computeMatchBase:412, snapCamera:413, addTrauma:415, fovKick:417, updateMatchCam:419, autoFocus:477, screenToGround:493, worldToScreen:504, acquireWake:511, floatWorld:520, bindInput:527, isFullscreen:573, enterFullscreen:574, toggleFullscreen:582, tick:589, onFrameError:597, step:606
+  constructor:39, cineFlat:88, ensureMatch:100, startSplash:103, splashView:119, startStage:125, stopStage:132, stageCam:134, updateSplash:144, splashBall:170, splashBallStep:187, splashRoar:206, stopSplash:208, warmShaders:221, buildStates:234, play:275, toMenu:279, quitMatch:280, onStadiumUpgraded:282, resize:287, basePixelRatio:298, applyPixelRatio:307, resMin:318, fixedLevel:321, setLevel:323, qualityChanged:330, levelDown:340, governor:355, onGlLost:398, onGlRestored:405, onVisibility:411, updateMenuCam:418, computeMatchBase:432, snapCamera:433, addTrauma:435, fovKick:437, updateMatchCam:439, autoFocus:497, screenToGround:513, worldToScreen:524, acquireWake:531, floatWorld:540, bindInput:547, isFullscreen:593, enterFullscreen:594, toggleFullscreen:602, tick:609, onFrameError:617, step:626
 
 ## src/core/perf.js (39 рядків)
 
@@ -317,6 +317,13 @@ Walkout: декорації виходу команд: прапори, кили�
 - **Walkout** :102
   constructor:103, start:122, hide:138, wave:141, update:152, fireworks:204
 
+## src/online/cloud.js (140 рядків)
+
+Онлайн-хаб на сервері гри (контракт API 2, server/README.md): клуб, підтверджений результат матчу, квести, таблиця.
+
+- **Cloud** :13
+  constructor:14, refresh:18, open:22, dirty:35, resync:41, train:43, scout:53, buy:55, reset:66, ticketOk:76, start:81, report:87, questsOn:105, loadQuests:106, setQuests:107, view:114, ready:123, claim:125, rollover:136, loadTop:139
+
 ## src/online/codec.js (86 рядків)
 
 Кадр онлайн-матчу: готові пози всіх 22 гравців (19 суглобів, як у повторі), м'яч, камера кат-сцен і стан гри.
@@ -344,6 +351,12 @@ Walkout: декорації виходу команд: прапори, кили�
 - **HostLink** :13
   constructor:14, install:21, uninstall:35, sendRef:37, resync:39, hud:45, ev:54, newPoss:57, timedOut:59, wake:61, onMsg:64, frame:87
 
+## src/online/modes.js (17 рядків)
+
+Режими онлайн-хабу: плитки вкладки «Матч» (screen.js). Новий режим, наприклад турнір, — новий запис тут; решту хабу міняти не треба.
+
+- Експорти: MODES:7, modeTabs:17
+
 ## src/online/names.js (64 рядків)
 
 Імена героїв онлайн-клубу: українське ім'я + прізвище, зібране за справжніми зразками (суфікси, козацькі складені,
@@ -354,38 +367,53 @@ Walkout: декорації виходу команд: прапори, кили�
 
 Мережа онлайн-матчу: кімната за кодом через PeerJS (публічний сервер лише знайомить двох гравців), далі — пряме
 
-- Експорти: PROTO:14, makeCode:15, cleanCode:16
-- Внутрішні функції: tabToken:31, loadPeer:37, ownConfig:46, openPeer:54, openWith:65
+- Експорти: PREFIX:10, PROTO:14, makeCode:15, cleanCode:16, loadPeer:37, openPeer:54
+- Внутрішні функції: tabToken:31, ownConfig:46, openWith:65
 - **Net** :76
   constructor:77, on:82, emit:83, kept:86, watch:92, host:100, join:122, connectTo:134, attach:147, setupStream:164, onMsg:175, startPing:182, send:194, sendFrame:196, drop:202, offline:205, lost:207, rejoin:215, close:222
 
-## src/online/profile.js (269 рядків)
+## src/online/profile.js (333 рядків)
 
 Онлайн-клуб гравця: окремий від кар'єри «Локомотива» — своя назва, прапор, форма, 11 унікальних героїв, рівень,
 
-- Експорти: esc:15, TRAITS:23, RARITY:36, ONLINE_FORMS:45, slotsOf:46, ONLINE_AIM:49, ONLINE_GK:50, newHero:54, newClub:69, OP:142, saveOP:143, markLive:145, clearLive:146, settleLive:147, resetOP:148, kitOf:154, awayKit:161, gkKitOf:167, shortOf:168, heroOvr:172, teamRating:173, trainPrice:174, SCOUT_PRICE:175, clubXpNeed:176, trainHero:178, setForm:185, swapHeroes:190, scoutHero:196, toWire:205, plain:216, fromWire:220, matchClub:242, applyResult:249
-- Внутрішні функції: repair:82, migrate:117, load:124
+- Експорти: esc:15, TRAITS:23, RARITY:36, ONLINE_FORMS:45, slotsOf:46, ONLINE_AIM:49, ONLINE_GK:50, newHero:54, newClub:69, OP:147, saveOP:148, markLive:150, clearLive:151, settleLive:152, toServer:156, adoptServer:169, adoptHero:184, resetOP:193, kitOf:199, awayKit:206, gkKitOf:212, shortOf:213, heroOvr:217, teamRating:218, trainPrice:219, SCOUT_PRICE:220, clubXpNeed:221, trainHero:223, setForm:230, swapHeroes:235, PACKS:244, packRarity:250, buyPack:256, scoutHero:264, toWire:268, plain:280, fromWire:284, matchClub:306, applyResult:313
+- Внутрішні функції: repair:82, migrate:122, load:129, toWireHero:275
 
-## src/online/screen.js (384 рядків)
+## src/online/quests.js (144 рядків)
 
-Вкладка «Онлайн» у меню: свій онлайн-клуб (назва, прапор, рівень, рейтинг), герої з прокачкою і гра з людиною
+Квести онлайн-клубу: 3 денні (легкий, середній, важкий) і 1 тижневий. Набір однаковий для всіх гравців: зерно — дата за Києвом,
 
-- **OnlineScreen** :31
-  constructor:32, onMenu:59, subKey:67, playState:68, html:70, clubCard:87, clubTiles:93, kitsHtml:98, clubHtml:102, feHtml:122, dice:123, thumb:124, feGen:125, feField:133, feEmblem:138, feColors:156, feExtra:163, rollCands:169, remember:170, patchFlag:172, patchFe:179, flagDone:189, syncSoon:192, look:195, afterRender:196, heroDetail:197, heroesHtml:209, revealHero:211, playHtml:220, stampOf:257, oppCard:259, patchOpp:264, input:276, setColor:297, act:298, copy:354, showResult:360
+- Експорти: questDef:33, questsLeft:54, questPeriods:69, dayIds:71, weekIds:72, questStep:74, syncQuests:87, questList:99, questsReady:105, claimQuest:112, matchFacts:123, factsOf:125, questMatch:133
+- Внутрішні функції: kyiv:38, rng:61, bank:79
 
-## src/online/server.js (95 рядків)
+## src/online/screen.js (636 рядків)
+
+Онлайн-хаб: окремий розділ гри на весь екран (меню кар'єри за ним сховане). Свій верх (назад у кар'єру, клуб, монети онлайн-клубу)
+
+- **OnlineScreen** :52
+  constructor:53, onMenu:90, subKey:98, playState:99, tabs:104, onOpen:106, back:113, html:119, questCard:142, questsHtml:149, topHtml:157, clubCard:168, clubTiles:174, kitsHtml:179, clubHtml:183, feHtml:203, dice:204, thumb:205, feGen:206, feField:214, feEmblem:219, feColors:237, feExtra:244, rollCands:250, remember:251, patchFlag:253, patchFe:260, flagDone:270, syncSoon:273, look:276, afterRender:277, heroDetail:278, heroesHtml:290, revealHero:292, star:311, starHtml:313, mountStar:318, slideHtml:324, homeHtml:336, featInit:354, featGo:380, shopHtml:390, buy:411, restage:431, playHtml:434, stampOf:474, oppCard:476, patchOpp:481, input:493, setColor:514, act:515, copy:605, showResult:611
+
+## src/online/seek.js (99 рядків)
+
+Швидкий матч без черги на сервері: «маяки» на фіксованих адресах PeerJS (SLOTS штук на версію протоколу).
+
+- Експорти: SLOTS:9
+- **Seeker** :14
+  constructor:15, kept:18, probePeer:23, scan:32, ask:38, light:61, serve:78, lit:89, dim:90, stop:94
+
+## src/online/server.js (151 рядків)
 
 Сервер гри (папка server/): вхід через Telegram, власний PeerJS і паролі до ретранслятора.
 
-- Експорти: SERVER_URL:8, serverOn:18, markDown:20, peerServer:23, login:50, roomShareId:80, iceServers:86
-- Внутрішні функції: api:29, stored:42, store:45, authed:65
+- Експорти: SERVER_URL:8, serverOn:18, markDown:20, peerServer:23, login:50, features:89, has:100, saveClub:111, meOnServer:112, trainOnServer:113, scoutOnServer:114, packOnServer:116, resetOnServer:117, matchStart:122, matchReport:123, matchState:124, queueJoin:126, queueLeave:127, queueStats:128, serverQuests:130, claimOnServer:131, topList:133, roomShareId:136, iceServers:142
+- Внутрішні функції: api:29, stored:42, store:45, authed:65, call:106
 
-## src/online/session.js (284 рядків)
+## src/online/session.js (410 рядків)
 
-Онлайн-сесія: кімната за кодом → лобі (обидва бачать клуби одне одного й тиснуть «Готовий») → матч → результат
+Онлайн-сесія: кімната за кодом або швидкий пошук (маяки, seek.js) → лобі (обидва бачать клуби одне одного й тиснуть «Готовий») → матч → результат
 
-- **Online** :21
-  constructor:22, role:33, inMatch:34, sendVis:35, onVis:37, busy:49, unready:51, refresh:52, setErr:53, create:56, join:63, why:70, bind:80, hello:104, sync:106, onMsg:108, setReady:151, buildSpec:160, me:171, startMatch:173, beginGuest:187, finish:201, guestEnd:213, leave:221, techLoss:231, stopMatch:237, oppLeft:244, dropped:257, rematch:263, toLobby:267, close:275
+- **Online** :28
+  constructor:29, role:42, inMatch:43, sendVis:44, onVis:46, busy:58, unready:60, refresh:61, setErr:62, create:65, join:72, seek:81, qloop:99, patchSeek:119, unqueue:124, relight:126, seekJoin:136, retrySeek:146, reseek:148, stopSeek:153, why:155, bind:165, hello:198, sync:200, onMsg:205, setReady:250, buildSpec:259, me:270, startMatch:272, beginGuest:292, onTicket:311, finish:319, guestEnd:335, leave:343, techLoss:353, stopMatch:359, oppLeft:366, dropped:380, rematch:387, toLobby:391, close:399
 
 ## src/physics/aim.js (123 рядків)
 
@@ -440,11 +468,11 @@ World: фізика м'яча з кроком 120 Гц: борти, штанги
 - Експорти: STAT_NAMES:10, STAT_HINT:11, keysFor:15, ROLE_UA:16, myKit:34, matchKit:36, makeStats:39, ovr:44, xpNeed:49, trainCost:50, tierOf:51, newEntry:57, ROSTER:71, defaultSquad:94, ensureSquad:102, allPlayers:116, swapPlayers:119, CAREER_FORMS:131, setTactic:137, swapStarters:139, bestLine:144, oppSquad:156, skillOf:183, gkBonus:190, squadLook:197, lookSig:204, customizeLook:207, resetLook:214, gainXp:221, trainStat:237, signGraduate:246, squadRating:264
 - Внутрішні функції: rosterEntry:82, relabelSquad:133
 
-## src/style.css (1662 рядків)
+## src/style.css (1978 рядків)
 
 Стилі основної гри; розділи перелічені в docs/CODE_MAP.md.
 
-- Розділи: Стилі основної гри; розділи перелічені в docs/CODE_MAP.md.:1 · кнопки:35 · сплеш:49 · панелі:59 · джойстик і мобільна зручність:106 · символіка клубу:135 · склад, картка гравця:148 · оверлеї:187 · результат:206 · HUD:224 · дрібні події (ВІДБІР, ВРЯТУВАВ, ПАС, ШТАНГА…): підказка, а не крик — лише текст, без плашки; тінь тільки для читабельності на газоні:250 · поверни пристрій:270 · анімації:279 · емблема-картинка заповнює свій контейнер:301 · заставка запуску (src/ui/intro.js): повний герб «Локомотива», з тунелю в червоному трикутнику виїжджає локомотив:309 · деталі крутяться навколо себе, а те, що рухається в координатах герба, від його початку:315 · редактор вигляду:324 · серія пенальті:341 · адаптація вікон під низькі екрани (телефон у ландшафті): вміст прокручується, кнопка «закрити» завжди на місці:360 · табло як на телебаченні: компактна плашка зліва вгорі:383 · анімації табло:400 · картка гравця з м'ячем: компактніша:419 · підказка для iPhone: встановити на початковий екран:428 · головна: ЛОКО РАШ. Власні літери й вхід у src/ui/splash.js; плоскі кольори, без градієнтів і світіння:433 · літери:439 · заслін: темне поле з отвором у літері O, летить на камеру й зникає:448 · кнопка: плоский блок із твердим об'ємом, як літери:460 · діагональні смуги лівреї на екрані результату й панелях:469 · підказка iPhone праворуч від назви:477 · налаштування джойстика: рядок не накладається на «На весь екран»:482 · верхній ряд:509 · маршрут ліги:519 · гаманець:540 · бічні: табличка клубу і табло:553 · низ: прокачка, вкладки, «ВПЕРЕД!»:615 · прокачка стадіону — кремова коса табличка:618 · вкладки — косі плитки лівреї, активна червона з кремовою рискою:636 · «ВПЕРЕД!» — та сама коса кнопка, що й на заставці, тільки більша:644 · поява меню:670 · вузькі екрани (4:3, 16:10) і низькі телефони:706 · текст не вилазить за межі блоків:720 · картки в панелях: нічого не стискається поверх сусіда, а що не влізло — гортається всередині картки:724 · джойстик: плавна поява, у катсценах прихований:751 · пауза:766 · налаштування:808 · низьке або вузьке вікно: Налаштування на всю висоту, а якщо вкладки однаково не вміщаються, вони прокручуються:852 · табличка доданого часу — як LED-табло резервного судді:942 · смужка автора гола під табло:951 · велике табло рахунку: перерви й фінальний свисток:965 · напис гола й автогола: заголовок у центрі згасає, плашка автора внизу лишається до повтору:1005 · представлення суперника на виході команд:1045 · довга назва: fitText зменшує шрифт, а як не вистачає — переносить; трикрапки немає:1046 · годинник: хвилина перекидається, секунди біжать рівно, смужка тайму; до розведення годинник стоїть (блимає двокрапка):1087 · онлайн: п'ята вкладка меню, онлайн-клуб, кімната за кодом:1105 · смуга зверху в кольорах клубу й косий штрих на тлі:1121 · вхідні анімації вмісту: лише при новій сторінці:1148 · кнопки в ліврею:1157 · полотно, що майорить:1168 · сцена під прапором: промені в кольорах клубу:1179 · лобі:1252 · клуб і редактор прапора:1277 · герої: тактичне поле, гравець на весь зріст, навички:1357 · низький екран (телефон лежачи): панель займає весь екран, меню за нею ховається:1441 · палець: більші цілі, без залиплого наведення, легші анімації:1452 · сяйво й промені за заголовком:1499 · конфеті:1508 · заголовок: літери падають згори з перельотом, потім по ньому пробігає відблиск:1521 · табло: два герби на косих плитах, рахунок «грюкає»:1538 · автори голів — під своєю командою:1560 · каса праворуч: плита з рейками-смугами, рядки виїжджають, суми дораховуються:1574 · кнопки — як у паузі:1601 · повторне малювання того самого вікна: вхідні анімації не повторюються:1621 · мінімапа матчу (ui/minimap.js):1624
+- Розділи: Стилі основної гри; розділи перелічені в docs/CODE_MAP.md.:1 · кнопки:35 · сплеш:49 · панелі:59 · джойстик і мобільна зручність:106 · символіка клубу:135 · склад, картка гравця:148 · оверлеї:187 · результат:206 · HUD:224 · дрібні події (ВІДБІР, ВРЯТУВАВ, ПАС, ШТАНГА…): підказка, а не крик — лише текст, без плашки; тінь тільки для читабельності на газоні:250 · поверни пристрій:270 · анімації:279 · емблема-картинка заповнює свій контейнер:301 · заставка запуску (src/ui/intro.js): повний герб «Локомотива», з тунелю в червоному трикутнику виїжджає локомотив:309 · деталі крутяться навколо себе, а те, що рухається в координатах герба, від його початку:315 · редактор вигляду:324 · серія пенальті:341 · адаптація вікон під низькі екрани (телефон у ландшафті): вміст прокручується, кнопка «закрити» завжди на місці:360 · табло як на телебаченні: компактна плашка зліва вгорі:383 · анімації табло:400 · картка гравця з м'ячем: компактніша:419 · підказка для iPhone: встановити на початковий екран:428 · головна: ЛОКО РАШ. Власні літери й вхід у src/ui/splash.js; плоскі кольори, без градієнтів і світіння:433 · літери:439 · заслін: темне поле з отвором у літері O, летить на камеру й зникає:448 · кнопка: плоский блок із твердим об'ємом, як літери:460 · діагональні смуги лівреї на екрані результату й панелях:469 · підказка iPhone праворуч від назви:477 · налаштування джойстика: рядок не накладається на «На весь екран»:482 · верхній ряд:509 · маршрут ліги:519 · гаманець:540 · бічні: табличка клубу і табло:553 · низ: прокачка, вкладки, «ВПЕРЕД!»:615 · прокачка стадіону — кремова коса табличка:618 · вкладки — косі плитки лівреї, активна червона з кремовою рискою:636 · «ВПЕРЕД!» — та сама коса кнопка, що й на заставці, тільки більша:644 · поява меню:670 · вузькі екрани (4:3, 16:10) і низькі телефони:706 · текст не вилазить за межі блоків:720 · картки в панелях: нічого не стискається поверх сусіда, а що не влізло — гортається всередині картки:724 · джойстик: плавна поява, у катсценах прихований:751 · пауза:766 · налаштування:808 · низьке або вузьке вікно: Налаштування на всю висоту, а якщо вкладки однаково не вміщаються, вони прокручуються:852 · табличка доданого часу — як LED-табло резервного судді:942 · смужка автора гола під табло:951 · велике табло рахунку: перерви й фінальний свисток:965 · напис гола й автогола: заголовок у центрі згасає, плашка автора внизу лишається до повтору:1005 · представлення суперника на виході команд:1045 · довга назва: fitText зменшує шрифт, а як не вистачає — переносить; трикрапки немає:1046 · годинник: хвилина перекидається, секунди біжать рівно, смужка тайму; до розведення годинник стоїть (блимає двокрапка):1087 · онлайн: п'ята вкладка меню, онлайн-клуб, кімната за кодом:1105 · смуга зверху в кольорах клубу й косий штрих на тлі:1121 · вхідні анімації вмісту: лише при новій сторінці:1148 · кнопки в ліврею:1157 · полотно, що майорить:1168 · сцена під прапором: промені в кольорах клубу:1179 · лобі:1252 · клуб і редактор прапора:1277 · герої: тактичне поле, гравець на весь зріст, навички:1357 · онлайн-хаб: окремий розділ гри на весь екран (src/online/screen.js):1441 · затемнення під текстом над стадіоном: угорі під шапкою, унизу під панеллю, ліворуч під зіркою; середина кадру світла:1453 · шапка: назад, клуб (прапор, назва, рівень і досвід, рейтинг), монети:1458 · вкладки з редакторами над стадіоном: суцільні поверхні, інакше дрібний текст тоне в трибунах:1468 · низ: розділи на всю ширину; активний — червона коса плита, решта на темному тлі:1479 · головна (вкладка «Матч»): зірка клубу на весь зріст ліворуч, сітка праворуч:1494 · карусель режимів: сторінки на всю плитку, гортає лише гравець (пальцем, мишею, колесом, крапками):1509 · плитки поруч: клуб (поле кольору форми), гра з другом, квести дня:1533 · кнопка «Клуб» у шапці поруч із монетами:1566 · вкладка «Магазин»: паки ліворуч (поля кольору рідкості), праворуч кого замінити й «Купити»:1573 · пошук суперника:1608 · вкладка «Квести»:1619 · вкладка «Рейтинг» (лише із сервером гри):1643 · онлайн-хаб: воксельні предмети (src/ui/vox.js) — ті самі кубики, з яких складена гра:1671 · навігація: воксельні іконки, як у кар'єрі. Предмет не виходить із рамки кнопки: відкрита вкладка лише раз оживає (клас fx, screen.js):1672 · «Матч»: м'яч двічі підскакує перед воротами (і на слайді швидкого матчу):1682 · «Квести»: галочки ставляться по черзі:1690 · «Магазин» і паки: вагон із контейнером під'їжджає рейками й гальмує:1695 · «Герої»: гравці підстрибують по черзі:1699 · «Рейтинг»: кубок падає на першу сходинку:1703 · квести: предмет у картці вистрибує слідом за самою карткою:1709 · квести: предмет ліворуч від назви; виконаний підстрибує, забраний тьмяніє:1712 · магазин: контейнер чи бінокль праворуч на плитці паку; обраний пак погойдується на рейках:1724 · головна: турніри — сірий кубок; гра з другом — двоє гравців із м'ячем; клуб — прапор, що майорить:1733 · відкриття паку: контейнер тремтить дедалі сильніше, крізь щілини світло кольору рідкості, спалах — і картка героя:1740 · низький екран (телефон лежачи): панель займає весь екран, меню за нею ховається:1757 · палець: більші цілі, без залиплого наведення, легші анімації:1768 · сяйво й промені за заголовком:1815 · конфеті:1824 · заголовок: літери падають згори з перельотом, потім по ньому пробігає відблиск:1837 · табло: два герби на косих плитах, рахунок «грюкає»:1854 · автори голів — під своєю командою:1876 · каса праворуч: плита з рейками-смугами, рядки виїжджають, суми дораховуються:1890 · кнопки — як у паузі:1917 · повторне малювання того самого вікна: вхідні анімації не повторюються:1937 · мінімапа матчу (ui/minimap.js):1940
 
 ## src/ui/hud.js (300 рядків)
 
@@ -454,11 +482,11 @@ Hud: табло матчу, годинник, картка гравця, бан�
 - **Hud** :28
   constructor:29, show:71, hide:87, matchday:94, setScore:126, setTime:138, setProg:157, addedTime:164, scored:171, scoreCard:180, setSignal:200, setCoins:205, bump:209, warn:211, hint:217, combo:222, banner:228, goal:240, clearGoal:270, cine:272, setCard:282, clearFloats:293, float:294
 
-## src/ui/icons.js (34 рядків)
+## src/ui/icons.js (38 рядків)
 
 Прості вбудовані SVG-іконки: без емодзі та зовнішніх файлів.
 
-- Експорти: I:4, crest:26, lokoCrest:32
+- Експорти: I:4, crest:30, lokoCrest:36
 
 ## src/ui/intro.js (378 рядків)
 
@@ -483,11 +511,11 @@ DemoMatch: маленька гра для зразка мінімапи в на�
 - **MapHud** :273
   constructor:274, apply:294, setKits:306, applyAlpha:312, layout:318, compute:328, planHtml:357, refreshPlan:373, animatePlan:379, placeJoyZone:387, update:397, ballCheck:411, bindPreview:420, fitPreview:428, place:433, resetPlace:434, setEdit:436, syncBar:442, initDrag:447
 
-## src/ui/portrait.js (115 рядків)
+## src/ui/portrait.js (124 рядків)
 
 portrait: рендерить 3D-модель гравця один раз у PNG для карток.
 
-- Експорти: portrait:22, mountTurntable:108
+- Експорти: portrait:22, mountTurntable:114
 - Внутрішні функції: init:10, viewerInit:55, viewerRelease:73, viewerLook:77, viewerTick:89
 
 ## src/ui/splash.js (265 рядків)
@@ -506,17 +534,17 @@ Tactics: екран складу для кар'єри й онлайн-клубу
 - **Tactics** :17
   constructor:18, reset:20, pos:21, token:26, formsHtml:30, popHtml:32, swapHtml:36, ttSig:41, ttHtml:42, html:46, afterRender:64, fill:71, patch:80, act:97
 
-## src/ui/ui.js (981 рядків)
+## src/ui/ui.js (991 рядків)
 
 UI: меню, панелі, пауза, налаштування, результат, джойстик. Кнопки: data-act -> UI.act.
 
 - Внутрішні функції: countTo:28, redraw:49
 - **UI** :55
-  constructor:56, onResize:155, key:166, goBack:183, canGoBack:192, hideSplash:197, splashReady:206, isIOS:221, isStandalone:222, iosHint:223, useJoy:231, setMatchUi:235, applyControls:236, joyCenter:255, placeJoy:260, initJoy:265, act:313, kitNote:378, setJoyEdit:384, editDone:390, menuTap:396, toast:405, setSlow:410, flash:411, showMenu:417, tiltNav:428, rollFlaps:440, hideMenu:457, leagueStrip:464, refresh:479, menuCards:496, fitFlaps:537, clock:546, tickCash:551, claimCash:559, deny:567, pop:568, buyStadium:570, openPanel:581, panelCovers:590, closePanel:591, renderPanel:599, showTier:617, statBar:623, teamSheet:626, careerLook:638, careerDetail:639, squadHtml:652, train:671, transfersHtml:679, academyHtml:696, stadiumHtml:711, chronicleHtml:729, symbolsHtml:739, buy:750, equip:759, collectGraduate:765, boostAcademy:785, openCustom:795, closeCustom:798, customAct:799, renderCustom:816, openSettings:839, closeSettings:842, renderSettings:843, pause:886, showResult:902, renderResult:931, hideResult:980
+  constructor:56, onResize:155, key:166, goBack:183, canGoBack:193, hideSplash:198, splashReady:207, isIOS:222, isStandalone:223, iosHint:224, useJoy:232, setMatchUi:236, applyControls:237, joyCenter:256, placeJoy:261, initJoy:266, act:314, kitNote:379, setJoyEdit:385, editDone:391, menuTap:397, toast:406, setSlow:411, flash:412, showMenu:418, tiltNav:429, rollFlaps:441, hideMenu:458, leagueStrip:465, refresh:480, menuCards:497, fitFlaps:538, clock:547, tickCash:552, claimCash:560, deny:568, pop:569, buyStadium:571, openPanel:582, panelCovers:595, leaveHub:600, closePanel:601, renderPanel:609, showTier:627, statBar:633, teamSheet:636, careerLook:648, careerDetail:649, squadHtml:662, train:681, transfersHtml:689, academyHtml:706, stadiumHtml:721, chronicleHtml:739, symbolsHtml:749, buy:760, equip:769, collectGraduate:775, boostAcademy:795, openCustom:805, closeCustom:808, customAct:809, renderCustom:826, openSettings:849, closeSettings:852, renderSettings:853, pause:896, showResult:912, renderResult:941, hideResult:990
 
-## src/ui/vox.js (82 рядків)
+## src/ui/vox.js (292 рядків)
 
 Воксельні іконки в ізометрії: ті самі кубики, з яких складена гра, лише в SVG.
 
-- Експорти: VOX:48
-- Внутрішні функції: shade:7, vox:13
+- Експорти: VOX:179
+- Внутрішні функції: shade:13, nearer:20, order:31, hidden:50, ballSvg:63, vox:83, digits:142, container:163

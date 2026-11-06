@@ -82,6 +82,7 @@ const count = (v, a, d, b = Infinity) => (typeof v === 'number' && Number.isFini
 function repair(o) {
   if (!o.club || typeof o.club !== 'object') o.club = newClub().club;
   if (o.live != null && !(typeof o.live === 'object' && Number.isFinite(o.live.r) && Number.isFinite(o.live.at))) o.live = null;
+  if (o.q != null && !questsOk(o.q)) delete o.q;              // квести: зіпсований набір quests.js збере заново на сьогодні
   const c = o.club;
   if (typeof c.name !== 'string' || !c.name.trim()) c.name = pick(NAMES);
   if (typeof c.city !== 'string') c.city = pick(CITIES);
@@ -104,6 +105,7 @@ function repair(o) {
     if (typeof e.id !== 'string') e.id = 'h' + Math.floor(Math.random() * 1e9).toString(36);
     e.num = count(e.num, 1, sl[i].num, 99); e.xp = count(e.xp, 0, 0); e.lvl = count(e.lvl, 1, 1); e.apps = count(e.apps, 0, 0); e.goals = count(e.goals, 0, 0); e.beard = count(e.beard, 0, 0, 3);
     if (!hasKey(RARITY, e.rar)) e.rar = 'c';
+    if (e.custom !== true) e.custom = true;                      // власний вигляд героя (squadLook); з сервера поле не приходить
     if (e.trait != null && !hasKey(TRAITS, e.trait)) e.trait = null;
     if (typeof e.skin !== 'string') e.skin = ACADEMY.allSkins[1];
     if (typeof e.hair !== 'string') e.hair = 'crop';
@@ -111,6 +113,9 @@ function repair(o) {
   }
   relabel(H, c.form);
 }
+/** Будова OP.q (src/online/quests.js): { d: 'РРРР-ММ-ДД', day: [{ id, p, got }], w: номер дня понеділка, week: [...] }. Самі назви квестів перевіряє quests.js. */
+const questOk = (e) => !!e && typeof e === 'object' && typeof e.id === 'string' && Number.isFinite(e.p) && e.p >= 0 && typeof e.got === 'boolean';
+const questsOk = (q) => typeof q === 'object' && typeof q.d === 'string' && Number.isFinite(q.w) && Array.isArray(q.day) && Array.isArray(q.week) && q.day.length <= 6 && q.week.length <= 3 && q.day.every(questOk) && q.week.every(questOk);
 const keepBroken = (raw) => { try { localStorage.setItem(KEY + '-broken', raw); } catch (_) { /* ignore */ } };   // наступний запис затре зіпсоване: лишаємо копію, як кар'єра
 
 /** Старе збереження: прапор із новими шарами й герої з іменами нового генератора. Лише раз: результат одразу записуємо, інакше випадковість мінялася б з кожним запуском. */
@@ -145,7 +150,47 @@ export function saveOP() { try { localStorage.setItem(KEY, JSON.stringify(OP)); 
 export function markLive(r) { OP.live = { r: Number.isFinite(r) ? r : 1000, at: Date.now() }; saveOP(); }
 export function clearLive() { if (OP.live) { OP.live = null; saveOP(); } }
 export function settleLive() { const l = OP.live; if (!l) return false; OP.live = null; applyResult('loss', 0, l.r, []); return true; }
-export function resetOP() { OP = newClub(); saveOP(); return OP; }
+// ------------------------------------------------------------------ сервер гри (src/online/cloud.js)
+const HERO_NUM = ['xp', 'lvl', 'apps', 'goals'];
+/** Клуб для POST /club/save: вигляд, тактика, герої й base — прогрес, який сервер бере лише при першому перенесенні. */
+export function toServer() {
+  return {
+    club: { name: OP.club.name, city: OP.club.city, flag: OP.club.flag, gk: OP.club.gk, form: OP.club.form },
+    heroes: OP.heroes.map((e) => ({ ...toWireHero(e), id: e.id, xp: e.xp, lvl: e.lvl, apps: e.apps, goals: e.goals })),
+    base: { coins: OP.coins, rating: OP.rating, lvl: OP.lvl, xp: OP.xp, rec: OP.rec, goals: OP.goals, games: OP.games },
+  };
+}
+const DEVICE_KEY = KEY + '-device';                         // клуб пристрою до першого збігу з сервером: на випадок, якщо на сервері був інший
+/**
+ * Клуб від сервера гри: монети, рейтинг, рівні й навички рахує він. looks = true бере й вигляд (назва, прапор, схема,
+ * склад) — при відкритті хабу, коли клуб могли змінити на іншому пристрої; false лише числа, щоб не затерти правку, яка ще
+ * летить на сервер. Квести пристрою й мітка матчу лишаються. false — відповідь не схожа на клуб.
+ */
+export function adoptServer(c, looks = true) {
+  if (!c || typeof c !== 'object' || !c.club || typeof c.club !== 'object' || !Array.isArray(c.heroes) || c.heroes.length !== 11) return false;
+  const same = c.heroes.every((h, i) => h && OP.heroes[i] && h.id === OP.heroes[i].id);
+  if (looks || !same) {
+    if (!same) { try { if (!localStorage.getItem(DEVICE_KEY)) localStorage.setItem(DEVICE_KEY, JSON.stringify(OP)); } catch (_) { /* ignore */ } }
+    const o = JSON.parse(JSON.stringify({ v: 1, nm: 1, club: c.club, heroes: c.heroes, lvl: c.lvl, xp: c.xp, coins: c.coins, rating: c.rating, rec: c.rec, goals: c.goals, games: c.games }));
+    if (o.club.flag) o.club.flag = normFlag(o.club.flag);
+    o.q = OP.q; o.live = OP.live; repair(o); OP = o; saveOP(); return true;
+  }
+  for (const k of ['coins', 'rating', 'lvl', 'xp', 'goals', 'games']) if (Number.isFinite(c[k])) OP[k] = Math.max(0, c[k]);
+  if (c.rec && typeof c.rec === 'object') for (const k of ['w', 'd', 'l']) if (Number.isFinite(c.rec[k])) OP.rec[k] = c.rec[k];
+  c.heroes.forEach((h, i) => adoptHero(i, h));
+  saveOP(); return true;
+}
+/** Герой від сервера (тренування, матч): навички й досвід; новий id — новий герой (скаут), тоді весь запис. */
+export function adoptHero(i, h) {
+  const e = OP.heroes[i]; if (!e || !h || typeof h !== 'object') return false;
+  if (h.id !== e.id) { const o = { ...OP, heroes: OP.heroes.slice() }; o.heroes[i] = JSON.parse(JSON.stringify(h)); repair(o); OP.heroes[i] = o.heroes[i]; saveOP(); return true; }
+  if (h.stats && typeof h.stats === 'object') for (const k of keysFor(e.line)) if (Number.isFinite(h.stats[k])) e.stats[k] = clamp(h.stats[k], 8, 99);
+  for (const k of HERO_NUM) if (Number.isFinite(h[k])) e[k] = Math.max(0, h[k]);
+  return true;
+}
+
+/** Новий випадковий клуб. Квести дня лишаються: інакше нагороди за той самий день можна було б забрати вдруге. */
+export function resetOP() { const q = OP.q; OP = newClub(); if (q) OP.q = q; saveOP(); return OP; }
 
 // ------------------------------------------------------------------ форма й прапор
 const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
@@ -192,13 +237,31 @@ export function swapHeroes(a, b) {
   if (a === b || !a || !b || !H[a] || !H[b]) return false;
   const t = H[a]; H[a] = H[b]; H[b] = t; relabel(H, OP.club.form); saveOP(); return true;
 }
-/** Скаут: на слот приходить новий випадковий герой (рідкість — за шансом, легенда — 5%). */
-export function scoutHero(i) {
-  if (OP.coins < SCOUT_PRICE) return null;
-  const used = new Set(OP.heroes.flatMap((e, j) => (j === i ? [] : [surname(e.name), 'f:' + e.name.split(' ')[0]])));
-  const slot = slotsOf(OP.club.form)[i]; OP.coins -= SCOUT_PRICE;
-  const h = newHero(slot, used); h.num = OP.heroes[i].num; OP.heroes[i] = h; saveOP(); return h;
+/**
+ * Магазин онлайн-хабу: скаут і паки героїв. odds — шанси рідкості (сума 1), їх же показує вітрина. Новий герой стає на
+ * обраний слот із тим самим номером, старий іде з клубу. Сервер гри має рахувати паки за цими самими числами (rules.js).
+ */
+export const PACKS = {
+  scout: { name: 'Скаут', price: SCOUT_PRICE, odds: { c: 0.5, r: 0.3, e: 0.15, l: 0.05 } },
+  rare: { name: 'Рідкісний пак', price: 450, odds: { r: 0.7, e: 0.25, l: 0.05 } },
+  epic: { name: 'Епічний пак', price: 1200, odds: { e: 0.85, l: 0.15 } },
+};
+/** Рідкість за шансами пака: від легенди до звичайного. */
+export function packRarity(kind, rnd = Math.random) {
+  const o = (PACKS[kind] || PACKS.scout).odds; let r = rnd();
+  for (const k of ['l', 'e', 'r', 'c']) { const p = o[k] || 0; if (r < p) return k; r -= p; }
+  return Object.keys(o)[0];
 }
+/** Купити пак kind на слот i: новий герой або null (не вистачає монет, немає такого слота чи пака). */
+export function buyPack(kind, i) {
+  const P = PACKS[kind];
+  if (!P || !OP.heroes[i] || OP.coins < P.price) return null;
+  const used = new Set(OP.heroes.flatMap((e, j) => (j === i ? [] : [surname(e.name), 'f:' + e.name.split(' ')[0]])));
+  const slot = slotsOf(OP.club.form)[i]; OP.coins -= P.price;
+  const h = newHero(slot, used, packRarity(kind)); h.num = OP.heroes[i].num; OP.heroes[i] = h; saveOP(); return h;
+}
+/** Скаут: на слот приходить новий випадковий герой (рідкість — за шансом, легенда — 5%). */
+export function scoutHero(i) { return buyPack('scout', i); }
 
 // ------------------------------------------------------------------ обмін із суперником
 /** Що бачить суперник: клуб і склад (без монет). */
@@ -206,9 +269,10 @@ export function toWire() {
   const c = OP.club;
   return {
     name: c.name, city: c.city, flag: c.flag, gk: c.gk, form: c.form, lvl: OP.lvl, rating: OP.rating, rec: OP.rec,
-    heroes: OP.heroes.map((e) => ({ name: e.name, num: e.num, role: e.role, line: e.line, stats: e.stats, skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, rar: e.rar, trait: e.trait })),
+    heroes: OP.heroes.map(toWireHero),
   };
 }
+function toWireHero(e) { return { name: e.name, num: e.num, role: e.role, line: e.line, stats: e.stats, skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, rar: e.rar, trait: e.trait }; }
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const col = (v, d) => (typeof v === 'string' && HEX.test(v) ? v : d);

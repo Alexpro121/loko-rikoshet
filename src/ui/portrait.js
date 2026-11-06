@@ -93,7 +93,10 @@ function viewerTick(now) {
   const dt = Math.min(0.1, (now - v.last) / 1000); v.last = now;
   if (!v.drag && !v.still) {
     v.ang += v.vel * dt; v.vel *= Math.exp(-dt * 3.2);               // кинутий пальцем докручується й стихає
-    if (now > v.wait) { v.spin += (SPIN - v.spin) * Math.min(1, dt * 1.6); v.ang += v.spin * dt; }
+    if (now > v.wait && v.fixed) {                                  // стоїть (головна хабу): після повороту пальцем повертається обличчям найкоротшим шляхом
+      v.ang = v.rest + ((((v.ang - v.rest + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI;
+      v.ang += (v.rest - v.ang) * Math.min(1, dt * 1.4);
+    } else if (now > v.wait) { v.spin += (SPIN - v.spin) * Math.min(1, dt * 1.6); v.ang += v.spin * dt; }
   }
   const w = c.clientWidth, h = c.clientHeight;
   if (w && h && (w !== v.w || h !== v.h)) { v.w = w; v.h = h; v.r.setSize(w, h, false); v.cam.aspect = w / h; v.cam.updateProjectionMatrix(); }
@@ -104,11 +107,17 @@ function viewerTick(now) {
   v.r.render(v.scene, v.cam);
   requestAnimationFrame(viewerTick);
 }
-/** Ставить живого гравця на місце заглушки ph. Якщо WebGL недоступний, лишається звичайна картинка still. */
-export function mountTurntable(ph, look, key, still) {
+/**
+ * Ставить живого гравця на місце заглушки ph. Якщо WebGL недоступний, лишається звичайна картинка still.
+ * opts.fixed — гравець стоїть під кутом opts.rest (головна онлайн-хабу), а не обертається; пальцем його все одно можна покрутити.
+ */
+export function mountTurntable(ph, look, key, still, opts = {}) {
   if (!v && !vFailed) { try { viewerInit(); } catch (_) { vFailed = true; } }
   if (!v) { const img = new Image(); img.className = 'on-tt-cv'; img.src = still(); img.alt = ''; ph.replaceWith(img); return; }
   clearTimeout(vRelease);
+  const fixed = !!opts.fixed;
+  if (fixed && (!v.fixed || v.key !== key)) { v.ang = opts.rest ?? 0.32; v.vel = 0; }
+  v.fixed = fixed; v.rest = opts.rest ?? 0.32;
   viewerLook(look, key);
   ph.replaceWith(v.canvas);
   if (!v.run) { v.run = 1; v.last = performance.now(); requestAnimationFrame(viewerTick); }

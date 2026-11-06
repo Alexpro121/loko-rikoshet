@@ -20,6 +20,10 @@ export const I = {
   ball: svg('<circle cx="12" cy="12" r="10" fill="#fff" stroke="#0b2a1f" stroke-width="1.8"/><path d="M12 7.2l4.2 3-1.6 4.9H9.4L7.8 10.2z" fill="#0b2a1f"/>'),
   bolt: svg('<path d="M13 2L5 13.5h5.5L9.5 22 19 9.5h-6z" fill="currentColor"/>'),
   up: svg('<path d="M12 4l7 8h-4.5v8h-5v-8H5z" fill="currentColor"/>'),
+  back: svg('<path d="M15 4.5L7.5 12l7.5 7.5" stroke="currentColor" stroke-width="3.4" stroke-linecap="square" fill="none"/>'),
+  quest: svg('<path fill="currentColor" d="M5 3h14v18H5z" opacity=".28"/><path d="M5 3h14v18H5zM7.6 5.6v12.8h8.8V5.6z" fill="currentColor" fill-rule="evenodd"/><path d="M9.2 9.2l1.6 1.6 3.2-3.2M9.2 15h5.6" stroke="currentColor" stroke-width="1.8" fill="none"/>'),
+  shop: svg('<path fill="currentColor" d="M4 8h16l-1.3 13H5.3z"/><path d="M8.5 10V6.5a3.5 3.5 0 017 0V10" stroke="currentColor" stroke-width="2.2" fill="none"/>'),
+  pennant: svg('<path d="M5 2.5h2.4v19H5z" fill="currentColor"/><path d="M7.4 4h12.1l-3.2 4.5 3.2 4.5H7.4z" fill="currentColor"/>'),
 };
 
 /** Щит клубу: два кольори та ініціали. */
