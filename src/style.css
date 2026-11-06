@@ -19,6 +19,13 @@
   --pad-r: max(calc(var(--u) * 2.2), var(--safe-r));
   --pad-t: max(calc(var(--u) * 1.6), var(--safe-t));
   --pad-b: max(calc(var(--u) * 1.6), var(--safe-b));
+  /* Смуга кнопок Telegram у повному екрані (--tg-content-safe-area-inset-top): «Назад» у лівому куті, «⌄ ⋮» у правому,
+     середина вільна. Табло матчу й пауза стоять у цій смузі збоку від кнопок, а не під нею: інакше все сповзає вниз.
+     min(смуга × 99, ширина) дає 0 поза Telegram і запас на кнопку, коли смуга є. */
+  --tgb: var(--tg-content-safe-area-inset-top, 0px);
+  --tgb-l: min(calc(var(--tgb) * 99), 104px);
+  --tgb-r: min(calc(var(--tgb) * 99), 92px);
+  --hud-t: max(calc(var(--u) * 1.6), calc(var(--safe-t) - var(--tgb) + max(0px, (var(--tgb) - 34px) / 2)));
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
@@ -118,7 +125,7 @@ svg { display: block; }
 .joy-prev { width: calc(var(--u) * 20); height: calc(var(--u) * 20); display: grid; place-items: center; overflow: hidden; border-radius: calc(var(--u) * 1.2); background: #0a3a28; opacity: var(--joy-a); }
 .joy-prev .joy-ring { width: calc(var(--u) * 12.5 * var(--joy-s)); height: calc(var(--u) * 12.5 * var(--joy-s)); } .joy-prev .joy-knob { width: calc(var(--u) * 5.5 * var(--joy-s)); height: calc(var(--u) * 5.5 * var(--joy-s)); }
 
-.joy-bar { position: absolute; top: calc(var(--pad-t) + var(--u) * 1); left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: calc(var(--u) * 1.4); padding: calc(var(--u) * 1) calc(var(--u) * 1.6); background: var(--deep); border: var(--edge) solid #fff; border-radius: 99px; font-weight: 800; font-size: var(--fs-s); white-space: nowrap; }
+.joy-bar { position: absolute; top: calc(var(--hud-t) + var(--u) * 1); left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: calc(var(--u) * 1.4); padding: calc(var(--u) * 1) calc(var(--u) * 1.6); background: var(--deep); border: var(--edge) solid #fff; border-radius: 99px; font-weight: 800; font-size: var(--fs-s); white-space: nowrap; }
 .joy-bar .btn { min-height: 36px; padding: 0 calc(var(--u) * 2); }
 .joy-mv { min-height: 40px; align-self: center; }
 .joy-set { grid-template-columns: 1fr 1fr auto auto; }
@@ -223,14 +230,14 @@ svg { display: block; }
 
 /* ---------- HUD ---------- */
 .hud { position: absolute; inset: 0; padding: var(--pad-t) var(--pad-r) 0 var(--pad-l); }
-.team { position: absolute; top: var(--pad-t); display: flex; align-items: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 0.8) calc(var(--u) * 1.6); background: var(--deep); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.8); box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.28); }
-.team.me { left: var(--pad-l); } .team.opp { right: calc(var(--pad-r) + var(--u) * 11.4); }
+.team { position: absolute; top: var(--hud-t); display: flex; align-items: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 0.8) calc(var(--u) * 1.6); background: var(--deep); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.8); box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.28); }
+.team.me { left: calc(var(--pad-l) + var(--tgb-l)); } .team.opp { right: calc(var(--pad-r) + var(--tgb-r) + var(--u) * 11.4); }
 .crest-box { position: relative; width: calc(var(--u) * 7); height: calc(var(--u) * 8); flex: none; } .crest-box .crest { width: 100%; height: 100%; }
 .crest-t { position: absolute; inset: 0 0 calc(var(--u) * 1) 0; display: grid; place-items: center; font-weight: 800; font-size: max(9px, calc(var(--u) * 2.2)); color: #fff; -webkit-text-stroke: calc(var(--u) * 0.4) var(--ink); paint-order: stroke fill; }
 .team-txt { display: flex; flex-direction: column; align-items: center; line-height: 1; } .team-txt span { font-size: max(9px, calc(var(--u) * 2)); font-weight: 800; letter-spacing: 0.04em; } .team-txt b { font-size: calc(var(--u) * 7.2); font-weight: 800; }
 .team.opp .team-txt { order: -1; }
-.pause-btn { position: absolute; top: var(--pad-t); right: var(--pad-r); background: var(--deep); }
-.hud-mid { position: absolute; top: var(--pad-t); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.8); }
+.pause-btn { position: absolute; top: var(--hud-t); right: calc(var(--pad-r) + var(--tgb-r)); background: var(--deep); }
+.hud-mid { position: absolute; top: var(--hud-t); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.8); }
 .plate { display: flex; flex-direction: column; align-items: center; padding: calc(var(--u) * 0.6) calc(var(--u) * 3.4); background: var(--deep); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.8); box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.28); min-width: calc(var(--u) * 25); }
 .plate-t { font-size: max(9px, calc(var(--u) * 2)); font-weight: 800; white-space: nowrap; color: #bfe9d2; } .plate-time { font-size: calc(var(--u) * 6.4); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .urgent .plate-time { color: #ff6671; animation: pulse 0.5s ease-in-out infinite; }
@@ -340,7 +347,7 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 
 /* ===== серія пенальті ===== */
 .pen { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
-.pen-top { position: absolute; top: calc(var(--pad-t) + var(--u) * 1); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: calc(var(--u) * 0.6); padding: calc(var(--u) * 1) calc(var(--u) * 2); background: rgba(8, 40, 30, 0.88); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.6); }
+.pen-top { position: absolute; top: calc(var(--hud-t) + var(--u) * 1); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: calc(var(--u) * 0.6); padding: calc(var(--u) * 1) calc(var(--u) * 2); background: rgba(8, 40, 30, 0.88); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.6); }
 .pen-row { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 3); font-size: var(--fs-s); font-weight: 800; }
 .pd { display: flex; gap: calc(var(--u) * 0.7); } .pd i { width: calc(var(--u) * 3); height: calc(var(--u) * 3); border-radius: 50%; background: #0a3a28; border: max(1px, calc(var(--u) * 0.25)) solid rgba(255, 255, 255, 0.4); } .pd i.g { background: #3fe08f; border-color: #fff; } .pd i.x { background: #ff3b4a; border-color: #fff; }
 .pen-msg { position: absolute; left: 50%; bottom: calc(var(--pad-b) + var(--u) * 14); transform: translateX(-50%); text-align: center; font-size: var(--fs-l); font-weight: 800; -webkit-text-stroke: calc(var(--u) * 0.5) var(--ink); paint-order: stroke fill; }
@@ -354,7 +361,7 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .pen-move button { width: calc(var(--u) * 9); height: calc(var(--u) * 9); border-radius: 50%; border: max(2px, calc(var(--u) * 0.5)) solid #fff; background: rgba(8, 40, 30, 0.88); color: #fff; font-size: var(--fs-l); font-weight: 800; touch-action: none; user-select: none; -webkit-user-select: none; }
 .pen-move button:active { background: #1f7a52; }
 .res-pens { margin-top: calc(var(--u) * 0.8); font-size: var(--fs-m); font-weight: 800; color: var(--gold); text-align: center; }
-.pen-top { top: calc(var(--pad-t) + var(--u) * 15); }
+.pen-top { top: calc(var(--hud-t) + var(--u) * 15); }
 .pen-msg { left: calc(var(--pad-l) + var(--u) * 2); bottom: calc(var(--pad-b) + var(--u) * 2); transform: none; text-align: left; max-width: 46vw; font-size: var(--fs-m); }
 
 /* ===== адаптація вікон під низькі екрани (телефон у ландшафті): вміст прокручується, кнопка «закрити» завжди на місці ===== */
@@ -381,7 +388,7 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 }
 
 /* ===== табло як на телебаченні: компактна плашка зліва вгорі ===== */
-.bug.hud-mid { left: var(--pad-l); top: var(--pad-t); transform: none; align-items: stretch; gap: calc(var(--u) * 0.5); }
+.bug.hud-mid { left: calc(var(--pad-l) + var(--tgb-l)); top: var(--hud-t); transform: none; align-items: stretch; gap: calc(var(--u) * 0.5); }
 .bug-top { display: flex; align-items: center; gap: calc(var(--u) * 1); padding: 0 calc(var(--u) * 1.2); font-size: max(8px, calc(var(--u) * 1.8)); }
 .bug-top .plate-t { color: #dff3e8; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 1px 0 rgba(0,0,0,.6); }
 .bug-main { display: flex; align-items: stretch; height: calc(var(--u) * 7.4); border-radius: calc(var(--u) * 0.9); overflow: hidden; box-shadow: 0 calc(var(--u) * 0.5) calc(var(--u) * 1.4) rgba(0, 0, 0, 0.45); background: rgba(8, 20, 16, 0.92); }
@@ -1632,8 +1639,8 @@ button.purse:active { transform: translate(calc(var(--U) * 0.4), calc(var(--U) *
 .map-zones.on { visibility: visible; pointer-events: auto; background: rgba(4, 14, 10, 0.55); box-shadow: 0 0 0 100vmax rgba(4, 14, 10, 0.55); }
 .map-zones.on::before { content: ''; position: fixed; inset: 0; }   /* тінь дотиків не ловить: смуга безпечної зони теж має бути закрита */
 .map-zones i { position: absolute; display: grid; place-items: center; border: 2px dashed rgba(255, 255, 255, 0.4); border-radius: calc(var(--u) * 1.2); font-style: normal; font-size: var(--fs-s); font-weight: 800; color: rgba(255, 255, 255, 0.6); text-align: center; line-height: 1.05; box-sizing: border-box; overflow: hidden; }
-.z-bug { left: 0; top: 0; width: calc(var(--u) * 74); height: calc(var(--u) * 12.6); }   /* найгірший випадок: рахунок 12:11, доданий час, смужка гола */
-.z-pause { right: 0; top: 0; width: calc(var(--u) * 9.6); height: calc(var(--u) * 9.6); }
+.z-bug { left: var(--tgb-l); top: calc(var(--hud-t) - var(--pad-t)); width: calc(var(--u) * 74); height: calc(var(--u) * 12.6); }   /* найгірший випадок: рахунок 12:11, доданий час, смужка гола */
+.z-pause { right: var(--tgb-r); top: calc(var(--hud-t) - var(--pad-t)); width: calc(var(--u) * 9.6); height: calc(var(--u) * 9.6); }
 .z-pause span { font-size: max(7px, calc(var(--u) * 1.5)); }
 .z-card { left: 0; bottom: 0; width: calc(var(--u) * 47); height: calc(var(--u) * 16); }   /* картка росте з довжиною імені */
 .hand-left .z-card { left: auto; right: 0; }
