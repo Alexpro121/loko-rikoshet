@@ -115,11 +115,15 @@ async function call(f, path, body, wait) {
 /** Клуб: перший виклик переносить клуб із пристрою (base), далі лише вигляд і тактику. Відповідь — клуб, як у /me. */
 export const saveClub = (data) => call('club', '/club/save', data);
 export const meOnServer = () => call('club', '/me');
-export const trainOnServer = (hero, stat) => call('club', '/club/train', { hero, stat });
+/** Тренування: hero — номер у спільному списку (основа, далі лава), id — щоб сервер не сплутав героя, якщо склад ще не збережено. */
+export const trainOnServer = (hero, stat, id) => call('club', '/club/train', { hero, stat, id });
 export const scoutOnServer = (hero) => call('club', '/club/scout', { hero });
 /** Пак героїв магазину (PACKS у profile.js): { coins, hero } або { error } ('no_coins', 'bad_pack', 'not_found' — сервер ще не вміє). */
 export const packOnServer = (hero, pack) => call('club', '/club/pack', { hero, pack });
 export const resetOnServer = () => call('club', '/club/reset', {});
+/** Магазин і лава (частина 'shop'): пак кладе новачка на лаву — { coins, hero, bench, club }; продаж лише з лави, за id — { coins, gain, club }. */
+export const buyOnServer = (hero, pack) => call('shop', '/club/buy', { hero, pack });
+export const sellOnServer = (id) => call('shop', '/club/sell', { id });
 /**
  * Матч: господар стартує й отримує { matchId, ticket }; квиток іде гостю напряму по P2P ('mt'), і гість стартує з ним.
  * Код кімнати знає кожен, кому його надіслали, тож за кодом сервер не парує: інакше чужий міг би стати «гостем» на сервері.

@@ -95,7 +95,7 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
     const quests = rules.QUESTS ? questRoutes(ctx) : null;     // квести вимагають match: прогрес рахує підтвердження
     const queue = queueRoutes(ctx, club, match, queueWaitMs);
     const top = topRoutes(ctx);
-    const features = ['club', 'match', ...(quests ? ['quests'] : []), 'queue', 'top'];
+    const features = ['club', 'match', ...(quests ? ['quests'] : []), 'queue', 'top', ...(rules.SHOP ? ['shop'] : [])];
     return { club, match, quests, queue, top, features };
   })() : null;
 

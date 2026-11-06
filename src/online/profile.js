@@ -72,7 +72,7 @@ export function newClub() {
   const star = 1 + ((Math.random() * 10) | 0);
   const form = pick(['433', '442', '4231']);
   const heroes = slotsOf(form).map((s, i) => newHero(s, used, i === star ? (Math.random() < 0.35 ? 'l' : 'e') : rollRar()));
-  return { v: 1, club: { name: pick(NAMES), city: pick(CITIES), flag, gk: pick(GK_COLS), form }, heroes, nm: 1, lvl: 1, xp: 0, coins: 300, rating: 1000, rec: { w: 0, d: 0, l: 0 }, goals: 0, games: 0 };
+  return { v: 1, club: { name: pick(NAMES), city: pick(CITIES), flag, gk: pick(GK_COLS), form }, heroes, bench: [], nm: 1, lvl: 1, xp: 0, coins: 300, rating: 1000, rec: { w: 0, d: 0, l: 0 }, goals: 0, games: 0 };
 }
 
 const isHex = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
@@ -103,16 +103,46 @@ function repair(o) {
     if (!e.stats || typeof e.stats !== 'object') e.stats = {};
     for (const k of keysFor(lineOf(sl[i]))) e.stats[k] = count(e.stats[k], 8, 45, 99);
     if (typeof e.id !== 'string') e.id = 'h' + Math.floor(Math.random() * 1e9).toString(36);
-    e.num = count(e.num, 1, sl[i].num, 99); e.xp = count(e.xp, 0, 0); e.lvl = count(e.lvl, 1, 1); e.apps = count(e.apps, 0, 0); e.goals = count(e.goals, 0, 0); e.beard = count(e.beard, 0, 0, 3);
-    if (!hasKey(RARITY, e.rar)) e.rar = 'c';
-    if (e.custom !== true) e.custom = true;                      // власний вигляд героя (squadLook); з сервера поле не приходить
-    if (e.trait != null && !hasKey(TRAITS, e.trait)) e.trait = null;
-    if (typeof e.skin !== 'string') e.skin = ACADEMY.allSkins[1];
-    if (typeof e.hair !== 'string') e.hair = 'crop';
-    if (typeof e.hairCol !== 'string') e.hairCol = '#1f2933';
+    fixHero(e, sl[i].num);
   }
   relabel(H, c.form);
+  fixBench(o);
 }
+/** Спільне для героя основи й лави: номер, досвід, рідкість, риса, вигляд. */
+function fixHero(e, num) {
+  e.num = count(e.num, 1, num, 99); e.xp = count(e.xp, 0, 0); e.lvl = count(e.lvl, 1, 1); e.apps = count(e.apps, 0, 0); e.goals = count(e.goals, 0, 0); e.beard = count(e.beard, 0, 0, 3);
+  if (!hasKey(RARITY, e.rar)) e.rar = 'c';
+  if (e.custom !== true) e.custom = true;                      // власний вигляд героя (squadLook); з сервера поле не приходить
+  if (e.trait != null && !hasKey(TRAITS, e.trait)) e.trait = null;
+  if (typeof e.skin !== 'string') e.skin = ACADEMY.allSkins[1];
+  if (typeof e.hair !== 'string') e.hair = 'crop';
+  if (typeof e.hairCol !== 'string') e.hairCol = '#1f2933';
+}
+/** Скільки героїв може сидіти на лаві. */
+export const BENCH_MAX = 5;
+/** Воротар за навичками, а не за слотом: на лаві слота немає. */
+export const isKeeper = (e) => !!(e && e.stats && 'hands' in e.stats);
+const FIELD_LINES = ['D', 'M', 'W', 'F'], LINE_ROLE = { D: 'CB', M: 'CM', W: 'LW', F: 'ST' };
+/**
+ * Лава запасних (до BENCH_MAX): кожен герой лишає свою лінію — воротар за навичками (є «Ловля»), польовий за line.
+ * Зіпсованого героя з лави прибираємо, а не вигадуємо: основа завжди повна, лава може бути й порожня.
+ */
+function fixBench(o) {
+  const ok = (e) => e && typeof e === 'object' && e.stats && typeof e.stats === 'object' && typeof e.name === 'string' && e.name.trim();
+  const B = Array.isArray(o.bench) ? o.bench.filter(ok).slice(0, BENCH_MAX) : [];
+  const ids = new Set(o.heroes.map((e) => e.id));
+  for (const e of B) {
+    const gk = isKeeper(e), line = gk ? 'G' : FIELD_LINES.includes(e.line) ? e.line : 'M';
+    e.line = line;
+    if (gk) e.role = e.pos = 'GK'; else if (typeof e.role !== 'string' || !ROLE_UA_OK.test(e.role) || e.role === 'GK') e.role = e.pos = LINE_ROLE[line];
+    for (const k of keysFor(line)) e.stats[k] = count(e.stats[k], 8, 45, 99);
+    if (typeof e.id !== 'string' || ids.has(e.id)) e.id = 'h' + Math.floor(Math.random() * 1e9).toString(36);
+    ids.add(e.id);
+    fixHero(e, 12);
+  }
+  o.bench = B;
+}
+const ROLE_UA_OK = /^(GK|LB|RB|CB|DM|CM|AM|LM|RM|LW|RW|ST)$/;
 /** Будова OP.q (src/online/quests.js): { d: 'РРРР-ММ-ДД', day: [{ id, p, got }], w: номер дня понеділка, week: [...] }. Самі назви квестів перевіряє quests.js. */
 const questOk = (e) => !!e && typeof e === 'object' && typeof e.id === 'string' && Number.isFinite(e.p) && e.p >= 0 && typeof e.got === 'boolean';
 const questsOk = (q) => typeof q === 'object' && typeof q.d === 'string' && Number.isFinite(q.w) && Array.isArray(q.day) && Array.isArray(q.week) && q.day.length <= 6 && q.week.length <= 3 && q.day.every(questOk) && q.week.every(questOk);
@@ -156,10 +186,11 @@ const HERO_NUM = ['xp', 'lvl', 'apps', 'goals'];
 export function toServer() {
   return {
     club: { name: OP.club.name, city: OP.club.city, flag: OP.club.flag, gk: OP.club.gk, form: OP.club.form },
-    heroes: OP.heroes.map((e) => ({ ...toWireHero(e), id: e.id, xp: e.xp, lvl: e.lvl, apps: e.apps, goals: e.goals })),
+    heroes: OP.heroes.map(serverHero), bench: OP.bench.map(serverHero),
     base: { coins: OP.coins, rating: OP.rating, lvl: OP.lvl, xp: OP.xp, rec: OP.rec, goals: OP.goals, games: OP.games },
   };
 }
+function serverHero(e) { return { ...toWireHero(e), id: e.id, xp: e.xp, lvl: e.lvl, apps: e.apps, goals: e.goals }; }
 const DEVICE_KEY = KEY + '-device';                         // клуб пристрою до першого збігу з сервером: на випадок, якщо на сервері був інший
 /**
  * Клуб від сервера гри: монети, рейтинг, рівні й навички рахує він. looks = true бере й вигляд (назва, прапор, схема,
@@ -171,18 +202,21 @@ export function adoptServer(c, looks = true) {
   const same = c.heroes.every((h, i) => h && OP.heroes[i] && h.id === OP.heroes[i].id);
   if (looks || !same) {
     if (!same) { try { if (!localStorage.getItem(DEVICE_KEY)) localStorage.setItem(DEVICE_KEY, JSON.stringify(OP)); } catch (_) { /* ignore */ } }
-    const o = JSON.parse(JSON.stringify({ v: 1, nm: 1, club: c.club, heroes: c.heroes, lvl: c.lvl, xp: c.xp, coins: c.coins, rating: c.rating, rec: c.rec, goals: c.goals, games: c.games }));
+    const o = JSON.parse(JSON.stringify({ v: 1, nm: 1, club: c.club, heroes: c.heroes, bench: Array.isArray(c.bench) ? c.bench : OP.bench, lvl: c.lvl, xp: c.xp, coins: c.coins, rating: c.rating, rec: c.rec, goals: c.goals, games: c.games }));
     if (o.club.flag) o.club.flag = normFlag(o.club.flag);
     o.q = OP.q; o.live = OP.live; repair(o); OP = o; saveOP(); return true;
   }
   for (const k of ['coins', 'rating', 'lvl', 'xp', 'goals', 'games']) if (Number.isFinite(c[k])) OP[k] = Math.max(0, c[k]);
   if (c.rec && typeof c.rec === 'object') for (const k of ['w', 'd', 'l']) if (Number.isFinite(c.rec[k])) OP.rec[k] = c.rec[k];
   c.heroes.forEach((h, i) => adoptHero(i, h));
+  if (Array.isArray(c.bench)) { const o = { ...OP, bench: JSON.parse(JSON.stringify(c.bench)) }; fixBench(o); OP.bench = o.bench; }   // лаву рахує сервер: беремо всю
   saveOP(); return true;
 }
 /** Герой від сервера (тренування, матч): навички й досвід; новий id — новий герой (скаут), тоді весь запис. */
 export function adoptHero(i, h) {
-  const e = OP.heroes[i]; if (!e || !h || typeof h !== 'object') return false;
+  const n = OP.heroes.length, onB = i >= n, e = onB ? OP.bench[i - n] : OP.heroes[i];
+  if (!e || !h || typeof h !== 'object') return false;
+  if (h.id !== e.id && onB) { const o = { ...OP, bench: OP.bench.slice() }; o.bench[i - n] = JSON.parse(JSON.stringify(h)); fixBench(o); OP.bench = o.bench; saveOP(); return true; }
   if (h.id !== e.id) { const o = { ...OP, heroes: OP.heroes.slice() }; o.heroes[i] = JSON.parse(JSON.stringify(h)); repair(o); OP.heroes[i] = o.heroes[i]; saveOP(); return true; }
   if (h.stats && typeof h.stats === 'object') for (const k of keysFor(e.line)) if (Number.isFinite(h.stats[k])) e.stats[k] = clamp(h.stats[k], 8, 99);
   for (const k of HERO_NUM) if (Number.isFinite(h[k])) e[k] = Math.max(0, h[k]);
@@ -220,8 +254,10 @@ export const trainPrice = (v) => Math.round(10 + 12 * Math.pow(1.12, v - 40));
 export const SCOUT_PRICE = 180;
 export const clubXpNeed = (l) => 120 + 80 * (l - 1);
 
+/** Усі герої клубу: перші 11 — основа, далі лава (так їх нумерують склад, прокачка й сервер). */
+export const allHeroes = (st = OP) => [...st.heroes, ...(st.bench || [])];
 export function trainHero(i, k) {
-  const e = OP.heroes[i]; if (!e || !(k in e.stats)) return false;
+  const e = allHeroes()[i]; if (!e || !(k in e.stats)) return false;
   const v = e.stats[k], c = trainPrice(v);
   if (v >= 99 || OP.coins < c) return false;
   OP.coins -= c; e.stats[k] = v + 1; saveOP(); return c;
@@ -252,15 +288,72 @@ export function packRarity(kind, rnd = Math.random) {
   for (const k of ['l', 'e', 'r', 'c']) { const p = o[k] || 0; if (r < p) return k; r -= p; }
   return Object.keys(o)[0];
 }
-/** Купити пак kind на слот i: новий герой або null (не вистачає монет, немає такого слота чи пака). */
-export function buyPack(kind, i) {
-  const P = PACKS[kind];
-  if (!P || !OP.heroes[i] || OP.coins < P.price) return null;
-  const used = new Set(OP.heroes.flatMap((e, j) => (j === i ? [] : [surname(e.name), 'f:' + e.name.split(' ')[0]])));
-  const slot = slotsOf(OP.club.form)[i]; OP.coins -= P.price;
-  const h = newHero(slot, used, packRarity(kind)); h.num = OP.heroes[i].num; OP.heroes[i] = h; saveOP(); return h;
+// ------------------------------------------------------------------ лава, магазин, продаж
+// Чисті правила для гри й сервера (server/src/rules.js): st — клуб { club, heroes, bench, coins }, функції міняють його й
+// повертають { error } з тими самими кодами, що й сервер. Обгортки нижче застосовують їх до OP пристрою.
+/** Продаж: база рідкості й трохи за силу понад базу (прокачка, рівні). Завжди менше, ніж коштує пак: перепродаж не годує. */
+export const SELL = { c: 25, r: 70, e: 160, l: 400 };
+export function sellPrice(e) {
+  const R = RARITY[e && e.rar] || RARITY.c;
+  return (SELL[e && e.rar] || SELL.c) + 5 * Math.max(0, ovr(e) - R.base);
 }
-/** Скаут: на слот приходить новий випадковий герой (рідкість — за шансом, легенда — 5%). */
+/** Склад чинний: 11 в основі, воротар на 0 і лише там, лава не більша за BENCH_MAX. */
+export function lineupOk(heroes, bench) {
+  return Array.isArray(heroes) && heroes.length === 11 && isKeeper(heroes[0]) && heroes.slice(1).every((e) => e && !isKeeper(e)) && Array.isArray(bench) && bench.length <= BENCH_MAX;
+}
+const namesOf = (list) => new Set(list.flatMap((e) => [surname(e.name), 'f:' + e.name.split(' ')[0]]));
+/** Вільний номер для новачка: з 12, бо 1–11 носить основа нового клубу. */
+function freeNum(st) {
+  const used = new Set(allHeroes(st).map((e) => e.num));
+  for (let n = 12; n < 100; n++) if (!used.has(n)) return n;
+  return 99;
+}
+/** Пак kind: новий герой на позицію слота i сідає на лаву. { hero, bench: його місце на лаві, price } або { error }. */
+export function packInto(st, kind, i) {
+  const P = PACKS[kind]; if (!P) return { error: 'bad_pack' };
+  const slot = slotsOf(st.club.form)[i]; if (!slot || !st.heroes[i]) return { error: 'bad_hero' };
+  const B = st.bench || (st.bench = []);
+  if (B.length >= BENCH_MAX) return { error: 'bench_full' };
+  if (st.coins < P.price) return { error: 'no_coins' };
+  const h = newHero(slot, namesOf(allHeroes(st)), packRarity(kind));
+  h.num = freeNum(st); st.coins -= P.price; B.push(h);
+  return { hero: h, bench: B.length - 1, price: P.price };
+}
+/** Продати героя з лави j: { gain } або { error }. Основу продати не можна: спершу на лаву. */
+export function sellFrom(st, j) {
+  const B = st.bench || [], e = B[j]; if (!e) return { error: 'bad_hero' };
+  const gain = sellPrice(e); st.coins += gain; B.splice(j, 1);
+  return { gain };
+}
+/**
+ * Обмін двох героїв у спільному списку (0–10 основа, 11+ лава): основа між собою — лише польові, основа з лавою —
+ * воротар міняється лише на воротаря. Ролі основи йдуть зі слотів схеми (relabel). false — обмін не годиться.
+ */
+export function moveHeroes(st, a, b) {
+  const H = st.heroes, B = st.bench || (st.bench = []), n = H.length, get = (i) => (i < n ? H[i] : B[i - n]);
+  if (a === b || !get(a) || !get(b)) return false;
+  if (a < n && b < n) { if (!a || !b) return false; const t = H[a]; H[a] = H[b]; H[b] = t; }
+  else if (a >= n && b >= n) { const t = B[a - n]; B[a - n] = B[b - n]; B[b - n] = t; }
+  else {
+    const s = a < n ? a : b, k = (a < n ? b : a) - n;
+    if (isKeeper(B[k]) !== (s === 0)) return false;
+    const t = H[s]; H[s] = B[k]; B[k] = t;
+  }
+  relabel(H, st.club.form); return true;
+}
+/** Чому обмін не годиться (для підказки). */
+export function moveDeny(st, a, b) {
+  const n = st.heroes.length, all = allHeroes(st), x = all[a], y = all[b];
+  if (!x || !y) return '';
+  if ((a < n && b < n) && (!a || !b)) return 'Воротар завжди в рамці';
+  if (a < n !== b < n) return isKeeper(x) || isKeeper(y) ? 'Воротаря міняє лише воротар' : '';
+  return '';
+}
+/** Купити пак на пристрої: новий герой на лаві. { hero, bench } або { error }. */
+export function buyPack(kind, i) { const r = packInto(OP, kind, i); if (r.hero) saveOP(); return r; }
+export function sellHero(j) { const r = sellFrom(OP, j); if (!r.error) saveOP(); return r; }
+export function swapAny(a, b) { if (!moveHeroes(OP, a, b)) return false; saveOP(); return true; }
+/** Скаут: новий випадковий герой на позицію слота i (рідкість — за шансом, легенда — 5%) на лаву. */
 export function scoutHero(i) { return buyPack('scout', i); }
 
 // ------------------------------------------------------------------ обмін із суперником

@@ -1618,6 +1618,14 @@ button.hub-tile:active { transform: translate(calc(var(--u) * 0.3), calc(var(--u
 .hub-buy:active { transform: translate(calc(var(--u) * 0.5), calc(var(--u) * 0.5)); }
 .hub-buy:active::before { box-shadow: none; }
 .hub-buy.dim { opacity: 0.55; }
+/* лава запасних у магазині: на всю ширину під паками, кожен запасний із ціною продажу */
+.hub-bench { grid-column: 1 / -1; display: flex; flex-direction: column; gap: calc(var(--u) * 0.7); padding: clamp(10px, calc(var(--u) * 2), 26px); background: var(--tile); }
+.hub-bench .hub-tile-h em { margin-left: 0.5em; font-style: normal; color: var(--amber); }
+.hub-bl { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: calc(var(--u) * 1); align-items: center; padding: calc(var(--u) * 0.6) calc(var(--u) * 0.8); background: var(--tile2); }
+.hub-bl > i { grid-row: 1 / 3; min-width: 1.8em; padding: 0.1em 0.2em; background: var(--rc); color: #08140f; font-style: normal; font-weight: 800; font-size: var(--ts); text-align: center; }
+.hub-bl > b { font-size: max(10px, calc(var(--u) * 1.9)); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hub-bl > small { grid-column: 2; font-size: max(9px, calc(var(--u) * 1.6)); font-weight: 700; color: var(--mute); }
+.hub-bl > .btn { grid-column: 3; grid-row: 1 / 3; }
 @media (max-width: 760px) { .hub-clubb b { display: none; } }
 
 /* пошук суперника */
@@ -1802,6 +1810,12 @@ button.hub-tile:active { transform: translate(calc(var(--u) * 0.3), calc(var(--u
 .on-reveal .on-ovr { top: calc(var(--u) * 1); left: calc(var(--u) * 1); }
 .reveal .on-reveal img { max-height: 46vh; }
 .on-reveal.r-l .rays { animation-duration: 3s; }
+/* новачок із паку: порівняння з тим, кого він замінив би, і три дороги — в основу, на лаву, продати */
+.on-rv-cmp { font-weight: 700; color: var(--mute); }
+.on-rv-cmp.up { color: #49d17f; } .on-rv-cmp.down { color: #f08a6a; }
+.on-rv-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u) * 1); }
+.on-rv-acts .btn { display: inline-flex; flex-direction: column; align-items: center; gap: 0.15em; }
+.on-rv-acts .btn small { font-size: max(9px, calc(var(--u) * 1.6)); font-weight: 700; opacity: 0.85; text-transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .on-sheet *, .on-sheet::before, .on-reveal * { animation: none !important; transition: none !important; }
 }

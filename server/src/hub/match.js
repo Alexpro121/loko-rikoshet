@@ -143,7 +143,7 @@ export function matchRoutes(ctx, club) {
       const oppR = before[other(role)] ?? 1000;
       const mine = view.filter((x) => x.mine && !x.og).map((x) => x.name);   // автогол суперника — наш гол, але не гол героя
       const r = rules.reward(s, outcome, Math.min(me, COIN_GOALS), oppR, mine.slice(0, COIN_GOALS));
-      const next = { ...r.state, imported: s.imported };
+      const next = { ...s, ...r.state };                                     // лава й решта клубу лишаються як були
       club.store(ids[role], next);
       ledger(ids[role], r.rew.coins, reason);
       ledger(ids[role], next.coins - s.coins - r.rew.coins, 'lvl');           // бонус за новий рівень клубу

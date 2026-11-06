@@ -64,7 +64,7 @@ test('health перелічує частини хабу', async () => {
   try {
     const h = (await s.call('GET', '/health')).body;
     assert.equal(h.api, 2);
-    assert.deepEqual(h.features, ['club', 'match', ...(rules.QUESTS ? ['quests'] : []), 'queue', 'top']);
+    assert.deepEqual(h.features, ['club', 'match', ...(rules.QUESTS ? ['quests'] : []), 'queue', 'top', ...(rules.SHOP ? ['shop'] : [])]);
   } finally { await s.close(); }
 });
 
@@ -118,7 +118,8 @@ test('клуб: перенесення з межами, далі лише виг
     const tr = (await s.call('POST', '/club/train', { hero: 2, stat: 'shoot' }, t)).body;
     assert.equal(tr.hero.stats.shoot, v + 1);
     assert.equal(tr.coins, 2300 - rules.trainPrice(v));
-    assert.equal((await s.call('POST', '/club/train', { hero: 11, stat: 'shoot' }, t)).body.error, 'bad_hero');
+    assert.equal((await s.call('POST', '/club/train', { hero: 16, stat: 'shoot' }, t)).body.error, 'bad_hero');
+    assert.equal((await s.call('POST', '/club/train', { hero: 11, stat: 'shoot' }, t)).body.error, 'bad_hero');   // лава порожня
 
     const sc = (await s.call('POST', '/club/scout', { hero: 7 }, t)).body;
     assert.equal(sc.coins, tr.coins - rules.SCOUT_PRICE);
@@ -465,5 +466,84 @@ test('паки магазину: ціна з PACKS, рідкість за шан
     const t2 = await s.login(2, 'Бо');
     await s.call('POST', '/club/save', device({ coins: 400 }), t2);
     assert.equal((await s.call('POST', '/club/pack', { hero: 1, pack: 'rare' }, t2)).body.error, 'no_coins');
+  } finally { await s.close(); }
+});
+
+test('магазин і лава: пак кладе новачка на лаву, склад міняється разом із лавою, продаж лише з лави', { skip: !rules.SHOP && 'немає лави в src/online/profile.js' }, async () => {
+  const s = await start();
+  try {
+    const t = await s.login(1, 'Аня');
+    const dev = device({ coins: 20000, games: 100, rec: { w: 100, d: 0, l: 0 } });
+    // лава з пристрою переноситься з тими самими межами; зламаний запис відкидається
+    const extra = rules.newClub().heroes;
+    dev.bench = [{ ...extra[4], stats: { ...extra[4].stats, pace: 400 } }, extra[0], 'сміття'];
+    const c = (await s.call('POST', '/club/save', dev, t)).body.club;
+    assert.equal(c.bench.length, 2);
+    assert.equal(c.bench[0].stats.pace, 99);
+    assert.equal(c.bench[1].line, 'G'); assert.equal(c.bench[1].role, 'GK');
+    // пак: новачок на лаві, гроші й журнал
+    const b = (await s.call('POST', '/club/buy', { hero: 3, pack: 'epic' }, t)).body;
+    assert.equal(b.coins, 20000 - rules.PACKS.epic.price);
+    assert.equal(b.bench, 2); assert.equal(b.club.bench[2].id, b.hero.id);
+    assert.ok(['e', 'l'].includes(b.hero.rar)); assert.ok(b.hero.num >= 12);
+    const sc = (await s.call('POST', '/club/buy', { hero: 0, pack: 'scout' }, t)).body;
+    assert.equal(sc.hero.role, 'GK');
+    await s.call('POST', '/club/buy', { hero: 5, pack: 'rare' }, t);
+    assert.equal((await s.call('POST', '/club/buy', { hero: 5, pack: 'rare' }, t)).body.error, 'bench_full');
+    assert.equal((await s.call('POST', '/club/buy', { hero: 5, pack: 'gold' }, t)).body.error, 'bad_pack');
+    // склад разом із лавою: новачок у основу, той, кого замінили, на лаву
+    let me = (await s.call('GET', '/me', null, t)).body.club;
+    const H = me.heroes.slice(), B = me.bench.slice();
+    [H[3], B[2]] = [B[2], H[3]];
+    let up = (await s.call('POST', '/club/save', { ...dev, heroes: H, bench: B }, t)).body.club;
+    assert.equal(up.heroes[3].id, b.hero.id); assert.equal(up.bench[2].id, me.heroes[3].id);
+    assert.equal(up.heroes[3].role, rules.slotsOf(up.club.form)[3].name);
+    // польовий у рамку чи підміна героя — склад лишається серверний
+    const bad = up.heroes.slice(), bb = up.bench.slice();
+    [bad[0], bb[0]] = [bb[0], bad[0]];
+    let same = (await s.call('POST', '/club/save', { ...dev, heroes: bad, bench: bb }, t)).body.club;
+    assert.deepEqual(same.heroes.map((e) => e.id), up.heroes.map((e) => e.id));
+    const fake = up.bench.slice(); fake[0] = { ...fake[0], id: 'чужий' };
+    same = (await s.call('POST', '/club/save', { ...dev, heroes: up.heroes, bench: fake }, t)).body.club;
+    assert.deepEqual(same.bench.map((e) => e.id), up.bench.map((e) => e.id));
+    // воротар із лави в рамку — можна
+    const gH = up.heroes.slice(), gB = up.bench.slice(), gj = gB.findIndex((e) => e.role === 'GK');
+    [gH[0], gB[gj]] = [gB[gj], gH[0]];
+    up = (await s.call('POST', '/club/save', { ...dev, heroes: gH, bench: gB }, t)).body.club;
+    assert.equal(up.heroes[0].id, gH[0].id); assert.equal(up.bench[gj].role, 'GK');
+    // продаж: лише з лави, за ціною гри, у журнал
+    assert.equal((await s.call('POST', '/club/sell', { id: up.heroes[4].id }, t)).body.error, 'not_bench');
+    const out = up.bench[1], before = up.coins;
+    const sold = (await s.call('POST', '/club/sell', { id: out.id }, t)).body;
+    assert.equal(sold.gain, rules.sellPrice(out)); assert.equal(sold.coins, before + sold.gain);
+    assert.equal(sold.club.bench.length, 4); assert.ok(!sold.club.bench.some((e) => e.id === out.id));
+    assert.equal((await s.call('POST', '/club/sell', { id: out.id }, t)).body.error, 'bad_hero');
+    // тренування героя з лави за id
+    const bh = sold.club.bench[0], k = Object.keys(bh.stats).find((x) => bh.stats[x] < 99);
+    const tr = (await s.call('POST', '/club/train', { hero: 11, id: bh.id, stat: k }, t)).body;
+    assert.equal(tr.hero.id, bh.id); assert.equal(tr.hero.stats[k], bh.stats[k] + 1);
+    // матч не губить лаву
+    me = (await s.call('GET', '/me', null, t)).body.club;
+    assert.equal(me.bench.length, 4);
+    assert.deepEqual(ledger(s.db, 1).map((r) => r[1]), ['import', 'pack', 'scout', 'pack', 'sell', 'train']);
+    assert.equal(sumLedger(s.db, 1), me.coins);
+    // ціни: перепродаж завжди дешевший за пак (навіть легенда з паку епіків)
+    for (const r of ['c', 'r', 'e', 'l']) assert.ok(rules.sellPrice({ rar: r, stats: { pace: 99, shoot: 99, pass: 99, drib: 99, tack: 99, iq: 99 }, line: 'F' }) < rules.PACKS.epic.price);
+  } finally { await s.close(); }
+});
+
+test('матч не губить лаву: нагороди отримує основа, лава лишається як була', { skip: !rules.SHOP && 'немає лави' }, async () => {
+  const s = await start();
+  try {
+    await two(s);
+    const b = (await s.call('POST', '/club/buy', { hero: 2, pack: 'rare' }, s.th)).body;
+    assert.equal(b.club.bench.length, 1);
+    const id = await pair(s);
+    await s.call('POST', '/match/result', { matchId: id, me: 1, opp: 0 }, s.th);
+    await s.call('POST', '/match/result', { matchId: id, me: 0, opp: 1 }, s.tg);
+    const c = (await s.call('GET', '/me', null, s.th)).body.club;
+    assert.equal(c.bench.length, 1); assert.equal(c.bench[0].id, b.hero.id);
+    assert.equal(c.bench[0].apps, 0); assert.equal(c.heroes[2].apps, 1);
+    assert.equal(c.games, 21);
   } finally { await s.close(); }
 });
