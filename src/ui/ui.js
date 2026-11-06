@@ -203,6 +203,17 @@ export class UI {
     const r = this.root, stop = (e) => { e.stopPropagation(); e.preventDefault(); };
     r.addEventListener('click', stop, true); setTimeout(() => r.removeEventListener('click', stop, true), 500);
   }
+  /**
+   * Гру відкрили за посиланням-запрошенням у кімнату: без екрана ЛОКО РАШ і заставки з гербом одразу меню, а над ним хаб і кімната
+   * (showMenu → online.onMenu). started стоїть ще до першого кадру, тож splashReady не вмикає ні вхід, ні стадіон. Звук, повний екран і
+   * заборону сну браузер дає лише після жесту, тому їх, як «ГРАТИ», вмикає перший дотик. У Telegram повний екран і так просить setup.
+   */
+  skipToRoom() {
+    const g = this.game;
+    this.started = true; this.el.splash.hidden = true; g.acquireWake(); g.ensureMatch(); this.showMenu();
+    const first = () => { removeEventListener('click', first, true); removeEventListener('keydown', first, true); g.acquireWake(); audio.unlock(); g.enterFullscreen(); };
+    addEventListener('click', first, true); addEventListener('keydown', first, true);
+  }
   /** Вхід ЛОКО РАШ стартує, коли готовий стадіон: конструктор гри й перші кадри блокують потік, і анімація пройшла б невидимою. Рівень деталізації відомий лише тепер. */
   splashReady() {
     let built = false, on = false;

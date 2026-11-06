@@ -237,7 +237,7 @@ Weather: дощ і сніг на InstancedMesh.
 
 - Внутрішні функції: ensureCtx:27, makeEngines:37, buildPhone:44, setPhone:53, trigger:118, stopAll:126, playScene:133, stopOldMusic:141, playOldMusic:142, fft:150, analyse:152, render:161, measure:179, measureScene:188, loopSeam:197, row:211, build:233
 
-## src/main.js (38 рядків)
+## src/main.js (39 рядків)
 
 Точка входу основної гри: шрифти, склад, UI, Game, онлайн-екран, сервіс-воркер.
 
@@ -409,12 +409,12 @@ Walkout: декорації виходу команд: прапори, кили�
 - Експорти: SERVER_URL:8, serverOn:18, markDown:20, peerServer:23, login:55, features:94, has:105, saveClub:116, meOnServer:117, trainOnServer:119, scoutOnServer:120, packOnServer:122, resetOnServer:123, buyOnServer:125, sellOnServer:126, matchStart:131, matchReport:132, matchState:133, queueJoin:135, queueLeave:136, queueStats:137, serverQuests:139, claimOnServer:140, topList:142, roomShareId:145, iceServers:151
 - Внутрішні функції: api:29, stored:47, store:50, authed:70, call:111
 
-## src/online/session.js (426 рядків)
+## src/online/session.js (430 рядків)
 
 Онлайн-сесія: кімната за кодом або швидкий пошук (маяки, seek.js) → лобі (обидва бачать клуби одне одного й тиснуть «Готовий») → матч → результат
 
 - **Online** :29
-  constructor:30, role:43, inMatch:44, sendVis:45, onVis:47, busy:59, unready:61, refresh:62, setErr:63, create:66, join:73, seek:85, qloop:105, patchSeek:125, unqueue:130, relight:132, seekJoin:145, retrySeek:158, reseek:160, stopSeek:165, why:167, bind:177, hello:213, sync:215, onMsg:220, setReady:265, buildSpec:274, me:285, startMatch:287, beginGuest:307, onTicket:326, finish:334, guestEnd:350, leave:358, techLoss:368, stopMatch:374, oppLeft:381, dropped:395, rematch:402, toLobby:406, close:414
+  constructor:30, role:43, inMatch:44, sendVis:45, onVis:47, busy:59, unready:61, refresh:62, setErr:63, create:66, join:74, seek:89, qloop:109, patchSeek:129, unqueue:134, relight:136, seekJoin:149, retrySeek:162, reseek:164, stopSeek:169, why:171, bind:181, hello:217, sync:219, onMsg:224, setReady:269, buildSpec:278, me:289, startMatch:291, beginGuest:311, onTicket:330, finish:338, guestEnd:354, leave:362, techLoss:372, stopMatch:378, oppLeft:385, dropped:399, rematch:406, toLobby:410, close:418
 
 ## src/physics/aim.js (123 рядків)
 
@@ -535,13 +535,13 @@ Tactics: екран складу для кар'єри й онлайн-клубу
 - **Tactics** :17
   constructor:18, reset:20, pos:21, token:26, formsHtml:30, popHtml:32, swapHtml:36, ttSig:41, ttHtml:42, html:46, afterRender:64, fill:71, patch:80, act:97
 
-## src/ui/ui.js (993 рядків)
+## src/ui/ui.js (1004 рядків)
 
 UI: меню, панелі, пауза, налаштування, результат, джойстик. Кнопки: data-act -> UI.act.
 
 - Внутрішні функції: countTo:28, redraw:49
 - **UI** :55
-  constructor:56, onResize:155, key:166, goBack:183, canGoBack:193, hideSplash:198, splashReady:207, isIOS:222, isStandalone:223, iosHint:224, useJoy:232, setMatchUi:236, applyControls:237, joyCenter:256, placeJoy:261, initJoy:266, act:314, kitNote:381, setJoyEdit:387, editDone:393, menuTap:399, toast:408, setSlow:413, flash:414, showMenu:420, tiltNav:431, rollFlaps:443, hideMenu:460, leagueStrip:467, refresh:482, menuCards:499, fitFlaps:540, clock:549, tickCash:554, claimCash:562, deny:570, pop:571, buyStadium:573, openPanel:584, panelCovers:597, leaveHub:602, closePanel:603, renderPanel:611, showTier:629, statBar:635, teamSheet:638, careerLook:650, careerDetail:651, squadHtml:664, train:683, transfersHtml:691, academyHtml:708, stadiumHtml:723, chronicleHtml:741, symbolsHtml:751, buy:762, equip:771, collectGraduate:777, boostAcademy:797, openCustom:807, closeCustom:810, customAct:811, renderCustom:828, openSettings:851, closeSettings:854, renderSettings:855, pause:898, showResult:914, renderResult:943, hideResult:992
+  constructor:56, onResize:155, key:166, goBack:183, canGoBack:193, hideSplash:198, skipToRoom:211, splashReady:218, isIOS:233, isStandalone:234, iosHint:235, useJoy:243, setMatchUi:247, applyControls:248, joyCenter:267, placeJoy:272, initJoy:277, act:325, kitNote:392, setJoyEdit:398, editDone:404, menuTap:410, toast:419, setSlow:424, flash:425, showMenu:431, tiltNav:442, rollFlaps:454, hideMenu:471, leagueStrip:478, refresh:493, menuCards:510, fitFlaps:551, clock:560, tickCash:565, claimCash:573, deny:581, pop:582, buyStadium:584, openPanel:595, panelCovers:608, leaveHub:613, closePanel:614, renderPanel:622, showTier:640, statBar:646, teamSheet:649, careerLook:661, careerDetail:662, squadHtml:675, train:694, transfersHtml:702, academyHtml:719, stadiumHtml:734, chronicleHtml:752, symbolsHtml:762, buy:773, equip:782, collectGraduate:788, boostAcademy:808, openCustom:818, closeCustom:821, customAct:822, renderCustom:839, openSettings:862, closeSettings:865, renderSettings:866, pause:909, showResult:925, renderResult:954, hideResult:1003
 
 ## src/ui/vox.js (292 рядків)
 

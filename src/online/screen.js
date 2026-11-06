@@ -98,12 +98,12 @@ export class OnlineScreen {
     const m = /[?&]room=([A-Za-z0-9]{5})/.exec(location.search), tgRoom = tgStartRoom();
     this.invite = m ? cleanCode(m[1]) : tgRoom ? cleanCode(tgRoom) : null;
   }
-  /** Після заставки меню: якщо гра відкрита за посиланням-запрошенням — одразу в кімнату. */
+  /** Перший показ меню: якщо гра відкрита за посиланням-запрошенням, одразу в кімнату (заставки тоді пропускає UI.skipToRoom). Код лишається в полі «Гра з другом» для повторної спроби. */
   onMenu() {
     if (!this.invite) return;
     const code = this.invite; this.invite = null;
     try { history.replaceState(null, '', location.pathname + location.hash); } catch (_) { /* ignore */ }
-    this.ui.openPanel('online'); this.tab = 'play'; this.s.join(code);
+    this.ui.openPanel('online'); this.tab = 'play'; this.codeIn = code; this.s.join(code, true);
   }
 
   /** Ключ вкладки для панелі: зміна стану кімнати теж «нова сторінка» (вхідні анімації, прокрутка з нуля). */
