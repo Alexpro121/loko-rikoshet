@@ -38,6 +38,57 @@ const MIGRATIONS = [
   `CREATE INDEX sessions_expires ON sessions(expires_at);`,
   `CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);       -- дрібниці бота: file_id обкладинки, id спільного рейтингу
    CREATE INDEX clubs_rating ON clubs(rating DESC);`,
+  // онлайн-хаб: клуб із пристрою переноситься раз (imported_at), матч підтверджують звіти обох гравців
+  `ALTER TABLE clubs ADD COLUMN imported_at INTEGER;
+   CREATE TABLE matches (
+     id TEXT PRIMARY KEY,
+     code TEXT NOT NULL,                -- кімната PeerJS: за нею сервер парує старти господаря й гостя
+     mode TEXT NOT NULL,                -- quick | friend | cup
+     cup_id TEXT,
+     host_id INTEGER REFERENCES players(id),
+     guest_id INTEGER REFERENCES players(id),
+     started_at INTEGER NOT NULL,
+     ended_at INTEGER,
+     state TEXT NOT NULL,               -- pending | live | solo | done | disputed | void
+     score_h INTEGER,
+     score_g INTEGER,
+     json TEXT NOT NULL DEFAULT '{}'    -- нагороди й квести кожного: { rew: { host, guest }, quests: { host, guest }, tech }
+   );
+   CREATE INDEX matches_host ON matches(host_id);
+   CREATE INDEX matches_guest ON matches(guest_id);
+   CREATE INDEX matches_started ON matches(started_at);
+   CREATE INDEX matches_code ON matches(code, state);
+   CREATE TABLE match_reports (
+     match_id TEXT NOT NULL REFERENCES matches(id),
+     player_id INTEGER NOT NULL REFERENCES players(id),
+     at INTEGER NOT NULL,
+     json TEXT NOT NULL,
+     PRIMARY KEY (match_id, player_id)
+   );`,
+  `CREATE TABLE quests (
+     player_id INTEGER NOT NULL REFERENCES players(id),
+     period TEXT NOT NULL,              -- 'd:2026-11-06' або 'w:20759' (номер дня понеділка)
+     id TEXT NOT NULL,
+     p INTEGER NOT NULL DEFAULT 0,
+     got_at INTEGER,
+     PRIMARY KEY (player_id, period, id)
+   );`,
+  // безпека хабу: гість приходить у матч за одноразовим квитком господаря, а не за кодом кімнати;
+  // flags — журнал підозрілого для власника (обрізане перенесення, розбіжності, фарм пари, надто швидкі звіти)
+  `ALTER TABLE matches ADD COLUMN ticket_hash TEXT;
+   ALTER TABLE matches ADD COLUMN ticket_exp INTEGER;
+   ALTER TABLE matches ADD COLUMN paired_at INTEGER;
+   ALTER TABLE matches ADD COLUMN rated INTEGER NOT NULL DEFAULT 0;
+   CREATE INDEX matches_ticket ON matches(ticket_hash);
+   CREATE TABLE flags (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     player_id INTEGER NOT NULL REFERENCES players(id),
+     kind TEXT NOT NULL,                -- import | disputed | pair | fast
+     at INTEGER NOT NULL,
+     json TEXT NOT NULL DEFAULT '{}'
+   );
+   CREATE INDEX flags_player ON flags(player_id);
+   CREATE INDEX flags_at ON flags(at);`,
 ];
 
 export function openDb(file) {

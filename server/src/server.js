@@ -9,20 +9,26 @@ import { createApp } from './app.js';
 import * as rules from './rules.js';
 import { createBot } from './bot/index.js';
 import { scheduleMaintenance } from './maintenance.js';
+import { guardedWss } from './peerguard.js';
 
 const PEERS_MAX = 1000;                   // одночасних гравців у сервері кімнат: далі нові отримують відмову, а не гальмують усіх
 
 const config = loadConfig();
 const db = openDb(join(config.dataDir, 'game.db'));
 const bot = config.bot ? createBot({ db, config, rules }) : null;
-const api = createServer(createApp({ db, config, newClub: rules.newClub, bot }));
+const app = createApp({ db, config, newClub: rules.newClub, rules, bot });
+const api = createServer(app);
+// онлайн-хаб: матчі без пари стають solo, мовчазні закриваються (серверний settleLive), черга забуває зниклих
+const sweep = setInterval(() => { try { app.sweep(); } catch (e) { console.error('Перевірка матчів не вдалася', e); } }, 30_000);
+sweep.unref();
 // Caddy тримає з'єднання до API відкритими 30 с; тут довше, щоб Caddy не натрапив на щойно закрите (502)
 api.keepAliveTimeout = 60_000;
 api.headersTimeout = 15_000;
 api.requestTimeout = 15_000;
 api.listen(config.port, config.host, () => console.log(`API гри: ${config.host}:${config.port}`));
 
-PeerServer({ port: config.peerPort, host: config.host, path: '/', proxied: true, allow_discovery: false, concurrent_limit: PEERS_MAX });
+// перебір кодів кімнат: обмеження нових з'єднань і спроб з'єднатися з адреси (peerguard.js)
+PeerServer({ port: config.peerPort, host: config.host, path: '/', proxied: true, allow_discovery: false, concurrent_limit: PEERS_MAX, createWebSocketServer: guardedWss({ behindProxy: config.behindProxy }) });
 console.log(`PeerJS: ${config.host}:${config.peerPort}`);
 
 const stopMaintenance = scheduleMaintenance(db, join(config.dataDir, 'backups'));
@@ -44,6 +50,7 @@ const stop = () => {
   stopping = true;
   stopMaintenance();
   stopPoll();
+  clearInterval(sweep);
   const end = () => { try { db.close(); } catch (_) { /* ignore */ } process.exit(0); };
   api.close(end);
   api.closeIdleConnections();
