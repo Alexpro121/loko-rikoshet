@@ -127,7 +127,7 @@ export class Game {
     if (!sp.show) return;
     sp.roar = Math.max(0, sp.roar - dt * 1.6);
     if (sp.ball) this.splashBallStep(dt);
-    v.stands.update(dt, this.time); v.surround.update(dt); v.pitch.boards.texture.offset.x = (this.time * 0.018) % 1;
+    v.stands.update(dt); v.surround.update(dt); v.pitch.boards.update(dt);
     if (c.aspect !== this.w / this.h) { c.aspect = this.w / this.h; c.fov = c.aspect < 1.5 ? 50 : 40; c.updateProjectionMatrix(); }
     const sx = Math.sin(sp.t * 0.5) * 0.06;
     if (sp.ball) {
@@ -606,6 +606,10 @@ export class Game {
   step(now) {
     // телефон із екраном 120 Гц: 60 рівних кадрів замість вдвічі більшої роботи й перегріву за кілька хвилин. 90 Гц тут не ріжеться: у них 11 мс
     if (this.coarse && S.settings.quality !== 'high' && now - this.last < 10.5) return;
+    // під непрозорою заставкою з гербом острів не малюємо: WebGL забирав би GPU в анімації. Один кадр на старті все ж малюємо,
+    // поки локомотив ще стоїть у тунелі: шейдери й текстури острова завантажаться тоді, а не в мить, коли заставка тане
+    if (this.ui.introOn && this.introDrawn) { this.last = now; return; }
+    if (this.ui.introOn) this.introDrawn = true;
     const calm = this.sm.name === 'MENU' && (this.ui.panel || !this.ui.started);   // острів під панеллю чи заставкою: ~30 кадрів достатньо
     if (calm && (this.coarse || !this.splash) && now - this.last < 30) return;     // на ПК камера стадіону йде плавно
     if (calm && this.ui.panelCovers()) { this.last = now; return; }

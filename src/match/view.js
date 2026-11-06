@@ -110,7 +110,7 @@ export class MatchView {
   }
 
   /** Рівень деталізації пристрою (DETAIL у src/core/perf.js): натовп, погода, полотнища. Викликає Game. */
-  setDetail(d) { this.stands.setDetail(d); this.weather.setDensity(d.weather); }
+  setDetail(d) { this.stands.setDetail(d); this.weather.setDensity(d.weather); this.pitch.boards.setDetail(d); }
 
   /** Туман рахується від камери: далека камера (тактична, повзунок відстані) відсуває густий туман разом із собою, щоб гра не тонула в сірому. */
   fitFog(d) {
@@ -136,7 +136,7 @@ export class MatchView {
     this.mine[0].setLook(this.look(H ? H.gk : KIT_GK_LOKO, true, squadLook(mySquad[0]), mySquad[0].num || 1));
     this.mine.forEach((p, i) => { if (i === 0) return; const e = mySquad[i], L = squadLook(e); p.setLook(this.look(H ? H.kit : matchKit(spec.club), false, L, L.num)); });
     const c = spec.club;
-    this.stands.setHome(H || null); this.stands.setOpponent(c); this.stands.particles = this.particles; this.pitch.boards.redraw(c); this.pitch.decals.setOpponent(c); this.pitch.decals.show(); this.tunnel.userData.carpet.visible = true;
+    this.stands.setHome(H || null); this.stands.setOpponent(c); this.stands.particles = this.particles; this.pitch.boards.setTeams(H, c); this.pitch.decals.setOpponent(c); this.pitch.decals.show(); this.tunnel.userData.carpet.visible = true;
     this.opp[0].setLook(this.look(c.gk, true, oppSq[0], 1));
     this.opp.forEach((p, i) => { if (i === 0) return; const e = oppSq[i]; p.setLook(this.look(c.kit, false, e, e.num)); });
     this.particles.clear();

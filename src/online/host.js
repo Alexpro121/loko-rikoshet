@@ -1,6 +1,6 @@
 // Господар онлайн-матчу: його гра — єдина правда. Він рахує фізику, ШІ і правила для обох команд, а гостю шле:
 //  · кадри поз 20 разів на секунду (codec.js, ненадійний канал);
-//  · події, які гість має побачити й почути так само: табло, звуки, бризки частинок, трибуни, салют (надійний канал).
+//  · події, які гість має побачити й почути так само: табло, звуки, бризки частинок, трибуни, LED-борти, салют (надійний канал).
 // Команди гостя (удар/пас його гравця, приціл, тап «пропустити») приходять сюди й виконуються в грі господаря.
 import { audio } from '../core/audio.js';
 import { encode, captureRef, PHASES, F } from './codec.js';
@@ -28,6 +28,7 @@ export class HostLink {
     hook(m.view.particles, 'burst', (a) => this.ev(['fx', a]));
     hook(m.view.stands, 'react', (a) => this.ev(['crowd', a[0], a[1] || null]));
     hook(m.view.ball, 'squash', (a) => this.ev(['squash', a[0], a[1], a[2]]));
+    hook(m.view.pitch.boards, 'cue', (a) => this.ev(['board', a[0], a[1] || null]));   // LED-борти: гість програє ту саму подію сам (guest.js, BOARD_OK)
     // поштовх камери лише в живій грі: на гол гість реагує сам (hud:goal), а кат-сцену бачить камерою господаря
     hook(this.game, 'addTrauma', (a) => { if (this.game.sm.name === 'MATCH' && m.phase === 'play' && m.bs !== 'net') this.ev(['trauma', a[0]]); });
   }

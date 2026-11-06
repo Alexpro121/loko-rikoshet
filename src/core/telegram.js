@@ -4,7 +4,7 @@ const SDK = 'https://telegram.org/js/telegram-web-app.js?64';
 const SDK_WAIT = 5000;                                          // telegram.org не відповів: гра стартує без нього
 const BG = '#0b3d2a';
 /** Посилання на бота для запрошень, наприклад 'https://t.me/loko_rush_bot'. Порожнє: у запрошенні звичайна адреса сайту. */
-const BOT_LINK = '';
+const BOT_LINK = 'https://t.me/lokorush_bot';
 
 const CLOUD_KEYS = ['loko-rikoshet-save-v1', 'loko-online-v1']; // що копіюємо в хмару; порядок входить у формат meta.n
 const SYNC_KEY = 'loko-tg-sync-v1';                             // локальна мітка останньої синхронізації: { at, sig }
@@ -20,6 +20,8 @@ const quiet = (fn) => { try { fn(); } catch (_) { /* старіша версія
 const isMobile = () => /android|ios/.test(tg.platform);
 
 export const inTelegram = () => !!tg;
+/** Підписані дані запуску для входу на сервер гри; порожньо поза Telegram. */
+export const tgInitData = () => (tg && typeof tg.initData === 'string' ? tg.initData : '');
 /** Як document.hidden, але ще й згорнутий у Telegram застосунок: там сторінка може лишатись «видимою». */
 export const appHidden = () => document.hidden || inactive;
 
@@ -122,6 +124,12 @@ export function tgStartRoom() {
   if (!m) return null;
   try { if (sessionStorage.getItem(ROOM_KEY) === p) return null; sessionStorage.setItem(ROOM_KEY, p); } catch (_) { /* ignore */ }
   return m[1];
+}
+
+/** Готове повідомлення від бота (картка виклику) у рідному вікні «Поділитися»; гра лишається відкритою. Telegram 8.0+. */
+export function tgShareMessage(id) {
+  if (!tg || !id || !at('8.0') || typeof tg.shareMessage !== 'function') return false;
+  try { tg.shareMessage(id); return true; } catch (_) { return false; }
 }
 
 /** Вікно вибору чату Telegram із запрошенням. @returns {boolean} false поза Telegram */
