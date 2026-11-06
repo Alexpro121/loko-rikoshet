@@ -4,8 +4,15 @@ import { createHash, randomBytes } from 'node:crypto';
 import { verifyInitData } from './telegram.js';
 import { turnCredentials } from './turn.js';
 import { tx } from './db.js';
+import { clubRoutes } from './hub/club.js';
+import { matchRoutes } from './hub/match.js';
+import { questRoutes } from './hub/quests.js';
+import { queueRoutes } from './hub/queue.js';
+import { topRoutes } from './hub/top.js';
 
-export const API_VERSION = 1;
+// API 2 — онлайн-хаб (клуб на сервері, підтверджений матч, квести, черга, таблиця). Клієнт вмикає кожну частину
+// за її назвою в features; без правил гри (rules) сервер лишається на API 1.
+export const API_VERSION = 2;
 const BODY_LIMIT = 64 * 1024;
 const SESSION_SEC = 30 * 24 * 3600;
 const AUTH_PER_MIN = 20;                 // спроб входу з однієї адреси за хвилину
@@ -35,7 +42,7 @@ function readJson(req) {
   });
 }
 
-export function createApp({ db, config, newClub, bot = null, now = () => Date.now() }) {
+export function createApp({ db, config, newClub, rules = null, bot = null, now = () => Date.now(), queueWaitMs = 12_000 }) {
   const sec = () => Math.floor(now() / 1000);
   const hits = new Map();                // 'кошик:ip' -> [хвилина, кількість]
 
@@ -71,9 +78,23 @@ export function createApp({ db, config, newClub, bot = null, now = () => Date.no
   }
 
   const clubOut = (row) => (row ? { ...JSON.parse(row.data), coins: row.coins, rating: row.rating, lvl: row.lvl } : null);
+  /** Кожна зміна монет — рядок у журналі. */
+  const ledger = (id, delta, reason) => { if (delta) q.ledger.run(id, delta, reason, sec()); };
+
+  // онлайн-хаб: частини додають свої маршрути; features — те, що клієнт може ввімкнути
+  const ctx = { db, rules, auth, readJson, HttpError, sec, now, tx, ledger, newClub, questsAfter: null };
+  const hub = rules ? (() => {
+    const club = clubRoutes(ctx);
+    const match = matchRoutes(ctx, club);
+    const quests = rules.QUESTS ? questRoutes(ctx) : null;     // квести вимагають match: прогрес рахує підтвердження
+    const queue = queueRoutes(ctx, club, match, queueWaitMs);
+    const top = topRoutes(ctx);
+    const features = ['club', 'match', ...(quests ? ['quests'] : []), 'queue', 'top'];
+    return { club, match, quests, queue, top, features };
+  })() : null;
 
   const routes = {
-    'GET /health': () => ({ ok: q.ping.get().ok === 1, api: API_VERSION }),
+    'GET /health': () => (hub ? { ok: q.ping.get().ok === 1, api: API_VERSION, features: hub.features } : { ok: q.ping.get().ok === 1, api: 1 }),
 
     'POST /auth/telegram': async (req, ip) => {
       if (rateLimited(ip, 'auth', AUTH_PER_MIN)) throw new HttpError(429, 'slow_down');
@@ -94,7 +115,10 @@ export function createApp({ db, config, newClub, bot = null, now = () => Date.no
 
     'GET /me': (req) => {
       const p = auth(req);
-      return { player: { id: p.id, name: p.name }, club: clubOut(q.club.get(p.id)) };
+      const club = clubOut(q.club.get(p.id));
+      if (!hub) return { player: { id: p.id, name: p.name }, club };
+      const quests = hub.quests ? hub.quests.list(p.id) : undefined;   // зараховує незабране з минулих періодів, тож клуб читаємо після
+      return { player: { id: p.id, name: p.name }, club: hub.club.out(hub.club.load(p.id)), rank: hub.top.rank(p.id), live: hub.match.live(p.id), quests };
     },
 
     // Клуб створює сервер за правилами гри; повторний виклик повертає вже наявний
@@ -131,7 +155,10 @@ export function createApp({ db, config, newClub, bot = null, now = () => Date.no
     },
   };
 
-  return async function handle(req, res) {
+  if (hub) Object.assign(routes, hub.club.routes, hub.match.routes, hub.quests ? hub.quests.routes : {}, hub.queue.routes, hub.top.routes);
+  const patterns = hub ? [...hub.match.patterns] : [];
+
+  async function handle(req, res) {
     const origin = req.headers.origin;
     const allowed = origin && config.origins.includes(origin);
     if (allowed) {
@@ -148,7 +175,7 @@ export function createApp({ db, config, newClub, bot = null, now = () => Date.no
     if (req.method === 'OPTIONS') { res.writeHead(allowed ? 204 : 403); res.end(); return; }
     if (origin && !allowed) return send(403, { error: 'origin' });
 
-    const path = new URL(req.url, 'http://x').pathname;
+    const url = new URL(req.url, 'http://x'), path = url.pathname;
     // вебхук бота: Telegram шле з кількох адрес багато запитів, тож без загального ліміту, зате з секретом
     if (path === '/tg' && req.method === 'POST') {
       if (!bot || req.headers['x-telegram-bot-api-secret-token'] !== bot.secret) return send(403, { error: 'secret' });
@@ -158,17 +185,26 @@ export function createApp({ db, config, newClub, bot = null, now = () => Date.no
       bot.handle(update);
       return;
     }
-    const route = routes[`${req.method} ${path}`];
+    let route = routes[`${req.method} ${path}`], params = [];
+    if (!route) {
+      for (const [method, re, fn] of patterns) {
+        const m = method === req.method && re.exec(path);
+        if (m) { route = fn; params = m.slice(1); break; }
+      }
+    }
     if (!route) return send(404, { error: 'not_found' });
     // за Caddy справжня адреса гравця в X-Forwarded-For; без проксі беремо адресу з'єднання
     const ip = (config.behindProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
     if (path !== '/health' && rateLimited(ip, 'all', CALLS_PER_MIN)) return send(429, { error: 'slow_down' });
     try {
-      send(200, await route(req, ip));
+      send(200, await route(req, ip, url, params));
     } catch (e) {
       if (e instanceof HttpError) return send(e.status, { error: e.code });
       console.error(e);
       send(500, { error: 'internal' });
     }
-  };
+  }
+  /** Фонова перевірка хабу (server.js кличе раз на 30 с): матчі без пари й без звітів, черга. */
+  handle.sweep = () => { if (hub) { hub.match.sweep(); hub.queue.sweep(); } };
+  return handle;
 }

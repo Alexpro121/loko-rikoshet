@@ -15,7 +15,11 @@ const PEERS_MAX = 1000;                   // одночасних гравців
 const config = loadConfig();
 const db = openDb(join(config.dataDir, 'game.db'));
 const bot = config.bot ? createBot({ db, config, rules }) : null;
-const api = createServer(createApp({ db, config, newClub: rules.newClub, bot }));
+const app = createApp({ db, config, newClub: rules.newClub, rules, bot });
+const api = createServer(app);
+// онлайн-хаб: матчі без пари стають solo, мовчазні закриваються (серверний settleLive), черга забуває зниклих
+const sweep = setInterval(() => { try { app.sweep(); } catch (e) { console.error('Перевірка матчів не вдалася', e); } }, 30_000);
+sweep.unref();
 // Caddy тримає з'єднання до API відкритими 30 с; тут довше, щоб Caddy не натрапив на щойно закрите (502)
 api.keepAliveTimeout = 60_000;
 api.headersTimeout = 15_000;
@@ -44,6 +48,7 @@ const stop = () => {
   stopping = true;
   stopMaintenance();
   stopPoll();
+  clearInterval(sweep);
   const end = () => { try { db.close(); } catch (_) { /* ignore */ } process.exit(0); };
   api.close(end);
   api.closeIdleConnections();
