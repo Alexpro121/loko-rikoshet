@@ -6,14 +6,16 @@ import { PeerServer } from 'peer';
 import { loadConfig } from './config.js';
 import { openDb } from './db.js';
 import { createApp } from './app.js';
-import { newClub } from './rules.js';
+import * as rules from './rules.js';
+import { createBot } from './bot/index.js';
 import { scheduleMaintenance } from './maintenance.js';
 
 const PEERS_MAX = 1000;                   // одночасних гравців у сервері кімнат: далі нові отримують відмову, а не гальмують усіх
 
 const config = loadConfig();
 const db = openDb(join(config.dataDir, 'game.db'));
-const api = createServer(createApp({ db, config, newClub }));
+const bot = config.bot ? createBot({ db, config, rules }) : null;
+const api = createServer(createApp({ db, config, newClub: rules.newClub, bot }));
 // Caddy тримає з'єднання до API відкритими 30 с; тут довше, щоб Caddy не натрапив на щойно закрите (502)
 api.keepAliveTimeout = 60_000;
 api.headersTimeout = 15_000;
@@ -25,12 +27,23 @@ console.log(`PeerJS: ${config.host}:${config.peerPort}`);
 
 const stopMaintenance = scheduleMaintenance(db, join(config.dataDir, 'backups'));
 
+// Бот не тримає запуск: Telegram недоступний — API і PeerJS однаково працюють, налаштування повториться за хвилину
+let stopPoll = () => {};
+async function startBot() {
+  try {
+    await bot.setup();
+    if (!config.publicUrl) stopPoll = bot.poll();
+  } catch (e) { console.error('Бот не запустився:', e.message); setTimeout(startBot, 60_000).unref(); }
+}
+if (bot) startBot();
+
 // systemd зупиняє службу перед оновленням: базу закриваємо акуратно, щоб WAL злився в основний файл
 let stopping = false;
 const stop = () => {
   if (stopping) return;
   stopping = true;
   stopMaintenance();
+  stopPoll();
   const end = () => { try { db.close(); } catch (_) { /* ignore */ } process.exit(0); };
   api.close(end);
   api.closeIdleConnections();

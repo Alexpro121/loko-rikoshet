@@ -19,3 +19,8 @@ const profile = await import('../../src/online/profile.js');
 
 /** Новий онлайн-клуб за правилами гри: 300 монет, рейтинг 1000, 11 героїв. */
 export const newClub = () => profile.newClub();
+const squad = await import('../../src/state/squad.js');
+
+/** Загальна сила героя (OVR) і риси героїв, як їх показує гра: для картки клубу в боті. */
+export const ovr = (hero) => squad.ovr(hero);
+export const TRAITS = profile.TRAITS;

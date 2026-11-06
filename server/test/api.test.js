@@ -18,7 +18,8 @@ const initData = (id = 42, authDate = NOW, extra = {}) =>
 async function start(over = {}) {
   const db = openDb(':memory:');
   const config = { botToken: BOT, origins: [ORIGIN], turnSecret: 's3cret', turnUrls: ['turn:api.example:3478'], behindProxy: false, ...over };
-  const srv = createServer(createApp({ db, config, newClub, now: () => NOW * 1000 }));
+  const bot = { secret: 'x', prepareRoom: async (u, code) => `P-${u.id}-${code}` };
+  const srv = createServer(createApp({ db, config, newClub, bot, now: () => NOW * 1000 }));
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${srv.address().port}`;
   const call = async (method, path, { body, token, origin = ORIGIN } = {}) => {
@@ -144,5 +145,16 @@ test('загальне обмеження частоти не чіпає пер�
     for (let i = 0; i < 125; i++) last = await s.call('GET', '/me');
     assert.equal(last.status, 429);
     assert.equal((await s.call('GET', '/health')).body.ok, true);
+  } finally { await s.close(); }
+});
+
+test('картка виклику: лише після входу й лише з правильним кодом кімнати', async () => {
+  const s = await start();
+  try {
+    assert.equal((await s.call('POST', '/share/room', { body: { code: 'K7QXP' } })).status, 401);
+    const { token } = (await s.call('POST', '/auth/telegram', { body: { initData: initData() } })).body;
+    assert.equal((await s.call('POST', '/share/room', { token, body: { code: 'K0O1I' } })).status, 400);
+    const r = await s.call('POST', '/share/room', { token, body: { code: 'k7qxp' } });
+    assert.equal(r.body.id, 'P-42-K7QXP');
   } finally { await s.close(); }
 });

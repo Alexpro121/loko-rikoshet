@@ -10,7 +10,8 @@ import { OP, saveOP, resetOP, esc, plain, flagSvg, kitOf, gkKitOf, teamRating, t
 import { FLAG_COLS, FLAG_PATS, FLAG_EMB, FLAG_PLATES, FLAG_OVS, FLAG_EDGES, FLAG_STYLES, flagUri, emblemSvg, rollFlag } from './flag.js';
 import { Online } from './session.js';
 import { cleanCode } from './net.js';
-import { tgStartRoom, tgShareRoom } from '../core/telegram.js';
+import { tgStartRoom, tgShareRoom, tgShareMessage, inTelegram } from '../core/telegram.js';
+import { serverOn, roomShareId } from './server.js';
 
 const STYLE_UA = { any: 'Усі', classic: 'Класика', herald: 'Геральдика', modern: 'Сучасний', wild: 'Дикий' };
 const FE_TABS = { gen: 'Генератор', field: 'Поле', emblem: 'Знак', colors: 'Кольори', extra: 'Оздоба' };
@@ -332,7 +333,12 @@ export class OnlineScreen {
       case 'on-ready': return s.setReady(!s.ready.me);
       case 'on-copy': this.copy(s.code, 'Код ' + s.code + ' скопійовано'); return;
       case 'on-share': {
-        const url = location.origin + location.pathname + '?room=' + s.code;
+        const url = location.origin + location.pathname + '?room=' + s.code, code = s.code;
+        // у Telegram із сервером гри: бот готує картку виклику, і вона йде в чат через рідне вікно «Поділитися»
+        if (inTelegram() && serverOn()) {
+          roomShareId(code).then((id) => { if (!tgShareMessage(id)) tgShareRoom(code, url, 'Заходь у мою кімнату LOKO RUSH: ' + code); });
+          return;
+        }
         if (tgShareRoom(s.code, url, 'Заходь у мою кімнату LOKO RUSH: ' + s.code)) return;
         if (navigator.share) navigator.share({ title: 'LOKO RUSH — онлайн-матч', text: 'Заходь у мою кімнату: ' + s.code, url }).catch(() => {});
         else this.copy(url, 'Посилання скопійовано');

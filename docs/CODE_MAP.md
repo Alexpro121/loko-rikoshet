@@ -63,12 +63,12 @@ Game: рендерер, сцена меню, стейт-машина MENU/MATCH/
 - **StateMachine** :2
   constructor:3, add:5, go:7, update:16
 
-## src/core/telegram.js (238 рядків)
+## src/core/telegram.js (244 рядків)
 
 Telegram Mini App: SDK лише всередині Telegram, повний екран, поворот, кнопка «назад», вібрація, запрошення, хмарна копія збереження.
 
-- Експорти: inTelegram:22, tgInitData:24, appHidden:26, initTelegram:34, tgReady:71, tgFullscreen:74, tgEnterFullscreen:75, tgToggleFullscreen:76, tgHaptic:110, tgStartRoom:121, tgShareRoom:130, bindTelegram:139, splitChunks:180, pullCloud:194, pushCloud:219
-- Внутрішні функції: launchedInTelegram:28, setup:51, lockLandscape:83, rotateHelp:89, sigOf:170
+- Експорти: inTelegram:22, tgInitData:24, appHidden:26, initTelegram:34, tgReady:71, tgFullscreen:74, tgEnterFullscreen:75, tgToggleFullscreen:76, tgHaptic:110, tgStartRoom:121, tgShareMessage:130, tgShareRoom:136, bindTelegram:145, splitChunks:186, pullCloud:200, pushCloud:225
+- Внутрішні функції: launchedInTelegram:28, setup:51, lockLandscape:83, rotateHelp:89, sigOf:176
 
 ## src/graphics/ball.js (88 рядків)
 
@@ -366,18 +366,18 @@ Walkout: декорації виходу команд: прапори, кили�
 - Експорти: esc:15, TRAITS:23, RARITY:36, ONLINE_FORMS:45, slotsOf:46, ONLINE_AIM:49, ONLINE_GK:50, newHero:54, newClub:69, OP:142, saveOP:143, markLive:145, clearLive:146, settleLive:147, resetOP:148, kitOf:154, awayKit:161, gkKitOf:167, shortOf:168, heroOvr:172, teamRating:173, trainPrice:174, SCOUT_PRICE:175, clubXpNeed:176, trainHero:178, setForm:185, swapHeroes:190, scoutHero:196, toWire:205, plain:216, fromWire:220, matchClub:242, applyResult:249
 - Внутрішні функції: repair:82, migrate:117, load:124
 
-## src/online/screen.js (378 рядків)
+## src/online/screen.js (384 рядків)
 
 Вкладка «Онлайн» у меню: свій онлайн-клуб (назва, прапор, рівень, рейтинг), герої з прокачкою і гра з людиною
 
-- **OnlineScreen** :30
-  constructor:31, onMenu:58, subKey:66, playState:67, html:69, clubCard:86, clubTiles:92, kitsHtml:97, clubHtml:101, feHtml:121, dice:122, thumb:123, feGen:124, feField:132, feEmblem:137, feColors:155, feExtra:162, rollCands:168, remember:169, patchFlag:171, patchFe:178, flagDone:188, syncSoon:191, look:194, afterRender:195, heroDetail:196, heroesHtml:208, revealHero:210, playHtml:219, stampOf:256, oppCard:258, patchOpp:263, input:275, setColor:296, act:297, copy:348, showResult:354
+- **OnlineScreen** :31
+  constructor:32, onMenu:59, subKey:67, playState:68, html:70, clubCard:87, clubTiles:93, kitsHtml:98, clubHtml:102, feHtml:122, dice:123, thumb:124, feGen:125, feField:133, feEmblem:138, feColors:156, feExtra:163, rollCands:169, remember:170, patchFlag:172, patchFe:179, flagDone:189, syncSoon:192, look:195, afterRender:196, heroDetail:197, heroesHtml:209, revealHero:211, playHtml:220, stampOf:257, oppCard:259, patchOpp:264, input:276, setColor:297, act:298, copy:354, showResult:360
 
-## src/online/server.js (86 рядків)
+## src/online/server.js (95 рядків)
 
 Сервер гри (папка server/): вхід через Telegram, власний PeerJS і паролі до ретранслятора.
 
-- Експорти: SERVER_URL:8, serverOn:18, markDown:20, peerServer:23, login:50, iceServers:77
+- Експорти: SERVER_URL:8, serverOn:18, markDown:20, peerServer:23, login:50, roomShareId:80, iceServers:86
 - Внутрішні функції: api:29, stored:42, store:45, authed:65
 
 ## src/online/session.js (284 рядків)

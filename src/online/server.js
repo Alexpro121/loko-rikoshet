@@ -62,15 +62,24 @@ export async function login() {
 }
 
 /** Сесію відкликали на сервері (вийшли на іншому пристрої понад ліміт, бан): забути й увійти заново. */
-async function authed(path) {
+async function authed(path, body) {
+  const init = (s) => (body
+    ? { method: 'POST', headers: { Authorization: 'Bearer ' + s.token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    : { headers: { Authorization: 'Bearer ' + s.token } });
   const s = await login();
   if (!s) return null;
-  try { return await api(path, { headers: { Authorization: 'Bearer ' + s.token } }); } catch (e) {
+  try { return await api(path, init(s)); } catch (e) {
     if (e.status !== 401) throw e;
     session = null; store(null);
     const again = await login();
-    return again ? api(path, { headers: { Authorization: 'Bearer ' + again.token } }) : null;
+    return again ? api(path, init(again)) : null;
   }
+}
+
+/** Картка виклику в кімнату від бота гри (для Telegram.WebApp.shareMessage) або null: тоді звичайне запрошення. */
+export async function roomShareId(code) {
+  if (!serverOn()) return null;
+  try { const r = await authed('/share/room', { code }); return (r && r.id) || null; } catch (_) { return null; }
 }
 
 /** Ретранслятор сервера гри для гравця, що увійшов. Будь-який збій дає порожній список: лишаються STUN і публічний TURN. */

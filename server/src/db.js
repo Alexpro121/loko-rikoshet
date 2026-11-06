@@ -36,6 +36,8 @@ const MIGRATIONS = [
    );
    CREATE INDEX coin_ledger_player ON coin_ledger(player_id);`,
   `CREATE INDEX sessions_expires ON sessions(expires_at);`,
+  `CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);       -- дрібниці бота: file_id обкладинки, id спільного рейтингу
+   CREATE INDEX clubs_rating ON clubs(rating DESC);`,
 ];
 
 export function openDb(file) {

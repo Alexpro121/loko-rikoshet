@@ -35,7 +35,7 @@ function readJson(req) {
   });
 }
 
-export function createApp({ db, config, newClub, now = () => Date.now() }) {
+export function createApp({ db, config, newClub, bot = null, now = () => Date.now() }) {
   const sec = () => Math.floor(now() / 1000);
   const hits = new Map();                // 'кошик:ip' -> [хвилина, кількість]
 
@@ -111,6 +111,18 @@ export function createApp({ db, config, newClub, now = () => Date.now() }) {
       });
     },
 
+    // Картка виклику в кімнату: бот готує повідомлення, гра відкриває його у вікні «Поділитися» (shareMessage)
+    'POST /share/room': async (req) => {
+      const p = auth(req);
+      const body = await readJson(req);
+      const code = String(body.code || '').toUpperCase();
+      if (!/^[A-HJ-NP-Z2-9]{5}$/.test(code)) throw new HttpError(400, 'bad_code');
+      if (!bot) throw new HttpError(404, 'no_bot');
+      const id = await bot.prepareRoom({ id: p.id, first_name: p.name }, code);
+      if (!id) throw new HttpError(502, 'telegram');
+      return { id };
+    },
+
     'GET /turn': (req) => {
       const p = auth(req);
       if (!config.turnSecret || !config.turnUrls.length) return { iceServers: [] };
@@ -137,6 +149,15 @@ export function createApp({ db, config, newClub, now = () => Date.now() }) {
     if (origin && !allowed) return send(403, { error: 'origin' });
 
     const path = new URL(req.url, 'http://x').pathname;
+    // вебхук бота: Telegram шле з кількох адрес багато запитів, тож без загального ліміту, зате з секретом
+    if (path === '/tg' && req.method === 'POST') {
+      if (!bot || req.headers['x-telegram-bot-api-secret-token'] !== bot.secret) return send(403, { error: 'secret' });
+      let update;
+      try { update = await readJson(req); } catch (e) { return send(e.status || 400, { error: e.code || 'bad_json' }); }
+      send(200, {});
+      bot.handle(update);
+      return;
+    }
     const route = routes[`${req.method} ${path}`];
     if (!route) return send(404, { error: 'not_found' });
     // за Caddy справжня адреса гравця в X-Forwarded-For; без проксі беремо адресу з'єднання

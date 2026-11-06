@@ -126,6 +126,12 @@ export function tgStartRoom() {
   return m[1];
 }
 
+/** Готове повідомлення від бота (картка виклику) у рідному вікні «Поділитися»; гра лишається відкритою. Telegram 8.0+. */
+export function tgShareMessage(id) {
+  if (!tg || !id || !at('8.0') || typeof tg.shareMessage !== 'function') return false;
+  try { tg.shareMessage(id); return true; } catch (_) { return false; }
+}
+
 /** Вікно вибору чату Telegram із запрошенням. @returns {boolean} false поза Telegram */
 export function tgShareRoom(code, webUrl, text) {
   if (!tg) return false;

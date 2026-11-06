@@ -1,5 +1,8 @@
 // Налаштування сервера з оточення (на сервері це /etc/loko-game/env, див. deploy/).
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const COVER = fileURLToPath(new URL('../../store/telegram-cover-640x360.png', import.meta.url));
 
 const list = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -14,6 +17,13 @@ export function loadConfig(env = process.env) {
     turnSecret: env.TURN_SECRET || '',
     turnUrls: list(env.TURN_URLS),
     behindProxy: env.BEHIND_PROXY !== '0',
+    // бот гри: вебхук на PUBLIC_URL/tg (без адреси — опитування), сторінка гри для кнопки «Грати»
+    bot: env.BOT_ENABLED !== '0',
+    publicUrl: env.PUBLIC_URL || '',
+    gameUrl: env.GAME_URL || 'https://alexpro121.github.io/loko-rikoshet/',
+    botApiUrl: env.BOT_API_URL || 'https://api.telegram.org',
+    widgets: env.BOT_WIDGETS !== '0',
+    coverFile: env.COVER_FILE || COVER,
   };
   if (!cfg.botToken) throw new Error('BOT_TOKEN не задано: без нього не перевірити вхід гравців');
   if (!cfg.origins.length) throw new Error('ALLOWED_ORIGINS не задано: адреса, з якої відкривається гра');

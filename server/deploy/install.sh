@@ -35,6 +35,9 @@ ALLOWED_ORIGINS=$GAME_ORIGIN
 TURN_SECRET=$(openssl rand -hex 32)
 TURN_URLS=turn:$DOMAIN:3478?transport=udp,turn:$DOMAIN:3478?transport=tcp
 DATA_DIR=$APP/data
+# Бот гри: вебхук на PUBLIC_URL/tg, кнопка «Грати» веде на GAME_URL; BOT_WIDGETS=0 вимикає HTML-віджети
+PUBLIC_URL=https://$DOMAIN
+GAME_URL=https://alexpro121.github.io/loko-rikoshet/
 PORT=8787
 PEER_PORT=9000
 # Копії бази в Backblaze B2 чи Cloudflare R2 (необов'язково): заповніть тут або в $ETC/backup.env, і install.sh налаштує Litestream
@@ -46,6 +49,9 @@ EOF
   chmod 640 "$ENV_FILE"
 fi
 BACKUP_ENV="$ETC/backup.env"              # ключі сховища копій (B2 чи R2) окремо: лише root, гра їх не бачить
+# env від старішої версії скрипта: дописати нові ключі, не чіпаючи наявних
+grep -q '^PUBLIC_URL=' "$ENV_FILE" || echo "PUBLIC_URL=https://$(sed -n 's/^DOMAIN=//p' "$ENV_FILE")" >> "$ENV_FILE"
+grep -q '^GAME_URL=' "$ENV_FILE" || echo "GAME_URL=https://alexpro121.github.io/loko-rikoshet/" >> "$ENV_FILE"
 # shellcheck disable=SC1090
 set -a; . "$ENV_FILE"; [ -f "$BACKUP_ENV" ] && . "$BACKUP_ENV"; set +a
 : "${DOMAIN:?У $ENV_FILE немає DOMAIN}"

@@ -1,0 +1,46 @@
+<style>
+[hidden]{display:none!important}
+:root{--h:var(--tg-theme-hint-color);--s:var(--tg-theme-secondary-bg-color);--a:var(--tg-theme-button-color)}
+body{margin:0;padding:12px 12px max(12px,env(safe-area-inset-bottom));font:15px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.hd{display:flex;align-items:center;gap:8px;padding:0 2px 8px;font-size:17px;font-weight:700}
+.hd span{margin-left:auto;font-size:12px;font-weight:400;color:var(--h)}
+.me{display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:9px 12px;border-radius:12px;background:#0b3d2a;color:#fff}
+.me b{font-size:20px}
+.me span{flex:1;font-size:13px;color:rgba(255,255,255,.8)}
+ol{margin:0;padding:6px;list-style:none;border-radius:14px;background:var(--s)}
+li{display:flex;align-items:center;gap:9px;height:36px;padding:0 6px;border-radius:9px}
+li.nw{animation:nw 1.4s ease-out}
+@keyframes nw{from{background:rgba(255,211,77,.35)}}
+li i{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:700 12px system-ui,sans-serif;font-style:normal;color:var(--h)}
+li:nth-child(1) i{background:#f2b600;color:#fff}
+li:nth-child(2) i{background:#a3adb8;color:#fff}
+li:nth-child(3) i{background:#d0884a;color:#fff}
+li u{flex:none;width:8px;height:22px;border-radius:3px}
+li p{flex:1;min-width:0;margin:0;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+li small{display:block;font-size:12px;color:var(--h);overflow:hidden;text-overflow:ellipsis}
+li b{font-size:16px}
+.no{justify-content:center;height:60px;color:var(--h)}
+.ft{padding:8px 4px 0;font-size:12px;color:var(--h)}
+</style>
+<div class="hd">🏆 Рейтинг LOKO RUSH<span id="n"></span></div>
+<div class="me" id="me" hidden><b id="mk"></b><span id="mt"></span></div>
+<ol id="ol"></ol>
+<div class="ft" id="ft"></div>
+<script>
+const T=window.TelegramWidget,$=i=>document.getElementById(i),J=(s,d)=>{try{return s?JSON.parse(s):d}catch(e){return d}};
+let L=null,prev=null;
+function draw(){
+ const p=T?J(T.publicData,null):{top:[['Олекса','КАЖАНИ',1084,'#254e9c'],['Марта','ГРІМ',1061,'#c8102e'],['Іван','ВОВКИ',1032,'#1f9d4a']],n:57,t:'19:40',r:1};
+ if(p&&(!L||(p.r|0)>=(L.r|0)))L=p;const d=L||{},top=Array.isArray(d.top)?d.top.slice(0,10):[],was=prev;prev={};
+ $('n').textContent=d.n?d.n+' гравців':'';
+ $('ol').replaceChildren(...top.map((x,i)=>{const li=document.createElement('li'),k=String(x[0])+'|'+x[1];prev[k]=x[2];
+  li.className=was&&was[k]!==x[2]?'nw':'';
+  li.innerHTML='<i>'+(i+1)+'</i><u></u><p></p><b>'+(x[2]|0)+'</b>';li.children[1].style.background=/^#[0-9a-f]{6}$/i.test(x[3])?x[3]:'#888';
+  li.children[2].textContent=String(x[0]).slice(0,32);const s=document.createElement('small');s.textContent=String(x[1]||'').slice(0,24);li.children[2].appendChild(s);return li}));
+ if(!top.length)$('ol').innerHTML='<li class="no">Ще ніхто не зіграв. Будь першим!</li>';
+ $('ft').textContent=d.t?'Оновлено о '+d.t:'';
+ const m=T&&J(T.chatData,null);$('me').hidden=!(m&&m.k);
+ if(m&&m.k){$('mk').textContent='#'+m.k;$('mt').textContent='Твоє місце · '+(m.r|0)+' рейтинг'+(m.n?' · '+m.n:'')}}
+draw();
+if(T){T.onEvent('publicDataChanged',draw);T.onEvent('chatDataChanged',draw);T.isPreview||T.watchPublicData();T.ready&&T.ready()}
+</script>
