@@ -37,6 +37,15 @@ export const newHero = (slot, used, rar) => profile.newHero(slot, used, rar);   
 // Паки магазину (PACKS, packRarity): поки їх немає в profile.js гілки сервера, маршрут /club/pack не існує (клієнт бачить 404)
 export const PACKS = profile.PACKS && typeof profile.packRarity === 'function' ? profile.PACKS : null;
 export const packRarity = (kind) => profile.packRarity(kind);
+// Лава запасних і магазин (packInto, sellFrom, lineupOk): ті самі чисті правила, що на пристрої; без них частини 'shop' немає
+export const SHOP = ['packInto', 'sellFrom', 'lineupOk', 'sellPrice', 'isKeeper'].every((k) => typeof profile[k] === 'function') && Number.isFinite(profile.BENCH_MAX);
+export const BENCH_MAX = profile.BENCH_MAX;
+export const isKeeper = (e) => profile.isKeeper(e);
+export const sellPrice = (e) => profile.sellPrice(e);
+export const lineupOk = (heroes, bench) => profile.lineupOk(heroes, bench);
+/** Пак на лаву: st — клуб із бази ({ club, heroes, bench, coins }), міняється на місці. { hero, bench, price } або { error }. */
+export const packInto = (st, kind, i) => profile.packInto(st, kind, i);
+export const sellFrom = (st, j) => profile.sellFrom(st, j);
 export const slotsOf = (form) => profile.slotsOf(form);
 export const plain = (v) => profile.plain(v);
 

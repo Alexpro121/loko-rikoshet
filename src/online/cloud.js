@@ -2,8 +2,8 @@
 // Кожну частину вмикає лише її назва в GET /health → features (server.js); без неї гра лишається на локальній логіці:
 // клуб і квести на пристрої (profile.js, quests.js). Коли частина є, головний сервер: гра показує результат одразу за
 // локальним підрахунком, а потім бере числа з відповіді сервера (adoptServer), тож розбіжність виправляється сама.
-import { OP, toServer, adoptServer, adoptHero, saveOP } from './profile.js';
-import { features, has, saveClub, meOnServer, trainOnServer, scoutOnServer, packOnServer, resetOnServer, matchStart, matchReport, matchState, serverQuests, claimOnServer, topList } from './server.js';
+import { OP, toServer, adoptServer, adoptHero, saveOP, allHeroes } from './profile.js';
+import { features, has, saveClub, meOnServer, trainOnServer, scoutOnServer, packOnServer, buyOnServer, sellOnServer, resetOnServer, matchStart, matchReport, matchState, serverQuests, claimOnServer, topList } from './server.js';
 import { questList, questsReady, claimQuest, questsLeft } from './quests.js';
 
 const SAVE_MS = 1500;                    // серія правок прапора й назви: на сервер іде лише остання
@@ -34,33 +34,57 @@ export class Cloud {
   /** Вигляд чи тактика змінились: зберегти на сервері (лише числа беремо назад, щоб не затерти наступну правку). */
   dirty() {
     if (!has('club') || !this.synced) return;
-    clearTimeout(this.saveT);
-    this.saveT = setTimeout(async () => { const r = await saveClub(toServer()); if (r && r.club) adoptServer(r.club, false); }, SAVE_MS);
+    clearTimeout(this.saveT); this.pending = true;
+    this.saveT = setTimeout(() => this.save(), SAVE_MS);
   }
+  async save() { this.pending = false; const r = await saveClub(toServer()); if (r && r.club) adoptServer(r.club, false); }
+  /** Правка складу ще чекає збереження: перед покупкою чи продажем зберегти зараз, щоб сервер бачив той самий склад. */
+  async flush() { if (!this.pending) return; clearTimeout(this.saveT); await this.save(); }
   /** Сервер відмовив у дії: його клуб правильний, беремо весь. */
   async resync() { const r = await meOnServer(); if (r && r.club && adoptServer(r.club, true)) this.refresh(); }
   /** Тренування вже зроблено на пристрої (кнопка реагує одразу); сервер підтверджує ціну й навичку або повертає свій стан. */
   async train(i, k) {
     if (!has('club')) return;
-    const r = await trainOnServer(i, k);
+    const e = allHeroes()[i];
+    const r = await trainOnServer(i, k, e && e.id);
     if (!r) return;
     if (r.error) { this.ui.toast('Сервер не прийняв тренування'); return this.resync(); }
     if (Number.isFinite(r.coins)) OP.coins = r.coins;
     if (r.hero) adoptHero(i, r.hero);
     saveOP(); this.refresh();
   }
-  /** Скаут на сервері: новий герой випадковий, тож його дає сервер. null — сервера немає (скаут на пристрої), false — відмова. */
-  scout(i) { return this.buy('scout', i); }
-  /** Скаут чи пак магазину на сервері (той самий шлях, що й scout). Сервер без паків ('not_found') — відмова, монети не чіпаємо. */
+  /**
+   * Скаут чи пак на сервері: героя випадково обирає сервер. Із лавою ('shop') новачок сідає на лаву — { hero, bench };
+   * старий сервер без лави міняє героя на слоті i — { hero, replaced: true }. { error } — відмова, null — сервер недоступний.
+   */
   async buy(kind, i) {
     if (!has('club')) return null;
+    if (has('shop')) {
+      await this.flush();
+      const r = await buyOnServer(i, kind);
+      if (!r) return null;
+      if (r.error || !r.hero || !r.club) { if (r.error !== 'bench_full' && r.error !== 'no_coins') await this.resync(); return { error: r.error || 'server' }; }
+      adoptServer(r.club, false);
+      const j = OP.bench.findIndex((e) => e.id === r.hero.id);
+      return j < 0 ? { error: 'server' } : { hero: OP.bench[j], bench: j };
+    }
     const r = kind === 'scout' ? await scoutOnServer(i) : await packOnServer(i, kind);
     if (!r) return null;
-    if (r.error === 'not_found') { this.ui.toast('Паки ще не підключені на сервері гри'); return false; }
-    if (r.error || !r.hero) { await this.resync(); return false; }
+    if (r.error === 'not_found') { this.ui.toast('Паки ще не підключені на сервері гри'); return { error: 'not_found' }; }
+    if (r.error || !r.hero) { await this.resync(); return { error: r.error || 'server' }; }
     if (Number.isFinite(r.coins)) OP.coins = r.coins;
     adoptHero(i, r.hero); saveOP();
-    return OP.heroes[i];
+    return { hero: OP.heroes[i], replaced: true };
+  }
+  /** Продати героя з лави j на сервері: { gain } або { error }; null — сервер недоступний (тоді нічого не продаємо). */
+  async sell(j) {
+    const e = OP.bench[j]; if (!e) return { error: 'bad_hero' };
+    await this.flush();
+    const r = await sellOnServer(e.id);
+    if (!r) return null;
+    if (r.error || !r.club) { await this.resync(); return { error: r.error || 'server' }; }
+    adoptServer(r.club, false);
+    return { gain: +r.gain || 0 };
   }
   /** «Новий випадковий клуб» на сервері. null — сервера немає, тоді новий клуб робить пристрій. */
   async reset() {
