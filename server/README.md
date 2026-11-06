@@ -24,6 +24,30 @@
 
 Чого ще немає: турнірів (формат вирішує власник), ринку. Віджет рейтингу бота ще показує й клуби, створені `POST /club` і ні разу не відкриті в грі.
 
+## Контракт онлайн-хабу (API 2)
+
+Клієнт уже написаний під цей контракт (`src/online/server.js`, `src/online/cloud.js`). Частини сервер вмикає по одній: `GET /health` → `{ ok, api: 2, features: [...] }`. Частину, якої немає в `features`, гра робить на пристрої, як раніше. Правила беруться з гри через `rules.js`, своїх формул на сервері немає. Кожна зміна монет пише рядок у `coin_ledger`.
+
+| Частина | Маршрути | Що робить сервер |
+|---|---|---|
+| `club` | `POST /club/save`, `GET /me`, `POST /club/train`, `/club/scout`, `/club/reset` | Перший `save` переносить клуб із пристрою з `base` (ліміти: монети ≤ 20 000, рейтинг 0–2400; чистить `fromWire`). Далі приймає лише вигляд, схему й порядок героїв за `id`. Монети, рейтинг, рівні й навички рахує сам. Відповідь `{ club }` у будові `/me → club`: `{ club, heroes, xp, rec, goals, games, coins, rating, lvl }`. `train` і `scout` повертають `{ coins, hero }`. Ще потрібен `POST /club/pack { hero, pack }` для магазину: пак `rare` чи `epic` за ціною й шансами `PACKS`, рідкість `packRarity` (обидва в `src/online/profile.js`), новий герой `newHero` на слот із тим самим номером; відповідь `{ coins, hero }`, помилки `no_coins`, `bad_pack`, `bad_hero`. Без цього маршруту гра каже, що паки на сервері ще не підключені. |
+| `match` | `POST /match/start`: господар `{ code, role: 'host', mode }` → `{ matchId, ticket }`, гість `{ role: 'guest', mode, ticket }` → `{ matchId }` (квиток 24 знаки, у базі хеш, 120 с; гість ≠ господар; за кодом не парує; помилки `bad_ticket`, `self`; без гостя за 120 с матч `solo`). Обмеження: рахунок раніше 200 с — `disputed`; з 4-го матчу пари за київську добу `limited: true` (30 монет, без рейтингу й квестів); монети за голи не більше ніж за 8. Підозріле пишеться в таблицю `flags`. PeerJS: ≤ 40 нових WebSocket за хвилину з адреси (`peerguard.js`). Черга віддає лише непрозорий `opp.id`, `POST /match/result { matchId, me, opp, scorers, forfeit?, void? }`, `GET /match/:id` | Парує старт обох гравців за кодом кімнати (30 с). Звіти збігаються: підтверджено. Розбіжність: `disputed`, без рейтингу, обом 30 монет за участь. Мовчить гість: вірить господарю. Мовчить господар, а гість звітує `forfeit: 'opp'`: технічна перемога гостя. Ніхто не звітував 15 хв: поразка мовчазному. Нагороди як `applyResult`, Ело з K = 32 за серверними рейтингами. Відповідь `{ state, rew, quests, club }` або `{ state: 'wait' }`. |
+| `queue` | `POST /queue { code, avoid? }` (довге очікування ≤ 12 с), `/queue/leave`, `GET /queue/stats` | Черга в пам'яті. Вікно рейтингу ±100, ширшає на +25 за кожні 5 с, до ±400; після 40 с годиться будь-хто. Господар той, хто довше чекав. Відповідь `{ state: 'wait', searching }` або `{ state: 'paired', role, code, opp: { id, name, rating } }`. |
+| `quests` | `GET /quests`, `POST /quests/claim { period, id }` | Ті самі квести, що в грі (`questPeriods`, `dayIds`, `weekIds`, `questDef`, `questStep`, `factsOf` із `src/online/quests.js`). Прогрес рахує підтвердження матчу, технічні результати не рахуються. Незабране зараховується, коли змінився період (`banked`). |
+| `top` | `GET /top?limit=50` | `{ list: [{ place, name, flag, rating, lvl, w, d, l }], me: { place, rating } }`. |
+| `cups` | пропозиція: `GET /cups`, `/cups/:id`, `POST /cups/:id/join`, `/leave`, `/ready` | Формат вирішує власник. Клієнта для турнірів ще немає. Нічия в кубку потребує серії пенальті в онлайні (зміна клієнта й `PROTO`). |
+
+Таблиці бази:
+- `matches`, `match_reports`, `quests(player_id, period, id, p, got_at)`;
+- для кубків `cups`, `cup_entries`, `cup_games`;
+- у `clubs` колонка `imported_at`.
+
+Обмеження, які впливають на дизайн:
+- `api.requestTimeout` 15 с;
+- CORS лише `GET` і `POST`, тож скасування теж через `POST`.
+
+Порядок робіт: `club` + `match`, далі `quests`, `queue`, `top`, `cups`.
+
 ## Бот гри
 
 Той самий процес обслуговує бота з `BOT_TOKEN` (`src/bot/`). Telegram шле оновлення на `https://<DOMAIN>/tg`; без `PUBLIC_URL` (локально) бот сам опитує Telegram.

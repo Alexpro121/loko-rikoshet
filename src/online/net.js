@@ -7,7 +7,7 @@
 
 import { peerServer, iceServers, markDown } from './server.js';
 
-const PREFIX = 'lokorush-v1-';
+export const PREFIX = 'lokorush-v1-';
 const TK_KEY = 'loko-online-tk';
 const FRAME_QUEUE = 16e3;                            // ~5 кадрів (250 мс): кадр — 3.2 КБ, 20/с, тобто 64 КБ/с. Далі черга лише старить картинку, свіжий кадр важливіший
 const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';     // без 0/O, 1/I — код легко продиктувати
@@ -34,7 +34,7 @@ function tabToken() {
 }
 
 // чанк PeerJS вантажиться лише тут: після релізу старий файл зник (404), а збій import() браузер пам'ятає, тож допоможе лише перезавантаження
-async function loadPeer() {
+export async function loadPeer() {
   if (!PeerCls) { try { PeerCls = (await import('peerjs')).Peer; } catch (e) { console.error(e); throw Object.assign(new Error('chunk'), { type: 'chunk' }); } }
   return PeerCls;
 }
@@ -51,7 +51,7 @@ async function ownConfig() {
 }
 
 /** Peer на своєму сервері, а якщо він недоступний — на публічному. peer.via каже, де саме ('own' | 'public'). */
-async function openPeer(Peer, id, publicOnly = false) {
+export async function openPeer(Peer, id, publicOnly = false) {
   const own = !publicOnly && peerServer() && await ownConfig();
   if (own) {
     try { return Object.assign(await openWith(Peer, id, own, OWN_WAIT), { via: 'own' }); } catch (e) {

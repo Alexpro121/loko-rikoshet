@@ -183,7 +183,16 @@
 
 | Завдання | Де |
 |---|---|
-| Вкладка «Онлайн» | `src/online/screen.js` |
+| Онлайн-хаб: верх, нижня навігація, вкладки | `TABS`, `html`, `back` у `src/online/screen.js`; на весь екран `hub-open`/`hub-on` в `openPanel` і `leaveHub` у `src/ui/ui.js`, стилі `.hub*` в `src/style.css` |
+| Воксельні предмети онлайн-хабу (контейнери паків, бінокль, предмети квестів, п'єдестал, іконки навігації) | моделі в `VOX` і `container` у `src/ui/vox.js`; хто що показує — `QUEST_ART`, `PACK_ART`, `TABS` у `src/online/screen.js`; відкриття паку `revealHero(h, kind)` і стилі `.pk-open`; анімація при відкритті вкладки — частини моделі (`tag(blocks, 'назва')` → `<g class="vx-назва">`) і правила `.hub-nb.fx .vx-…` у `src/style.css`, клас `fx` ставить `html()` лише в мить перемикання |
+| Магазин онлайн-хабу: паки, ціни, шанси рідкості | `PACKS`, `packRarity`, `buyPack` у `src/online/profile.js`; вітрина `shopHtml`, купівля `buy` у `src/online/screen.js`; із сервером гри `Cloud.buy`, `packOnServer` (`POST /club/pack`) |
+| Головна онлайн-хабу: зірка, плитки, карусель режимів | `homeHtml`, `starHtml`, `slideHtml`, `featInit`, `featGo` у `src/online/screen.js`; стилі `.hub-home`, `.hub-sl`, `.hub-tile` |
+| Стадіон у тлі хабу: камера, трибуни | `startStage`, `stopStage`, `stageCam` у `src/core/game.js`; `restage` у `src/online/screen.js` |
+| Новий режим онлайну (турнір тощо) | запис у `MODES` у `src/online/modes.js` (плитка, `on`, `why`, `act`, за потреби `tab` зі своїм екраном); дію додай в `OnlineScreen.act` |
+| Квести: пул, нагороди, час оновлення | `DAY`, `WEEK`, `syncQuests`, `questMatch`, `matchFacts` у `src/online/quests.js`; виклик у `Online.finish` (`src/online/session.js`); екран `questsHtml`, `questMini` у `src/online/screen.js` |
+| Онлайн-хаб на сервері гри: які частини ввімкнені, виклики API 2 | `features`, `has`, `call` і обгортки (`saveClub`, `matchStart`, `queueJoin`, `serverQuests`, `topList`…) у `src/online/server.js`; логіка в `Cloud` (`src/online/cloud.js`); прийняття клубу від сервера `adoptServer`, `adoptHero`, `toServer` у `src/online/profile.js`; контракт у `server/README.md` |
+| Черга сервера для швидкого матчу | `qloop`, `unqueue`, `patchSeek` у `src/online/session.js` |
+| Швидкий матч: маяки, тайм-аути | `SLOTS`, `ASK_MS`, клас `Seeker` у `src/online/seek.js`; сценарій `seek`, `relight`, `seekJoin`, `reseek`, `GIVE_MS` у `src/online/session.js` |
 | Адреса сервера гри, власний PeerJS і ретранслятор | `SERVER_URL` у `src/online/server.js`, `openPeer` у `src/online/net.js`; сам сервер у `server/` |
 | Бот гри: меню, команди, тексти, описи профілю | `server/src/bot/texts.js`; логіка в `server/src/bot/index.js` |
 | Вигляд карток бота (клуб, виклик, рейтинг) | `server/src/bot/widgets/*.html` (до 4 КБ стиснутого, тест у `server/test/bot.test.js`) |
@@ -195,7 +204,7 @@
 | Схеми онлайн-клубу, обмін героїв | `ONLINE_FORMS`, `setForm`, `swapHeroes` у `src/online/profile.js`; нова схема також у `FORMATIONS` у `src/config.js` |
 | Тактичне поле, запас, обмін | клас `Tactics` і `DEPTH` у `src/ui/tactics.js`; адаптери: `squadHtml` у `src/ui/ui.js`, конструктор `OnlineScreen` |
 | Гравець на весь зріст | `mountTurntable`, `RELEASE_MS` у `src/ui/portrait.js` |
-| Панель на весь низький екран, сон острова | `panelCovers` у `src/ui/ui.js`, блоки `max-height: 500px` і `pointer: coarse` в онлайн-розділі `src/style.css` |
+| Панель на весь низький екран, сон острова | `panelCovers` у `src/ui/ui.js` (онлайн-хаб закриває екран завжди), блоки `max-height: 500px` і `pointer: coarse` в онлайн-розділі `src/style.css` |
 | Схема в кар'єрі | `S.tactic`, `CAREER_FORMS`, `setTactic`, `swapStarters` у `src/state/squad.js` |
 | Прапор: візерунки, знаки, оздоба, стилі генератора, палітра | `PATS`, `EMB`, `PLATE`, `OV`, `STYLE`, `FLAG_COLS`, `rollFlag`, `normFlag` у `src/online/flag.js` |
 | Редактор прапора | `feHtml`, `patchFlag`, `flagDone` у `src/online/screen.js` |

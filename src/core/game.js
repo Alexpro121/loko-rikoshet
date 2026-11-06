@@ -118,6 +118,25 @@ export class Game {
   /** Під заслоном стадіону не видно: тоді ні оновлення, ні кадру. Вмикає вхід, коли отвір O стає прозорим. */
   splashView(on) { if (this.splash) this.splash.show = on; }
   /**
+   * Онлайн-хаб стоїть на своєму стадіоні: та сама порожня сцена матчу, що на екрані ЛОКО РАШ (startSplash), трибуни в кольорах
+   * онлайн-клубу (club — matchClub), камера повільно йде вздовж поля. Повторний виклик лише перефарбовує трибуни (setHome має свій ключ).
+   * false — стадіону немає (рівень 0, сцена не збудувалась): тоді хаб на суцільному тлі.
+   */
+  startStage(club) {
+    if (this.splash && !this.splash.hub) return false;        // ще йде екран ЛОКО РАШ
+    if (!this.splash && !this.startSplash()) return false;
+    this.splash.hub = true;
+    try { this.splash.v.stands.setHome(club || null); } catch (e) { console.warn(e); }
+    return true;
+  }
+  stopStage() { if (this.splash && this.splash.hub) this.stopSplash(); }
+  /** Камера хабу: на висоті трибуни першого ряду, повільно вздовж бровки, погляд на протилежну трибуну. Без алокацій. */
+  stageCam(sp) {
+    const c = sp.cam, t = sp.t, x = Math.sin(t * 0.045) * 15;
+    c.position.set(x, 2.5 + Math.sin(t * 0.21) * 0.1, 5);
+    c.rotation.set(0.13 + Math.sin(t * 0.17) * 0.01, -x * 0.011 + Math.sin(t * 0.07) * 0.12, 0);
+  }
+  /**
    * Камера повільно оглядає трибуни; після удару назви короткий поштовх. До м'яча вона стоїть трохи позаду центрального кола.
    * Щойно з'явився 3D-м'яч, камера стартує з його швидкістю (м'яч на екрані стоїть, як і плаский перед ним) і плавно гальмує
    * до центрального кола: крива Ерміта з початковою швидкістю м'яча й нульовою в кінці, тож без ривка й без відкату назад.
@@ -129,6 +148,7 @@ export class Game {
     if (sp.ball) this.splashBallStep(dt);
     v.stands.update(dt); v.surround.update(dt); v.pitch.boards.update(dt);
     if (c.aspect !== this.w / this.h) { c.aspect = this.w / this.h; c.fov = c.aspect < 1.5 ? 50 : 40; c.updateProjectionMatrix(); }
+    if (sp.hub) return this.stageCam(sp);
     const sx = Math.sin(sp.t * 0.5) * 0.06;
     if (sp.ball) {
       sp.ct = Math.min(SPLASH_LOCK + SPLASH_FLY, sp.ct + dt);

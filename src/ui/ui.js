@@ -44,7 +44,7 @@ const sheet = (title, body, cls = '') => `
 </div>`;
 
 const LOW_SCREEN = matchMedia('(max-height: 500px)');
-const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .on-bench, .sym, .on-play, .on-id, .on-fe-b, .set-grid, .cu-wrap, .cu-opts, .stad-i, .tiers';
+const SCROLLS = '.scroller, .scroller > .tcard, .scroller > .chap, .sq-d, .on-bench, .sym, .on-play, .on-id, .on-fe-b, .set-grid, .cu-wrap, .cu-opts, .stad-i, .tiers, .hub-q, .hub-top ol';
 /** Замінює вміст вікна; keep — те саме вікно малюється заново, тож прокрутка лишається на місці. */
 function redraw(host, html, keep) {
   const sc = keep ? [...host.querySelectorAll(SCROLLS)].map((n) => [n.scrollLeft, n.scrollTop]) : [];
@@ -187,6 +187,7 @@ export class UI {
     else if (!this.el.settings.hidden) this.closeSettings();
     else if (!this.el.custom.hidden) this.closeCustom();
     else if (this.game.sm.name === 'MATCH') { if (!this.el.pause.hidden) this.act('resume'); else this.pause(); }
+    else if (this.panel === 'online' && this.online && this.online.back()) return;   // хаб: спершу на «Матч», скасувати пошук, а вже потім вихід у кар'єру
     else if (this.panel) this.closePanel();
   }
   canGoBack() {
@@ -581,20 +582,29 @@ export class UI {
 
   // ---------------------------------------------------------------- панелі
   openPanel(name) {
+    if (name === 'online' && this.panel !== 'online' && this.online) { this.online.tab = 'play'; this.online.navAt = null; this.online.tac.swapFrom = null; setTimeout(() => this.online.onOpen(), 0); }   // хаб відкривається з «Матчу»; сервер гри підтягує клуб і квести
+    if (this.panel === 'online' && name !== 'online') this.leaveHub();
     this.panel = name;
     const wide = name === 'online' || name === 'transfers';           // ці панелі на низькому екрані займають його весь
+    const hub = name === 'online';                                    // онлайн-хаб — окремий розділ: на весь екран за будь-якої висоти, меню кар'єри сховане
     this.el.menu.classList.toggle('panel-full', wide); this.el.panel.classList.toggle('full', wide);
+    this.el.menu.classList.toggle('hub-open', hub); this.el.panel.classList.toggle('hub-on', hub);
     this.el.panel.hidden = false; this.el.menu.classList.add('panel-open');
     this.el.nav.querySelectorAll('.nb').forEach((b, i) => b.classList.toggle('on', ['match', 'transfers', 'academy', 'stadium', 'online'][i] === name));
     this.renderPanel();
   }
   /** Панель закрила весь екран: острів за нею не видно, тож малювати його нема потреби. */
-  panelCovers() { return !!this.panel && this.el.panel.classList.contains('full') && LOW_SCREEN.matches; }
+  panelCovers() {
+    if (this.panel === 'online') return !(this.game && this.game.splash && this.game.splash.hub);   // хаб на стадіоні: стадіон малюється; без нього тло суцільне
+    return !!this.panel && this.el.panel.classList.contains('full') && LOW_SCREEN.matches;
+  }
+  /** Вийшов з онлайн-хабу: «готовий» знімається (матч не має початись сам), пошук суперника зупиняється, стадіон хабу гасне. Кімната з другом лишається. */
+  leaveHub() { if (this.online) { this.online.s.unready(); this.online.s.stopSeek(); } if (this.game) this.game.stopStage(); }
   closePanel(silent) {
     if (this.tac) this.tac.reset();
     if (this.online && this.online.tac) this.online.tac.reset();
-    if (this.panel === 'online' && this.online) this.online.s.unready();   // із закритою панеллю онлайн-матч не має початись сам
-    this.panel = null; this._pv = null; this.el.panel.hidden = true; this.el.menu.classList.remove('panel-open', 'panel-full'); this.el.panel.classList.remove('full');
+    if (this.panel === 'online') this.leaveHub();
+    this.panel = null; this._pv = null; this.el.panel.hidden = true; this.el.menu.classList.remove('panel-open', 'panel-full', 'hub-open'); this.el.panel.classList.remove('full', 'hub-on');
     this.el.nav.querySelectorAll('.nb').forEach((b, i) => b.classList.toggle('on', i === 0));
   }
 
