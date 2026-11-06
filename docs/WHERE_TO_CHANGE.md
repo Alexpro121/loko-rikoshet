@@ -226,6 +226,7 @@
 | Кнопка «назад» Telegram, підтвердження виходу | `bindTelegram` у `src/core/telegram.js`, `UI.goBack`, `UI.canGoBack` |
 | Хмарна копія збереження | `pullCloud`, `pushCloud`, `CLOUD_KEYS` у `src/core/telegram.js` |
 | Відступи від вирізу екрана й кнопок Telegram | `--safe-*`, `--pad-*` у `src/style.css` |
+| Розмір і прозорість кнопки паузи в матчі (напівпрозора, ледь видна над м'ячем, повна перші 3 с) | `.pause-btn` у `src/style.css`, `Minimap.pauseCheck`, `Hud.pauseDim` і `show` у `src/ui/hud.js` |
 | Табло й пауза матчу поруч із кнопками Telegram («Назад», «⌄ ⋮») у повному екрані | `--tgb`, `--tgb-l`, `--tgb-r`, `--hud-t` у `src/style.css`; зони мінімапи `.z-bug`, `.z-pause` |
 | Офлайн-кеш, прийняття релізу | `adopt`, `shell`, `fits` у `public/sw.js` |
 | Частота кадрів у паузі, помилка в кадрі | `still` у `Game.step`, `Game.onFrameError` у `src/core/game.js` |

@@ -58,7 +58,7 @@ export class Hud {
     const q = (id) => root.querySelector('#' + id);
     this.el = q('hud');
     this.t = { title: q('h-title'), time: q('h-time'), coins: q('h-coins'), me: q('h-sc-me'), opp: q('h-sc-opp'), oppName: q('h-opp-name'), crestMe: q('h-crest-me'), crestOpp: q('h-crest-opp'), warn: q('h-warn'), combo: q('h-combo'), banner: q('h-banner'), banT: q('h-ban-t'), banS: q('h-ban-sub'), banN: q('h-ban-note'), goal: q('h-goal'), mday: q('h-mday'), hint: q('h-hint'), hintT: q('h-hint-t'), floats: q('h-floats'), mid: root.querySelector('#h-bug'), half: q('h-half'), pcard: q('h-pcard') };
-    this.t.sig = q('h-sig'); this._sig = '';
+    this.t.sig = q('h-sig'); this._sig = ''; this.t.pause = root.querySelector('.pause-btn');
     Object.assign(this.t, { prog: q('h-prog'), tmM: this.t.time.querySelector('.tm-m'), tmS: this.t.time.querySelector('.tm-s'), extra: q('h-extra'), extraN: q('h-extra-n'), extraT: q('h-extra-t'), bgoal: q('h-bug-goal'), bgoalT: q('h-bug-goal-t'), scard: q('h-scard') });
     this.floatEls = [];
     // напис, що дограв, ховаємо зовсім: інакше після display:none (кінець матчу, новий старт) браузер програє його анімацію знову на старому місці
@@ -72,6 +72,7 @@ export class Hud {
     this.el.hidden = false;
     this.t.mid.classList.remove('enter'); void this.t.mid.offsetWidth; this.t.mid.classList.add('enter'); clearTimeout(this.tm.enter); this.tm.enter = setTimeout(() => this.t.mid.classList.remove('enter'), 1600);
     if (this.onShow) this.onShow();
+    this.t.pause.classList.add('wake'); clearTimeout(this.tm.wake); this.tm.wake = setTimeout(() => this.t.pause.classList.remove('wake'), 3000); this.pauseDim(false);
     this.spec = spec; this.goalLive = false; this.t.bgoal.hidden = true; this.t.scard.hidden = true; this.el.classList.remove('bug-off');
     this.t.title.textContent = spec.leagueName + ' · ' + spec.no + '/' + spec.of;
     this.t.oppName.textContent = spec.club.short || spec.club.name.slice(0, 3).toUpperCase();
@@ -202,6 +203,9 @@ export class Hud {
     if (k === this._sig) return;
     this._sig = k; this.t.sig.className = 'poss ' + k;
   }
+  /** М'яч під паузою: кнопка ледь видна, щоб не закривати гру. */
+  pauseDim(on) { if (on !== this.dimP) { this.dimP = on; this.t.pause.classList.toggle('dim', on); } }
+
   setCoins(n) {
     if (n === this.last.coins) return;
     this.last.coins = n; this.t.coins.textContent = n; this.bump(this.t.coins);
