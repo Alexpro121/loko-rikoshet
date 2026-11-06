@@ -81,7 +81,7 @@ const BAN_NORMAL = `#include <beginnormal_vertex>
   objectNormal = bnRot(objectNormal, bnZ, bnX, aRot.x);`;
 const BAN_POS = `#include <begin_vertex>
   if (bnK < 1.5) {
-    float bnCl = smoothstep(0.65, 0.95, position.y);
+    float bnCl = bnK < 0.5 ? smoothstep(0.65, 0.95, position.y) : smoothstep(0.0, 0.6, position.x);   // прапор тримається за древко, хвилюється вільний край
     float bnW = aPiv.x * 0.8 + aPiv.z * 0.6;
     transformed.z += sin(position.x * 2.8 + uWave + bnW) * (0.05 + 0.2 * uAmp) * bnCl;
     transformed.y += sin(uFlut + bnW + position.x) * 0.05 * uAmp * bnCl;
@@ -225,7 +225,8 @@ function crowdMat() {
 const RX = { goal: 1, groan: 2, gasp: 3, wave: 4, clap: 5, flash: 6, miss: 7 };
 const DUR = { goal: 3.8, groan: 2.6, gasp: 1.2, wave: 4.2, clap: 2.6, flash: 3.2, miss: 2.2 };
 const TAIL = 0.8;                                   // с: стільки ще йде реакція, що розходиться від м'яча (CROWD_VS, rt −= відстань)
-const FADE = 0.3;                                   // с: стільки згасає попередня реакція, коли поверх неї почалась нова
+const FLAG_TOP = 3.0;                               // верхівка древка прапора над рядом (рядом стоять глядачі ~1.5 заввишки)
+const FADE = 0.3;                                  // с: стільки згасає попередня реакція, коли поверх неї почалась нова
 
 const _fm = new THREE.Matrix4(), _fp = new THREE.Vector3(), _fs = new THREE.Vector3(), _fq = new THREE.Quaternion();
 /** Свій генератор для спалахів і диму: натовп не бере Math.random, тож не зсуває випадковість гри в симуляторі. */
@@ -384,9 +385,10 @@ export class Stands {
     const gH = [], gA = [], gP = [];
     this.flagPos = [];                               // для диму з домашніх прапорів
     for (const sp of spots) {
-      const w = 2.4, hh = 1.5, ph = Math.random() * 6.28, y = sp.y - 0.9;
-      const cloth = new THREE.PlaneGeometry(w, hh, 14, 1); cloth.translate(w / 2 - 0.05, 0.7 + hh / 2, 0);
-      const pole = new THREE.CylinderGeometry(0.05, 0.05, 4.4, 5); pole.translate(0, 2.2, 0);
+      // древко з рук глядача (0.5 над рядом) до FLAG_TOP, полотнище висить на самій верхівці
+      const w = 1.6, hh = 1.0, ph = Math.random() * 6.28, y = sp.y - 0.9;
+      const cloth = new THREE.PlaneGeometry(w, hh, 14, 1); cloth.translate(w / 2 - 0.03, FLAG_TOP - hh / 2, 0);
+      const pole = new THREE.CylinderGeometry(0.04, 0.04, FLAG_TOP - 0.5, 5); pole.translate(0, (FLAG_TOP + 0.5) / 2, 0);
       (sp.home ? gH : gA).push(pin(cloth, sp.x, y, sp.z, ph, sp.ry, 1));
       gP.push(pin(pole, sp.x, y, sp.z, ph, sp.ry, 2));
       this.flagPos.push({ x: sp.x, y, z: sp.z, home: sp.home });
@@ -518,7 +520,7 @@ export class Stands {
       if (this.smokeT <= 0) {
         this.smokeT = 0.16;
         const f = this.flagPos[(vrand() * this.flagPos.length) | 0];
-        if (f && f.home) this.particles.emit(f.x, f.y + 4.6, f.z, (vrand() - 0.5) * 0.8, 1.6, (vrand() - 0.5) * 0.8, 1.9, 0.5, vrand() < 0.5 ? '#d6282f' : '#f1efe8', -1.2, 0.8, 0, 0.6);
+        if (f && f.home) this.particles.emit(f.x, f.y + FLAG_TOP + 0.2, f.z, (vrand() - 0.5) * 0.8, 1.6, (vrand() - 0.5) * 0.8, 1.9, 0.5, vrand() < 0.5 ? '#d6282f' : '#f1efe8', -1.2, 0.8, 0, 0.6);
       }
     }
   }

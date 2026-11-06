@@ -142,13 +142,13 @@ Ragdoll: падіння гравця як система точок Верле; 
 - **Ragdoll** :52
   constructor:63, com:94, setDrive:102, frame:118, step:126, limitKnees:218, minDist:232, limitLegs:244, legLim:261, limitBody:274, closest:283, segSep:294, nudge:311, faceDown:314, apply:322
 
-## src/graphics/stands.js (562 рядків)
+## src/graphics/stands.js (564 рядків)
 
 Stands: трибуни й глядачі (анімація в шейдерах), реакції натовпу на гру, банери, прапори, сектор гостей.
 
 - Внутрішні функції: drawAtlas:15, bannerAtlas:30, bannerMat:90, pin:99, crowdMat:213
-- **Stands** :235
-  constructor:236, buildBanners:351, addCloth:370, buildFlags:376, buildAway:400, setOpponent:418, setHome:440, react:464, cheer:473, chantEnv:476, setDetail:482, update:492, track:531, runFlashes:550
+- **Stands** :236
+  constructor:237, buildBanners:352, addCloth:371, buildFlags:377, buildAway:402, setOpponent:420, setHome:442, react:466, cheer:475, chantEnv:478, setDetail:484, update:494, track:533, runFlashes:552
 
 ## src/graphics/surround.js (129 рядків)
 
