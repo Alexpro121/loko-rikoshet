@@ -19,9 +19,9 @@ export const serverOn = () => !!SERVER_URL && Date.now() >= downUntil;
 /** Збій сервера: хвилину гра обходиться без нього. */
 export function markDown() { downUntil = Date.now() + DOWN_MS; }
 
-/** Налаштування PeerJS для власного сервера кімнат або null. */
-export function peerServer() {
-  if (!serverOn()) return null;
+/** Налаштування PeerJS для власного сервера кімнат або null. force — навіть якщо сервер щойно падав (пошук кімнати там). */
+export function peerServer(force = false) {
+  if (!SERVER_URL || (!force && !serverOn())) return null;
   const u = new URL(SERVER_URL);
   return { host: u.hostname, port: u.port ? Number(u.port) : (u.protocol === 'https:' ? 443 : 80), path: '/p/', secure: u.protocol === 'https:' };
 }
@@ -31,7 +31,12 @@ async function api(path, init = {}, wait = API_WAIT) {
   let r;
   try {
     r = await fetch(SERVER_URL + path, { ...init, signal: ctl.signal });
-  } catch (e) { markDown(); throw e; } finally { clearTimeout(t); }
+  } catch (e) {
+    // довге очікування черги, обірване нами ж, — не падіння сервера: інакше хвилину кімнати й маяки відкривались би на
+    // публічному PeerJS, а суперники лишались на своєму, і пошук не зводив би їх (BUGS NET-6)
+    if (!(e && e.name === 'AbortError' && wait > API_WAIT)) markDown();
+    throw e;
+  } finally { clearTimeout(t); }
   if (r.status >= 500) markDown();
   if (!r.ok) { let code = ''; try { code = (await r.json()).error || ''; } catch (_) { /* не JSON */ } throw Object.assign(new Error('api'), { status: r.status, code }); }
   return r.json();
@@ -92,8 +97,8 @@ export async function features() {
   try {
     const r = await api('/health');
     feats = new Set(r && r.api >= 2 && Array.isArray(r.features) ? r.features.map(String) : []);
-  } catch (_) { feats = NONE; }
-  featsAt = Date.now();
+    featsAt = Date.now();
+  } catch (_) { feats = NONE; featsAt = Date.now() - FEATS_MS + DOWN_MS; }   // збій /health: без частин хвилину, а не 10
   return feats;
 }
 /** Те саме без очікування: за останньою відповіддю /health (для розмітки й синхронних рішень). */

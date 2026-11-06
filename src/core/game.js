@@ -12,6 +12,7 @@ import { CineFX } from '../graphics/cinefx.js';
 import { CamDirector, camInfoBlank } from './camera.js';
 import { appHidden, inTelegram, tgFullscreen, tgEnterFullscreen, tgToggleFullscreen } from './telegram.js';
 import { DETAIL, MAX_LEVEL, loadPerf, savePerf } from './perf.js';
+import { releaseTurntable } from '../ui/portrait.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const _v = new THREE.Vector3();
@@ -101,10 +102,12 @@ export class Game {
 
   /** Екран ЛОКО РАШ стоїть на справжньому стадіоні: камера в центрі поля дивиться на трибуни. Гравців і м'яча ще немає. Сцену матчу все одно збудував би «ГРАТИ». */
   startSplash() {
-    if (this.splash || this.level < 1 || this.lost) return false;
+    if (this.splash || this.level < 1 || this.lost || (this.sm.name && this.sm.name !== 'MENU')) return false;   // лише в меню: сцена матчу тоді вільна
+    let off = null, was = null;
     try {
-      const v = this.ensureMatch().view, off = [...v.players.map((p) => p.root), v.ball.group, v.shadows, v.aim.mesh, v.ring, v.band];
-      const was = off.map((o) => o.visible);
+      const v = this.ensureMatch().view;
+      off = [...v.players.map((p) => p.root), v.ball.group, v.shadows, v.aim.mesh, v.ring, v.band];
+      was = off.map((o) => o.visible);
       for (const o of off) o.visible = false;
       v.setEnv('day', 'clear');
       this.renderer.toneMappingExposure = v.exposure || 1.1;
@@ -113,7 +116,11 @@ export class Game {
       this.warmShaders(false);
       this.updateSplash(0);
       return true;
-    } catch (e) { console.warn(e); this.splash = null; return false; }
+    } catch (e) {                                                   // збій посередині: сховане повертаємо, інакше м'яч, тіні й гравці зникли б з усіх наступних матчів
+      console.warn(e);
+      if (off) off.forEach((o, i) => { o.visible = was[i]; });
+      this.renderer.toneMappingExposure = 1.1; this.splash = null; return false;
+    }
   }
   /** Під заслоном стадіону не видно: тоді ні оновлення, ні кадру. Вмикає вхід, коли отвір O стає прозорим. */
   splashView(on) { if (this.splash) this.splash.show = on; }
@@ -123,6 +130,7 @@ export class Game {
    * false — стадіону немає (рівень 0, сцена не збудувалась): тоді хаб на суцільному тлі.
    */
   startStage(club) {
+    if (this.sm.name !== 'MENU') return false;                  // хаб відкрили на мить перед стартом матчу (onOpen іде таймером): стадіон-заставка не має лізти в матч
     if (this.splash && !this.splash.hub) return false;        // ще йде екран ЛОКО РАШ
     if (!this.splash && !this.startSplash()) return false;
     this.splash.hub = true;
@@ -254,6 +262,11 @@ export class Game {
     this.sm.add('MATCH', {
       enter(data) {
         if (data && data.resume) return;
+        // сцена матчу ще стоїть заставкою (хаб, або екран ЛОКО РАШ, коли в матч зайшли за посиланням без «ГРАТИ»): вона сховала
+        // гравців, м'яч і тіні й тримає свою камеру м'яча. Без цього матч ішов би без них (BUGS GFX-1)
+        if (g.splash) g.stopSplash();
+        const ttl = g.ui.el.splash; if (ttl && !ttl.hidden && !ttl.classList.contains('out')) g.ui.hideSplash();   // і сам екран ЛОКО РАШ поверх матчу
+        releaseTurntable();
         g.ui.hideMenu();
         if (data.guest) { g.ensureMatch(); g.match = data.guest; data.guest.start(data.spec, data.hudSpec); g.warmShaders(false); return; }   // онлайн-гість: показ гри господаря
         g.match = g.ensureMatch(); g.match.start(data.spec); g.warmShaders(false);

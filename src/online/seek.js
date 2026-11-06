@@ -1,6 +1,6 @@
 // Швидкий матч без черги на сервері: «маяки» на фіксованих адресах PeerJS (SLOTS штук на версію протоколу).
-// Хто шукає, спершу обходить маяки по черзі: маяк віддає першому, хто прийшов, код своєї кімнати й гасне, а той заходить у кімнату
-// звичайним Net.join. Ніхто не відповів: сам стає маяком (кімната через Net.host і перша вільна адреса маяка). Адреса виявилась
+// Хто шукає, обходить маяки (усі адреси разом) і просить код ('want') лише в одного: маяк віддає код своєї кімнати тому, хто
+// попросив першим, і гасне, а той заходить у кімнату звичайним Net.join. Ніхто не відповів: сам стає маяком (кімната через Net.host і перша вільна адреса маяка). Адреса виявилась
 // зайнятою — там щойно засвітився інший, і ми питаємо його: двоє, що почали шукати одночасно, не чекають одне одного на різних маяках.
 // Маяки живуть на тому сервері кімнат, де відкрито кімнату (свій або публічний), тож гравці бачать лише маяки свого сервера.
 // Суперник випадковий: рейтингу маяк не знає. Підбір за рейтингом потребує черги на сервері гри (server/README.md).
@@ -9,7 +9,9 @@ import { loadPeer, openPeer, cleanCode, PREFIX, PROTO } from './net.js';
 export const SLOTS = 8;
 const ASK_MS = 5000;                     // маяк мовчить довше: завислий (вкладку закрили, а сервер ще не помітив)
 const LINGER_MS = 400;                   // відповідь маяка має встигнути піти, перш ніж він згасне
-const beaconId = (i) => PREFIX + 'qm' + PROTO + '-' + i;
+// 'b' — маяк віддає код лише на прохання 'want'. Старі клієнти (код одразу при з'єднанні) живуть на інших адресах і з новими не змішуються
+const beaconId = (i) => PREFIX + 'qm' + PROTO + 'b-' + i;
+const WANT = { t: 'want' };
 
 export class Seeker {
   constructor() { this.off = false; this.probe = null; this.beacon = null; this.code = ''; this.onGive = null; }
@@ -28,11 +30,36 @@ export class Seeker {
     return this.probe;
   }
 
-  /** Обійти маяки: код кімнати першого, хто відповів, або ''. */
+  /**
+   * Обійти маяки: код кімнати першого, хто відповів, або ''. Усі адреси питаємо разом: про порожню адресу сервер кімнат
+   * відповідає (EXPIRE) лише через ~5 с, тож по черзі обхід 8 адрес тривав ~40 с, і весь цей час гравець ні світив свого маяка,
+   * ні стояв у черзі сервера: двоє, що шукали водночас, не бачили одне одного (BUGS NET-6). Разом — не довше за ASK_MS.
+   */
   async scan() {
     const p = await this.probePeer();
-    for (let i = 0; i < SLOTS && !this.off; i++) { const c = await this.ask(p, i); if (c) return c; }
-    return '';
+    if (this.off || p.disconnected || p.destroyed) return '';
+    return new Promise((res) => {
+      let left = SLOTS, done = false, asked = null;
+      const conns = [], gone = new Set();
+      const finish = (c) => {
+        if (done) return; done = true; clearTimeout(to); p.off('error', onErr);
+        for (const x of conns) try { x.close(); } catch (_) { /* ignore */ }
+        res(c);
+      };
+      const miss = (i) => { if (gone.has(i)) return; gone.add(i); if (conns[i] === asked) asked = null; if (--left <= 0) finish(''); };
+      const onErr = (e) => { if (!e || e.type !== 'peer-unavailable') return; const m = /qm\d+b-(\d+)/.exec(String(e.message || '')); if (m) miss(+m[1]); };
+      const to = setTimeout(() => finish(''), ASK_MS);
+      p.on('error', onErr);
+      for (let i = 0; i < SLOTS; i++) {
+        const c = p.connect(beaconId(i), { label: 'qm', reliable: true, serialization: 'json' });
+        conns.push(c);
+        // код просимо лише в одного маяка за раз: інакше погасли б маяки кількох гравців, а прийти ми можемо лише до одного
+        c.on('open', () => { if (done) return; if (asked) { try { c.close(); } catch (_) { /* ignore */ } return; } asked = c; try { c.send(WANT); } catch (_) { /* ignore */ } });
+        c.on('data', (m) => { const k = m && m.t === 'room' ? cleanCode(m.code) : ''; if (k.length === 5) finish(k); });
+        c.on('close', () => miss(i));
+        c.on('error', () => miss(i));
+      }
+    });
   }
   /** Спитати маяк i. Порожньо: адреса вільна, маяк завис або вже віддав код іншому. */
   ask(peer, i) {
@@ -48,6 +75,7 @@ export class Seeker {
       const to = setTimeout(() => end(''), ASK_MS);
       peer.on('error', onErr);
       conn = peer.connect(beaconId(i), { label: 'qm', reliable: true, serialization: 'json' });
+      conn.on('open', () => { try { conn.send(WANT); } catch (_) { /* ignore */ } });
       conn.on('data', (m) => { const c = m && m.t === 'room' ? cleanCode(m.code) : ''; if (c.length === 5) end(c); });
       conn.on('close', () => end(''));
       conn.on('error', () => end(''));
@@ -74,17 +102,19 @@ export class Seeker {
     }
     return { lit: false };
   }
-  /** Маяк віддає код першому, хто прийшов, і гасне: кімната на двох. Решта отримує закрите з'єднання й шукає далі. */
+  /** Маяк віддає код першому, хто попросив, і гасне: кімната на двох. Решта отримує закрите з'єднання й шукає далі. */
   serve(b) {
     b.on('connection', (c) => {
-      c.on('open', () => {
+      c.on('data', (m) => {
+        if (!m || m.t !== 'want') return;
         if (this.beacon !== b || this.off) { try { c.close(); } catch (_) { /* ignore */ } return; }
         try { c.send({ t: 'room', code: this.code }); } catch (_) { /* ignore */ }
         this.dim();
         if (this.onGive) this.onGive();
       });
     });
-    b.on('disconnected', () => { if (this.beacon === b) this.dim(); });   // сервер кімнат моргнув: адресу вже звільнено, маяк засвітить сесія знову
+    // сервер кімнат моргнув: адресу вже звільнено. Сесія засвітить маяк знову (onGive), інакше пошук лишився б без маяка
+    b.on('disconnected', () => { if (this.beacon === b) { this.dim(); if (this.onGive) this.onGive(); } });
   }
   lit() { return !!this.beacon; }
   dim() {

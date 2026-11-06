@@ -43,10 +43,10 @@ const OWN_WAIT = 6000;                               // свій сервер к
 const SERVER_FAIL = ['network', 'server-error', 'socket-error', 'timeout'];
 
 /** Свій сервер гри (src/online/server.js) знайомить гравців і дає ретранслятор; без нього публічний PeerJS. */
-async function ownConfig() {
+async function ownConfig(force = false) {
   const [stunG, stunCf, publicTurn] = PEER_CFG.config.iceServers;
   const relay = await iceServers();                 // спершу API: якщо сервер лежить, peerServer() далі дасть null
-  const own = peerServer();
+  const own = peerServer(force);
   return own && { ...own, config: { iceServers: [stunG, stunCf, ...relay, publicTurn] }, debug: 0 };
 }
 
@@ -118,13 +118,20 @@ export class Net {
     return this.code;
   }
 
-  /** Приєднатися за кодом. Кімнати немає на своєму сервері — шукаємо на публічному: у господаря наш сервер міг бути недоступний. */
+  /**
+   * Приєднатися за кодом. Кімнати немає на одному сервері кімнат — шукаємо на іншому: у господаря свій сервер міг бути
+   * недоступний (кімната на публічному), або недоступним щойно здавався нам (ми на публічному, кімната на своєму).
+   */
   async join(code) {
     const Peer = await loadPeer(); this.role = 'guest'; this.code = cleanCode(code);
     if (!this.peer || this.peer.destroyed) { this.peer = this.kept(await openPeer(Peer)); this.watch(this.peer); }
     try { await this.connectTo(this.peer); } catch (e) {
-      if (e.type !== 'no-room' || this.peer.via !== 'own') throw e;
-      const pub = this.kept(await openPeer(Peer, undefined, true));
+      if (e.type !== 'no-room') throw e;
+      const toOwn = this.peer.via !== 'own', cfg = toOwn && await ownConfig(true);
+      if (toOwn && !cfg) throw e;
+      let pub;
+      try { pub = this.kept(toOwn ? Object.assign(await openWith(Peer, undefined, cfg, OWN_WAIT), { via: 'own' }) : await openPeer(Peer, undefined, true)); }
+      catch (e2) { throw toOwn && e2.type !== 'closed' ? e : e2; }   // свій сервер і справді лежить: кімнати просто немає
       try { await this.connectTo(pub); } catch (e2) { try { pub.destroy(); } catch (_) { /* ignore */ } throw e2; }
       try { this.peer.destroy(); } catch (_) { /* ignore */ }
       this.peer = pub; this.watch(pub);

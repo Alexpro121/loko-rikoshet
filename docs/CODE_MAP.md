@@ -40,14 +40,14 @@ CamDirector: ігрова камера матчу за пресетами CAM_PR
 - **CamDirector** :50
   constructor:51, snap:65, add:67, nearest:70, collect:85, need:122, needOne:131, solve:137, bounds:152, update:174, keepIn:298
 
-## src/core/game.js (655 рядків)
+## src/core/game.js (668 рядків)
 
 Game: рендерер, сцена меню, стейт-машина MENU/MATCH/GOAL/RESULT, головний цикл, ввід, камера матчу, якість.
 
-- Експорти: gfxFail:28
-- Внутрішні функції: springStep:22
-- **Game** :38
-  constructor:39, cineFlat:88, ensureMatch:100, startSplash:103, splashView:119, startStage:125, stopStage:132, stageCam:134, updateSplash:144, splashBall:170, splashBallStep:187, splashRoar:206, stopSplash:208, warmShaders:221, buildStates:234, play:275, toMenu:279, quitMatch:280, onStadiumUpgraded:282, resize:287, basePixelRatio:298, applyPixelRatio:307, resMin:318, fixedLevel:321, setLevel:323, qualityChanged:330, levelDown:340, governor:355, onGlLost:398, onGlRestored:405, onVisibility:411, updateMenuCam:418, computeMatchBase:432, snapCamera:433, addTrauma:435, fovKick:437, updateMatchCam:439, autoFocus:497, screenToGround:513, worldToScreen:524, acquireWake:531, floatWorld:540, bindInput:547, isFullscreen:593, enterFullscreen:594, toggleFullscreen:602, tick:609, onFrameError:617, step:626
+- Експорти: gfxFail:29
+- Внутрішні функції: springStep:23
+- **Game** :39
+  constructor:40, cineFlat:89, ensureMatch:101, startSplash:104, splashView:126, startStage:132, stopStage:140, stageCam:142, updateSplash:152, splashBall:178, splashBallStep:195, splashRoar:214, stopSplash:216, warmShaders:229, buildStates:242, play:288, toMenu:292, quitMatch:293, onStadiumUpgraded:295, resize:300, basePixelRatio:311, applyPixelRatio:320, resMin:331, fixedLevel:334, setLevel:336, qualityChanged:343, levelDown:353, governor:368, onGlLost:411, onGlRestored:418, onVisibility:424, updateMenuCam:431, computeMatchBase:445, snapCamera:446, addTrauma:448, fovKick:450, updateMatchCam:452, autoFocus:510, screenToGround:526, worldToScreen:537, acquireWake:544, floatWorld:553, bindInput:560, isFullscreen:606, enterFullscreen:607, toggleFullscreen:615, tick:622, onFrameError:630, step:639
 
 ## src/core/perf.js (39 рядків)
 
@@ -363,14 +363,14 @@ Walkout: декорації виходу команд: прапори, кили�
 
 - Експорти: FIRST_NAMES:7, newName:52, SURNAME_POOLS:64
 
-## src/online/net.js (232 рядків)
+## src/online/net.js (239 рядків)
 
 Мережа онлайн-матчу: кімната за кодом через PeerJS (публічний сервер лише знайомить двох гравців), далі — пряме
 
 - Експорти: PREFIX:10, PROTO:14, makeCode:15, cleanCode:16, loadPeer:37, openPeer:54
 - Внутрішні функції: tabToken:31, ownConfig:46, openWith:65
 - **Net** :76
-  constructor:77, on:82, emit:83, kept:86, watch:92, host:100, join:122, connectTo:134, attach:147, setupStream:164, onMsg:175, startPing:182, send:194, sendFrame:196, drop:202, offline:205, lost:207, rejoin:215, close:222
+  constructor:77, on:82, emit:83, kept:86, watch:92, host:100, join:125, connectTo:141, attach:154, setupStream:171, onMsg:182, startPing:189, send:201, sendFrame:203, drop:209, offline:212, lost:214, rejoin:222, close:229
 
 ## src/online/profile.js (333 рядків)
 
@@ -393,27 +393,27 @@ Walkout: декорації виходу команд: прапори, кили�
 - **OnlineScreen** :52
   constructor:53, onMenu:90, subKey:98, playState:99, tabs:104, onOpen:106, back:113, html:119, questCard:142, questsHtml:149, topHtml:157, clubCard:168, clubTiles:174, kitsHtml:179, clubHtml:183, feHtml:203, dice:204, thumb:205, feGen:206, feField:214, feEmblem:219, feColors:237, feExtra:244, rollCands:250, remember:251, patchFlag:253, patchFe:260, flagDone:270, syncSoon:273, look:276, afterRender:277, heroDetail:278, heroesHtml:290, revealHero:292, star:311, starHtml:313, mountStar:318, slideHtml:324, homeHtml:336, featInit:354, featGo:380, shopHtml:390, buy:411, restage:431, playHtml:434, stampOf:474, oppCard:476, patchOpp:481, input:493, setColor:514, act:515, copy:605, showResult:611
 
-## src/online/seek.js (99 рядків)
+## src/online/seek.js (129 рядків)
 
 Швидкий матч без черги на сервері: «маяки» на фіксованих адресах PeerJS (SLOTS штук на версію протоколу).
 
 - Експорти: SLOTS:9
-- **Seeker** :14
-  constructor:15, kept:18, probePeer:23, scan:32, ask:38, light:61, serve:78, lit:89, dim:90, stop:94
+- **Seeker** :16
+  constructor:17, kept:20, probePeer:25, scan:38, ask:65, light:89, serve:106, lit:119, dim:120, stop:124
 
-## src/online/server.js (151 рядків)
+## src/online/server.js (156 рядків)
 
 Сервер гри (папка server/): вхід через Telegram, власний PeerJS і паролі до ретранслятора.
 
-- Експорти: SERVER_URL:8, serverOn:18, markDown:20, peerServer:23, login:50, features:89, has:100, saveClub:111, meOnServer:112, trainOnServer:113, scoutOnServer:114, packOnServer:116, resetOnServer:117, matchStart:122, matchReport:123, matchState:124, queueJoin:126, queueLeave:127, queueStats:128, serverQuests:130, claimOnServer:131, topList:133, roomShareId:136, iceServers:142
-- Внутрішні функції: api:29, stored:42, store:45, authed:65, call:106
+- Експорти: SERVER_URL:8, serverOn:18, markDown:20, peerServer:23, login:55, features:94, has:105, saveClub:116, meOnServer:117, trainOnServer:118, scoutOnServer:119, packOnServer:121, resetOnServer:122, matchStart:127, matchReport:128, matchState:129, queueJoin:131, queueLeave:132, queueStats:133, serverQuests:135, claimOnServer:136, topList:138, roomShareId:141, iceServers:147
+- Внутрішні функції: api:29, stored:47, store:50, authed:70, call:111
 
-## src/online/session.js (410 рядків)
+## src/online/session.js (426 рядків)
 
 Онлайн-сесія: кімната за кодом або швидкий пошук (маяки, seek.js) → лобі (обидва бачать клуби одне одного й тиснуть «Готовий») → матч → результат
 
-- **Online** :28
-  constructor:29, role:42, inMatch:43, sendVis:44, onVis:46, busy:58, unready:60, refresh:61, setErr:62, create:65, join:72, seek:81, qloop:99, patchSeek:119, unqueue:124, relight:126, seekJoin:136, retrySeek:146, reseek:148, stopSeek:153, why:155, bind:165, hello:198, sync:200, onMsg:205, setReady:250, buildSpec:259, me:270, startMatch:272, beginGuest:292, onTicket:311, finish:319, guestEnd:335, leave:343, techLoss:353, stopMatch:359, oppLeft:366, dropped:380, rematch:387, toLobby:391, close:399
+- **Online** :29
+  constructor:30, role:43, inMatch:44, sendVis:45, onVis:47, busy:59, unready:61, refresh:62, setErr:63, create:66, join:73, seek:85, qloop:105, patchSeek:125, unqueue:130, relight:132, seekJoin:145, retrySeek:158, reseek:160, stopSeek:165, why:167, bind:177, hello:213, sync:215, onMsg:220, setReady:265, buildSpec:274, me:285, startMatch:287, beginGuest:307, onTicket:326, finish:334, guestEnd:350, leave:358, techLoss:368, stopMatch:374, oppLeft:381, dropped:395, rematch:402, toLobby:406, close:414
 
 ## src/physics/aim.js (123 рядків)
 
@@ -511,12 +511,12 @@ DemoMatch: маленька гра для зразка мінімапи в на�
 - **MapHud** :273
   constructor:274, apply:294, setKits:306, applyAlpha:312, layout:318, compute:328, planHtml:357, refreshPlan:373, animatePlan:379, placeJoyZone:387, update:397, ballCheck:412, pauseCheck:421, bindPreview:432, fitPreview:440, place:445, resetPlace:446, setEdit:448, syncBar:454, initDrag:459
 
-## src/ui/portrait.js (124 рядків)
+## src/ui/portrait.js (134 рядків)
 
 portrait: рендерить 3D-модель гравця один раз у PNG для карток.
 
-- Експорти: portrait:22, mountTurntable:114
-- Внутрішні функції: init:10, viewerInit:55, viewerRelease:73, viewerLook:77, viewerTick:89
+- Експорти: portrait:22, releaseTurntable:81, mountTurntable:124
+- Внутрішні функції: init:10, viewerInit:55, viewerRelease:73, viewerLook:86, viewerTick:98
 
 ## src/ui/splash.js (265 рядків)
 

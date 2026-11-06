@@ -74,6 +74,15 @@ function viewerRelease() {
   if (!v || v.run) return;
   v.r.dispose(); v.r.forceContextLoss(); v = null;
 }
+/**
+ * Звільнити другий WebGL-контекст одразу, а не через RELEASE_MS: матч стартує (збирає шейдери й текстури), а два контексти
+ * на телефоні — це пам'ять, через яку браузер може забрати головний (графіка зникає). Наступний mountTurntable збудує заново.
+ */
+export function releaseTurntable() {
+  if (!v) return;
+  clearTimeout(vRelease); v.run = 0;
+  viewerRelease();
+}
 function viewerLook(look, key) {
   if (v.key === key) return;
   v.key = key;
@@ -87,6 +96,7 @@ function viewerLook(look, key) {
   v.fit = Math.max(1.6, Math.min(3.4, _box.max.y));
 }
 function viewerTick(now) {
+  if (!v) return;                                                     // контекст звільнили наперед (releaseTurntable)
   const c = v.canvas;
   if (!c.isConnected || !c.offsetParent) { v.run = 0; clearTimeout(vRelease); vRelease = setTimeout(viewerRelease, RELEASE_MS); return; }
   if (v.gap && now - v.last < v.gap) { requestAnimationFrame(viewerTick); return; }   // телефон: 30 кадрів, плавності вистачає

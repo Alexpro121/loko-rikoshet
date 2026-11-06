@@ -13,7 +13,7 @@ import { OP, toWire, fromWire, matchClub, awayKit, flagSvg, applyResult, plain, 
 import { Seeker } from './seek.js';
 import { questMatch, matchFacts } from './quests.js';
 import { Cloud } from './cloud.js';
-import { has, queueJoin, queueLeave } from './server.js';
+import { has, features, queueJoin, queueLeave } from './server.js';
 
 const AWAY_MS = 30000;                                       // згорнув гру в матчі довше за це: вийшов
 const OPP_AWAY_MS = 32000;                                   // суперник згорнув і не сказав «bye» (телефон приспав вкладку): трохи пізніше за його власний AWAY_MS
@@ -22,6 +22,7 @@ const BYE_MS = 400;                                          // «bye» має �
 const BUSY_MS = 3000;                                        // «busy» чинний лише на самому старті: посеред матчу чужий клієнт ним нічого не анулює
 const GIVE_MS = 12000;                                       // маяк віддав код, а гість так і не зайшов: світимо знову
 const RELIGHT_MS = 4000;                                     // усі адреси маяків зайняті: пробуємо ще
+const QUICK_BACK_MS = 8000;                                  // гість швидкого матчу пропав із лобі: стільки чекаємо, що повернеться, і лише тоді шукаємо іншого
 const TICKET_MS = 30000;                                     // квиток від господаря не прийшов (у нього немає сервера гри): матч без серверного підрахунку
 const pickEnv = (v, list) => (v === 'random' || !list.includes(v) ? list[(Math.random() * list.length) | 0] : v);
 
@@ -30,7 +31,7 @@ export class Online {
     this.g = game; this.ui = ui; game.online = this;
     this.net = null; this.state = 'idle'; this.code = ''; this.err = ''; this.opp = null; this.ready = { me: false, opp: false };
     this.mode = 'friend'; this.seeker = null; this.seekAt = 0; this.onFound = null;   // mode: 'friend' — кімната за кодом, 'quick' — швидкий пошук
-    this.cloud = new Cloud(this); this.midP = null; this.ticket = null; this.midRes = null; this.qOn = null; this.queued = false; this.searching = null; this.avoid = [];   // сервер гри: cloud.js, черга швидкого матчу
+    this.cloud = new Cloud(this); this.midP = null; this.ticket = null; this.midRes = null; this.qOn = null; this.queued = false; this.searching = null; this.avoid = []; this.joining = '';   // сервер гри: cloud.js, черга швидкого матчу
     this.link = null; this.guest = null; this.last = null; this.lostT = 0; this.lastEnd = null; this.startT = 0; this.onOpp = null;
     // згорнута вкладка: господар перестає рахувати гру, а гість нічим не керує. Суперник дізнається одразу, а не за тайм-аутом
     document.addEventListener('visibilitychange', () => this.onVis());
@@ -77,18 +78,23 @@ export class Online {
     try { await net.join(code); } catch (e) { if (this.net !== net) return; this.close(); this.err = this.why(e); this.refresh(); }
   }
   // ------------------------------------------------------------------ швидкий матч
-  /** Обійти маяки (seek.js); нікого — відкрити кімнату й засвітити маяк. Стан 'seeking' триває, доки суперник не зайде в кімнату. */
+  /**
+   * Відкрити свою кімнату й водночас обійти маяки (seek.js). Кімната готова — одразу в чергу сервера гри (якщо він її веде).
+   * Маяк знайшовся — йдемо в ту кімнату, свою закриваємо; ні — світимо свій. Стан 'seeking' триває, доки суперник не зайде.
+   */
   async seek() {
     this.close(); this.mode = 'quick'; this.state = 'seeking'; this.err = ''; this.seekAt = Date.now(); this.refresh();
     const sk = (this.seeker = new Seeker());
+    const live = () => this.seeker === sk && this.state === 'seeking' && !this.joining;
     try {
-      const code = await sk.scan();
-      if (this.seeker !== sk) return;
-      if (code) { this.seekJoin(code); return; }
+      const scan = sk.scan().catch(() => '');
       const net = (this.net = new Net()); this.bind(net);
       this.code = await net.host();
       if (this.seeker !== sk || this.net !== net) return;
-      if (has('queue')) this.qloop(sk);                     // черга сервера гри підбирає за рейтингом; маяк світить паралельно для тих, хто без сервера
+      if ((await features()).has('queue') && live()) this.qloop(sk);   // черга сервера гри підбирає за рейтингом; маяк світить паралельно для тих, хто без сервера
+      const code = await scan;
+      if (!live()) return;
+      if (code && code !== this.code) { this.seekJoin(code); return; }
       await this.relight();
     } catch (e) { if (this.seeker !== sk) return; this.close(); this.err = this.why(e); this.refresh(); }
   }
@@ -124,22 +130,28 @@ export class Online {
   unqueue() { this.qOn = null; if (this.queued) { this.queued = false; queueLeave(); } }
   /** Маяк для своєї кімнати. Хтось засвітився раніше — закриваємо свою кімнату й ідемо до нього. */
   async relight() {
-    const sk = this.seeker, net = this.net; if (!sk || !net) return;
+    const sk = this.seeker, net = this.net; if (!sk || !net || this.joining) return;
     const again = (ms) => { clearTimeout(this.giveT); this.giveT = setTimeout(() => { if (this.seeker === sk && this.state === 'seeking') this.relight().catch(() => this.retrySeek(sk)); }, ms); };
     sk.onGive = () => again(GIVE_MS);
     const r = await sk.light(this.code, !!(net.peer && net.peer.via === 'public'));
-    if (this.seeker !== sk || this.state !== 'seeking') return;
+    if (this.seeker !== sk || this.state !== 'seeking' || this.joining) return;
     if (r.other) { if (this.net === net) { net.close(); this.net = null; } this.seekJoin(r.other); return; }
     if (!r.lit) again(RELIGHT_MS);
   }
   /** Код від маяка: звичайний вхід у кімнату, але стан лишається пошуком. Не вийшло (кімнату вже зайняли) — шукаємо знову. */
+  // Черга й маяк працюють паралельно й можуть обидва послати в кімнату: другий вхід туди ж ігноруємо, а попереднє з'єднання
+  // закриваємо. Інакше в господаря лишались два наші з'єднання з тією самою міткою, друге він сприймав як повернення гостя після
+  // обриву (Net.host → lost), і швидкий матч одразу кидав знайденого суперника й шукав знову (BUGS NET-6).
   async seekJoin(code) {
     const sk = this.seeker;
-    this.unqueue(); this.code = code;
+    if (this.joining === code && this.net && this.net.role === 'guest') return;
+    this.unqueue(); clearTimeout(this.giveT); this.joining = code; this.code = code;
+    if (sk && sk.lit()) sk.dim();
+    if (this.net) { this.net.close(); this.net = null; }
     const net = (this.net = new Net()); this.bind(net); this.refresh();
     try { await net.join(code); } catch (_) {
       if (this.net !== net || this.seeker !== sk) return;
-      net.close(); this.net = null; this.code = '';
+      net.close(); this.net = null; this.code = ''; this.joining = '';
       this.retrySeek(sk);
     }
   }
@@ -166,7 +178,7 @@ export class Online {
     net.on('open', () => {
       if (this.net !== net) return;
       if (this.seeker) { this.seeker.stop(); this.seeker = null; clearTimeout(this.giveT); }   // суперник у кімнаті: маяк більше не потрібен
-      this.unqueue();
+      this.unqueue(); this.joining = '';
       this.state = 'lobby'; this.ready = { me: false, opp: false }; this.hello(); audio.horn();
       if (this.onFound) this.onFound();
       this.refresh();
@@ -188,7 +200,10 @@ export class Online {
       if (this.net !== net) return;
       if (this.role === 'host') {
         if (this.state === 'match') { this.ui.hud.warn('СУПЕРНИК ВІДКЛЮЧИВСЯ…'); this.lostT = setTimeout(() => this.dropped(), 30000); }
-        else if (this.mode === 'quick') { this.reseek(this.opp ? 'Суперник відключився — шукаємо іншого' : ''); return; }
+        else if (this.mode === 'quick') {                    // гість міг лише моргнути мережею: 'back' скасує таймер
+          this.ready = { me: false, opp: false }; clearTimeout(this.lostT);
+          this.lostT = setTimeout(() => { if (this.net === net && !net.open && this.mode === 'quick') this.reseek(this.opp ? 'Суперник відключився — шукаємо іншого' : ''); }, QUICK_BACK_MS);
+        }
         else { this.state = 'hosting'; if (this.opp) this.ui.toast('Суперник відключився — кімната чекає'); this.opp = null; this.ready = { me: false, opp: false }; }
       } else if (this.state !== 'match') this.state = 'wait';
       this.refresh();
@@ -403,6 +418,7 @@ export class Online {
     if (this.link) { this.link.uninstall(); this.link = null; }
     this.g.link = null;
     if (this.net) { this.net.close(linger); this.net = null; }
+    this.joining = '';
     this.guest = null; this.opp = null; this.ready = { me: false, opp: false };
     if (this.state !== 'result') this.state = 'idle';
     this.code = '';
