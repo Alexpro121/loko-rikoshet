@@ -1,53 +1,76 @@
 <style>
 [hidden]{display:none!important}
-:root{--h:var(--tg-theme-hint-color);--s:var(--tg-theme-secondary-bg-color);--a:var(--tg-theme-button-color);--at:var(--tg-theme-button-text-color)}
-body{margin:0;padding:0 0 max(12px,env(safe-area-inset-bottom));font:15px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums}
-.hd{display:flex;gap:12px;align-items:center;padding:14px;background:#0b3d2a;color:#fff}
-.hd svg{flex:none;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))}
+:root{--h:var(--tg-theme-hint-color,#8a9099);--s:var(--tg-theme-secondary-bg-color,#8882);--a:#254e9c;--b:#e4e8ec;--c:#e8b923}
+body{margin:0;padding:0 0 max(12px,env(safe-area-inset-bottom));font:15px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--tg-theme-text-color)}
+.hd{display:flex;align-items:center;gap:12px;padding:14px 16px 16px;color:#f6f4ec;background:repeating-linear-gradient(90deg,#0f4d34 0 26px,#0b3d2a 26px 52px)}
+.xb{display:block;max-width:100%;height:auto;overflow:visible}
+.xb text{font:italic 900 34px system-ui,sans-serif;stroke-linejoin:round;fill:var(--z);stroke:#06120d;stroke-width:0}
+.xb :first-child{fill:#06120d;stroke-width:5}
+.xb :last-child{fill:var(--f);stroke-width:2.5;paint-order:stroke}
+.xg{--f:#f6f4ec;--z:#1f8f3f}.xr{--f:#e02a38;--z:#7d1219}
+#s0{fill:var(--a);stroke:#06120d}#s1{fill:var(--b)}#ic{fill:var(--c)}
+.cr{flex:none;animation:dp .62s both}
 .nm{flex:1;min-width:0}
-.nm b{display:block;font-size:20px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nm span{font-size:13px;color:rgba(255,255,255,.75)}
-.rk{flex:none;padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.25);font:700 13px system-ui,sans-serif}
-.g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 12px 4px}
-.t{padding:9px 6px;border-radius:12px;background:var(--s);text-align:center}
-.t b{display:block;font-size:19px}
-.t span{font-size:12px;color:var(--h)}
-.t i{font-style:normal;color:var(--h);font-weight:400}
-h4{margin:10px 14px 4px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--h)}
-.r{display:flex;align-items:center;gap:10px;padding:5px 14px}
-.r u{flex:none;width:10px;height:10px;border-radius:50%}
-.r span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.r small{font-size:12px;color:var(--h)}
-.r b{font-size:17px}
-.bt{display:flex;gap:8px;padding:10px 12px 0}
-button{flex:1;height:42px;border:0;border-radius:12px;background:var(--a);color:var(--at);font:600 15px system-ui,sans-serif}
-#up{flex:none;width:42px;background:var(--s);color:var(--tg-theme-text-color)}
-#up.sp{animation:sp .8s linear infinite}
-@keyframes sp{to{transform:rotate(360deg)}}
-.no{padding:6px 14px;color:var(--h);font-size:14px}
+#n,#k{animation:st .5s .3s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes st{0%{transform:scale(1.7) rotate(-6deg);opacity:0}}
+.nm p{margin:3px 0 0 4px;font-size:13px;color:#f6f4ecc0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk{flex:none;text-align:center;font-size:12px;color:#f6f4ecc0}
+.g{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:10px;margin:12px 12px 0;padding:10px 12px 11px;background:var(--s);animation:up .5s .3s both}
+.g p,.hr p{margin:0;min-width:0}
+.g small{display:block;font-size:12px;color:var(--h)}
+.g b{display:block;font:italic 900 24px/1.15 system-ui,sans-serif}
+#w{color:#20a050}#l{color:#e02a38}
+.br{display:flex;gap:2px;height:6px;margin:4px 0 3px;transform-origin:0;animation:gr .9s .7s both}
+.br *{background:#20a050}.br *+*{background:var(--h)}.br *+*+*{background:#e02a38}
+@keyframes gr{0%{transform:scaleX(0)}}
+@keyframes up{0%{transform:translateY(14px);opacity:0}}
+h4{margin:16px 14px 6px;font-size:15px}
+.hr{display:flex;align-items:center;gap:12px;height:40px;padding:0 16px;animation:up .45s both}
+.hr em{flex:none;width:38px;padding:3px 0;background:var(--q);color:#06120d;font:italic 900 18px system-ui,sans-serif;text-align:center;transform:skewX(-10deg);box-shadow:3px 3px 0 #06120d}
+.c{--q:#9ca3af}.r{--q:#5fb3e6}.e{--q:#b06ae0}.l{--q:#e8b923}
+.hr p{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr small{margin-left:7px;font-size:13px;font-weight:400;color:var(--h)}
+.no{display:flex;align-items:center;gap:14px;margin:14px 16px 0;color:var(--h)}
+.no p{margin:0}
+.bo{flex:none;animation:dp .62s .3s both}
+@keyframes dp{0%{transform:translateY(-40px);animation-timing-function:cubic-bezier(.33,0,.67,.33)}37%,78%,to{transform:none;animation-timing-function:cubic-bezier(.33,.67,.67,1)}57%{transform:translateY(-12px);animation-timing-function:cubic-bezier(.33,0,.67,.33)}89%{transform:translateY(-4px);animation-timing-function:cubic-bezier(.33,0,.67,.33)}}
+.bt{display:flex;gap:14px;padding:18px 18px 6px}
+button{flex:1;height:46px;border:0;border-radius:0;background:#e02a38;color:#fff;font:italic 800 16px system-ui,sans-serif;letter-spacing:.04em;transform:skewX(-10deg);box-shadow:4px 4px 0 #7d1219,4px 4px 0 2px #06120d,0 0 0 2px #06120d;transition:transform .1s,box-shadow .1s}
+button:active{transform:skewX(-10deg) translate(4px,4px);box-shadow:0 0 0 2px #06120d}
+button>*{display:block;margin:auto;transform:skewX(10deg)}
+#up{flex:none;width:52px;background:#f6f4ec;color:#06120d}
+.sp{animation:sp .8s linear infinite}
+@keyframes sp{to{transform:skewX(10deg) rotate(1turn)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
-<div class="hd" id="hd"><svg width="44" height="52" viewBox="0 0 40 48"><path id="s0" d="M20 2 38 8v14c0 12-8 20-18 24C10 42 2 34 2 22V8z" fill="#254e9c" stroke="#e8b923" stroke-width="2.5"/><path id="s1" d="M15 4.6h10v39.2l-5 2.2-5-2.2z" fill="#e4e8ec"/><path id="ic" d="M20 15.5l2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2-4.2 2.2.8-4.7-3.4-3.3 4.7-.7z" fill="#e8b923" stroke="rgba(0,0,0,.35)" stroke-width=".8"/></svg><div class="nm"><b id="n">LOKO RUSH</b><span id="ci"></span></div><div class="rk" id="rk"></div></div>
-<div id="box"></div>
-<div class="bt"><button id="go">▶ Грати</button><button id="up">↻</button></div>
+<div class="hd"><svg class="cr" width="50" height="60" viewBox="0 0 44 52"><path id="sh" d="M20 2 38 8v14c0 12-8 20-18 24C10 42 2 34 2 22V8z" fill="#06120d" stroke="#06120d" stroke-width="5" stroke-linejoin="round" transform="translate(3 3)"/><path id="s0" d="M20 2 38 8v14c0 12-8 20-18 24C10 42 2 34 2 22V8z" stroke-width="3"/><path id="s1" d="M15 4.6h10v39.2l-5 2.2-5-2.2z"/><path id="ic" d="m20 15.5 2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2-4.2 2.2.8-4.7-3.4-3.3 4.7-.7z"/></svg><div class="nm"><div id="n"></div><p id="ci"></p></div><div class="rk" id="rk"><div id="k"></div>місце</div></div>
+<div id="cl"><div class="g"><p><b id="r">0</b><small>рейтинг</small></p><p><b id="co">0</b><small>монети</small></p><p><b><span id="w"></span>-<span id="d"></span>-<span id="l"></span></b><span class="br"><i id="bw"></i><i id="bd"></i><i id="bl"></i></span><small>В-Н-П</small></p></div>
+<h4 id="hh">Зірки складу</h4><div id="hs"></div></div>
+<div class="no" id="em"><svg class="bo" width="34" height="34" viewBox="-12 -12 24 24"><circle r="11" fill="#fff" stroke="#06120d" stroke-width="1.6"/><path d="M0-5 5-1.5 3 4h-6l-2-5.5z" fill="#06120d"/></svg><p>Клуб з’явиться тут, щойно створиш його в онлайн-режимі гри.</p></div>
+<div class="bt"><button id="go"><span id="gt"></span></button><button id="up" hidden><svg width="20" height="20" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 3v6h-6" fill="none" stroke="currentColor" stroke-width="3"/></svg></button></div>
 <script>
-const T=window.TelegramWidget,$=i=>document.getElementById(i),J=(s,d)=>{try{return s?JSON.parse(s):d}catch(e){return d}},
-RC={c:'#9ca3af',r:'#5fb3e6',e:'#b06ae0',l:'#e8b923'},E=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>'&#'+c.charCodeAt(0)+';');
-let D=null,busy=0;
-const own=T&&!T.isForward&&!T.isPreview&&T.chatType=='private';
-function draw(d){if(!d||typeof d!='object')return;D=d;const c=Array.isArray(d.c)?d.c:[];
- $('hd').style.background='linear-gradient(135deg,'+(c[0]||'#0b3d2a')+',#0b3d2a)';
- $('s0').setAttribute('fill',c[0]||'#555');$('s1').setAttribute('fill',c[1]||'#999');$('s0').setAttribute('stroke',c[2]||'#ccc');
- $('ic').setAttribute('fill',c[2]||'#fff');
- $('n').textContent=d.n||'Клубу ще немає';$('ci').textContent=d.n?(d.ci||'')+' · Рівень '+(d.l|0):d.p||'';
- $('rk').textContent=d.k?'#'+d.k:'';$('rk').hidden=!d.k;
- if(!d.n){$('box').innerHTML='<p class="no">Відкрий онлайн-режим у грі: клуб з’явиться тут, з рейтингом, монетами й зірками складу.</p>';return}
- const rc=Array.isArray(d.rec)?d.rec:[0,0,0],h=Array.isArray(d.h)?d.h:[];
- $('box').innerHTML='<div class="g"><div class="t"><b>'+(d.r|0)+'</b><span>Рейтинг</span></div><div class="t"><b>'+(d.co|0)+'</b><span>Монети</span></div><div class="t"><b>'+(rc[0]|0)+'<i>-</i>'+(rc[1]|0)+'<i>-</i>'+(rc[2]|0)+'</b><span>В-Н-П</span></div></div>'
- +(h.length?'<h4>Зірки складу</h4>'+h.slice(0,3).map(x=>'<div class="r"><u style="background:'+(RC[x[1]]||RC.c)+'"></u><span>'+E(x[0])+' <small>'+E(x[3]||'')+'</small></span><b>'+(x[2]|0)+'</b></div>').join(''):'')}
-function ask(){if(busy||!own)return;busy=1;$('up').className='sp';
- T.request('me').then(a=>draw(J(a.result,null)),()=>0).finally(()=>{busy=0;$('up').className=''})}
-$('go').onclick=()=>{const b=D&&D.b;if(T&&b)T.openTelegramLink('https://t.me/'+b+'?startapp');try{T.HapticFeedback.impactOccurred('light')}catch(e){}};
+const T=window.TelegramWidget,$=i=>document.getElementById(i),J=s=>{try{return JSON.parse(s)}catch(e){}},
+RM=matchMedia('(prefers-reduced-motion: reduce)').matches,X=c=>/^#[0-9a-f]{6}$/i.test(c)&&c,
+E=s=>String(s??'').replace(/[&<>]/g,c=>'&#'+c.charCodeAt()+';'),
+B=(t,c)=>{const n=[...t].length*25+16;let u='',k=5;for(;k--;)u+='<text x="'+k+'" y="'+k+'">'+t+'</text>';
+ return'<svg width="'+n+'" height="44" viewBox="0 0 '+n+' 44" class="'+c+'"><g transform="translate(6 33) skewX(-10)">'+u+'</g></svg>'},
+own=T&&!T.isForward&&!T.isPreview&&T.chatType=='private';
+let D={},busy=0,hk;
+function N(e,v){const f=e.v|0,t=performance.now(),s=()=>{const k=RM?1:Math.min(1,(performance.now()-t)/900);e.textContent=Math.round(v-(v-f)*(1-k)**3);k<1&&requestAnimationFrame(s)};e.v=v;s()}
+function draw(d){D=d=Object(d);const c=[].concat(d.c||[]).map(X),r=[].concat(d.rec||[]),h=[].concat(d.h||[]).filter(Array.isArray).slice(0,3),k=JSON.stringify(h);
+ document.body.style.cssText=c.map((x,i)=>x?'--'+'abc'[i]+':'+x:'').join(';');
+ $('n').innerHTML=B(E((d.n||'Клубу ще немає').toUpperCase()),'xb xg');$('k').innerHTML=B('#'+(d.k|0),'xb xr');
+ $('ci').textContent=[d.p,d.n&&d.ci,d.n&&'рівень '+(d.l|0)].filter(Boolean).join(' · ');$('gt').textContent=d.n?'ГРАТИ':'СТВОРИТИ КЛУБ';
+ $('rk').hidden=!d.k;$('cl').hidden=!d.n;$('em').hidden=!!d.n;$('go').hidden=!d.b;
+ if(!d.n)return;
+ N($('r'),d.r|0);N($('co'),d.co|0);
+ ['w','d','l'].map((n,i)=>{const v=r[i]>0?r[i]|0:0,b=$('b'+n);$(n).textContent=v;b.style.flexGrow=v;b.hidden=!v});
+ $('hh').hidden=!h.length;
+ if(k!=hk){hk=k;$('hs').innerHTML=h.map((x,i)=>{const q=/^[crel]$/.test(x[1])?x[1]:'c';return'<div class="hr '+q+'" style="animation-delay:'+(.6+i*.1)+'s"><em>'+(x[2]|0)+'</em><p>'+E(x[0])+'<small>'+E(x[3])+'</small></p></div>'}).join('')}}
+function ask(){if(busy||!own)return;busy=1;$('up').firstChild.classList.add('sp');
+ T.request('me').then(a=>{const r=J(a&&a.result);r&&r.b&&draw(r)},()=>0).finally(()=>{busy=0;$('up').firstChild.classList.remove('sp')})}
+$('go').onclick=()=>{try{T.openTelegramLink('https://t.me/'+D.b+'?startapp');T.HapticFeedback.impactOccurred('light')}catch(e){}};
 $('up').onclick=ask;$('up').hidden=!own;
-if(T){draw(J(T.chatData,null)||J(T.publicData,null));T.onEvent('chatDataChanged',()=>draw(J(T.chatData,null)));T.ready&&T.ready();if(own)ask()}
-else draw({p:'Олекса',n:'КАЖАНИ',ci:'Полтава',c:['#254e9c','#e4e8ec','#e8b923'],l:3,r:1042,co:420,rec:[5,2,1],k:12,h:[['Гончар','l',71,'Гармата'],['Ткач','e',66,'Маестро'],['Бойко','r',58,'Стіна']]})
+if(T){draw(J(T.chatData)||J(T.publicData));T.onEvent('chatDataChanged',()=>{const v=J(T.chatData);v&&draw(v)});T.ready&&T.ready();own&&ask()}
+else{document.documentElement.style.colorScheme='light dark';draw({p:'Олекса',n:'КАЖАНИ',c:['#254e9c','#e4e8ec','#e8b923'],l:3,r:1042,co:420,rec:[5,2,1],k:12,h:[['Гончар','l',71,'Гармата'],['Ткач','e',66,'Маестро'],['Бойко','r',58,'Стіна']],b:'loko_rush_bot'})}
 </script>
