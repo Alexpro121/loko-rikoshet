@@ -96,6 +96,8 @@ else
   sudo -u "$USER_NAME" git -C "$APP/app" fetch -q --depth 1 origin "$BRANCH"
   sudo -u "$USER_NAME" git -C "$APP/app" reset -q --hard "origin/$BRANCH"
 fi
+# правила гри (src/online/profile.js) тягнуть модулі гри, а ті — three з кореня репозиторію: ставимо й залежності кореня, без dev
+(cd "$APP/app" && sudo -u "$USER_NAME" npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error)
 (cd "$APP/app/server" && sudo -u "$USER_NAME" npm ci --omit=dev --no-audit --no-fund --loglevel=error)
 chgrp "$USER_NAME" "$ENV_FILE"
 DEPLOY="$APP/app/server/deploy"
