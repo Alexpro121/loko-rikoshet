@@ -96,6 +96,21 @@ export function clubRoutes(ctx) {
     return s;
   };
 
+  /** Новий герой на слот i за price монет (скаут чи пак): номер слота лишається, ім'я не повторює решти складу (як scoutHero у грі). */
+  function newcomer(playerId, i, price, rar, reason) {
+    return tx(db, () => {
+      const s = need(playerId);
+      if (s.coins < price) throw new HttpError(409, 'no_coins');
+      const used = new Set(s.heroes.flatMap((e, j) => (j === i ? [] : [surname(e.name), 'f:' + e.name.split(' ')[0]])));
+      const h = rules.newHero(rules.slotsOf(s.club.form)[i], used, rar);
+      h.num = s.heroes[i].num;
+      s.heroes[i] = h; s.coins -= price;
+      store(playerId, s);
+      ledger(playerId, -price, reason);
+      return { coins: s.coins, hero: h };
+    });
+  }
+
   const routes = {
     'POST /club/save': async (req) => {
       const p = auth(req);
@@ -139,19 +154,7 @@ export function clubRoutes(ctx) {
     'POST /club/scout': async (req) => {
       const p = auth(req);
       const body = await readJson(req);
-      const i = heroIdx(body.hero);
-      return tx(db, () => {
-        const s = need(p.id);
-        if (s.coins < rules.SCOUT_PRICE) throw new HttpError(409, 'no_coins');
-        // ім'я нового героя не повторює прізвищ та імен решти складу (як scoutHero у грі)
-        const used = new Set(s.heroes.flatMap((e, j) => (j === i ? [] : [surname(e.name), 'f:' + e.name.split(' ')[0]])));
-        const h = rules.newHero(rules.slotsOf(s.club.form)[i], used);
-        h.num = s.heroes[i].num;
-        s.heroes[i] = h; s.coins -= rules.SCOUT_PRICE;
-        store(p.id, s);
-        ledger(p.id, -rules.SCOUT_PRICE, 'scout');
-        return { coins: s.coins, hero: h };
-      });
+      return newcomer(p.id, heroIdx(body.hero), rules.SCOUT_PRICE, undefined, 'scout');
     },
 
     // «Новий випадковий клуб»: клуб за правилами гри; квести (окрема таблиця) не скидаються
@@ -169,6 +172,18 @@ export function clubRoutes(ctx) {
       });
     },
   };
+
+  // магазин: рідкісний і епічний паки (скаут — окремий маршрут); ціни й шанси з PACKS гри
+  if (rules.PACKS) {
+    routes['POST /club/pack'] = async (req) => {
+      const p = auth(req);
+      const body = await readJson(req);
+      const i = heroIdx(body.hero), kind = String(body.pack || '');
+      const P = kind !== 'scout' && Object.prototype.hasOwnProperty.call(rules.PACKS, kind) ? rules.PACKS[kind] : null;
+      if (!P) throw new HttpError(400, 'bad_pack');
+      return newcomer(p.id, i, P.price, rules.packRarity(kind), 'pack');
+    };
+  }
 
   return { routes, load, store, out };
 }

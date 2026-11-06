@@ -1,6 +1,6 @@
 // Онлайн-хаб (API 2): два клієнти проходять перенесення клубу, старт матчу, звіти й бачать монети, Ело, квести, чергу й таблицю.
 // Квести перевіряються, коли src/online/quests.js є в гілці; до того їх можна підставити з іншої копії гри:
-// LOKO_QUESTS=шлях/до/src/online/quests.js npm test
+// LOKO_QUESTS=шлях/до/src/online/quests.js npm test. Так само паки магазину: LOKO_PACKS=шлях/до/src/online/profile.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -19,6 +19,11 @@ let rules = baseRules;
 if (!rules.QUESTS && process.env.LOKO_QUESTS) {
   const m = await import(pathToFileURL(process.env.LOKO_QUESTS).href);
   rules = { ...baseRules, QUESTS: true, questPeriods: m.questPeriods, questsLeft: m.questsLeft, dayIds: m.dayIds, weekIds: m.weekIds, questDef: m.questDef, questStep: m.questStep, factsOf: m.factsOf };
+}
+
+if (!rules.PACKS && process.env.LOKO_PACKS) {
+  const m = await import(pathToFileURL(process.env.LOKO_PACKS).href);
+  rules = { ...rules, PACKS: m.PACKS, packRarity: m.packRarity };
 }
 
 const initData = (id, name) => signInitData({ auth_date: String(NOW), query_id: 'q', user: JSON.stringify({ id, first_name: name, username: 'u' + id }) }, BOT);
@@ -328,5 +333,31 @@ test('квести: прогрес за підтвердженим матчем,
     // гість програв 1:4: його квести рахуються з його погляду
     const gq = (await s.call('GET', '/me', null, s.tg)).body.quests;
     assert.ok(gq);
+  } finally { await s.close(); }
+});
+
+test('паки магазину: ціна з PACKS, рідкість за шансами пака, номер слота лишається', { skip: !rules.PACKS && 'немає PACKS у src/online/profile.js' }, async () => {
+  const s = await start();
+  try {
+    const t = await s.login(1, 'Аня');
+    const c = (await s.call('POST', '/club/save', device({ coins: 20000 }), t)).body.club;
+    const ep = (await s.call('POST', '/club/pack', { hero: 4, pack: 'epic' }, t)).body;
+    assert.equal(ep.coins, 20000 - rules.PACKS.epic.price);
+    assert.ok(['e', 'l'].includes(ep.hero.rar));
+    assert.equal(ep.hero.num, c.heroes[4].num);
+    assert.notEqual(ep.hero.id, c.heroes[4].id);
+    const rr = (await s.call('POST', '/club/pack', { hero: 0, pack: 'rare' }, t)).body;
+    assert.ok(['r', 'e', 'l'].includes(rr.hero.rar));
+    assert.equal(rr.hero.line, 'G');
+    assert.equal((await s.call('POST', '/club/pack', { hero: 1, pack: 'scout' }, t)).body.error, 'bad_pack');
+    assert.equal((await s.call('POST', '/club/pack', { hero: 1, pack: 'gold' }, t)).body.error, 'bad_pack');
+    assert.equal((await s.call('POST', '/club/pack', { hero: 12, pack: 'rare' }, t)).body.error, 'bad_hero');
+    assert.deepEqual(ledger(s.db, 1).slice(1), [[-rules.PACKS.epic.price, 'pack'], [-rules.PACKS.rare.price, 'pack']]);
+    const me = (await s.call('GET', '/me', null, t)).body.club;
+    assert.equal(me.heroes[4].id, ep.hero.id);
+    assert.equal(sumLedger(s.db, 1), me.coins);
+    const t2 = await s.login(2, 'Бо');
+    await s.call('POST', '/club/save', device({ coins: 400 }), t2);
+    assert.equal((await s.call('POST', '/club/pack', { hero: 1, pack: 'rare' }, t2)).body.error, 'no_coins');
   } finally { await s.close(); }
 });

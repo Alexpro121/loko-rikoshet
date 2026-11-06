@@ -32,7 +32,10 @@ export const trainPrice = (v) => profile.trainPrice(v);
 export const SCOUT_PRICE = profile.SCOUT_PRICE;
 export const clubXpNeed = (l) => profile.clubXpNeed(l);
 export const xpNeed = (l) => squad.xpNeed(l);
-export const newHero = (slot, used) => profile.newHero(slot, used);
+export const newHero = (slot, used, rar) => profile.newHero(slot, used, rar);   // rar не задано — рідкість за шансом скаута
+// Паки магазину (PACKS, packRarity): поки їх немає в profile.js гілки сервера, маршрут /club/pack не існує (клієнт бачить 404)
+export const PACKS = profile.PACKS && typeof profile.packRarity === 'function' ? profile.PACKS : null;
+export const packRarity = (kind) => profile.packRarity(kind);
 export const slotsOf = (form) => profile.slotsOf(form);
 export const plain = (v) => profile.plain(v);
 
