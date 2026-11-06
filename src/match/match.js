@@ -142,7 +142,7 @@ export class Match {
     this.introTgt = [this.mine, this.opp].map((arr) => arr.map((a) => ({ x: a.p.x, z: a.p.z })));
     this.introFlags = { wave: false, clap: false, cheer: false, roar: false, anthem: false, hs: false, fans: false };
     this.rp = null; this.hl = null; this.clips = []; this.moments = []; this.walk.start(spec.club, spec.home); this.view.pitch.boards.cue('intro');
-    for (const a of this.actors) { a.lane = null; a._st = 0; a.post = null; a._jr = Math.random(); a.p.gaze = true; a._ix = a._iz = undefined; }
+    for (const a of this.actors) { a.lane = null; a._st = 0; a.post = null; a._jr = Math.random(); a.p.gaze = true; a._ix = a._iz = undefined; a._tt = undefined; }
     this.introEndAt = null; this.skipEnd = false; this._cx = undefined; this._camT = undefined; this.brk = null; this.endPairs = null; this.replay.clear();
     this.ui.hud.cine(true);
     this.driveIntro(0, 0);
@@ -863,9 +863,10 @@ export class Match {
    * плавно йде до vT (обмежені прискорення в move), м'яч — у ногах попереду, з легким «дихання» дотиків. Біля бортів і
    * воріт курс заходить усередину поля. Повертає курс (кут).
    */
-  carry(a, dt, want, turn, vT) {
+  carry(a, dt, want, turn, vT, pivot = false) {
     const p = a.p, b = this.ball, v = Math.hypot(p.vx, p.vz);
-    let cur = v > 0.6 ? Math.atan2(p.vx, p.vz) : (a.carryH ?? p.bodyYaw);
+    // pivot: розворот із м'ячем на місці, курс крутиться сам, не чекаючи, поки тіло (а з ним і швидкість) переступить
+    let cur = v > 0.6 && !pivot ? Math.atan2(p.vx, p.vz) : (a.carryH ?? p.bodyYaw);
     if (want != null) cur += clamp(angDiff(cur, want), -turn * dt, turn * dt);
     let hx = Math.sin(cur), hz = Math.cos(cur);
     // борт попереду — курс уздовж нього, а не в нього
@@ -916,13 +917,18 @@ export class Match {
    * (розворот дугою на бігу, як у людини, а не на місці). Повертає true, коли можна бити: м'яч перед ногою, а корпус
    * відхилений від напрямку удару не більше maxAng.
    */
-  dribbleKick(a, dx, dz, dt, maxAng) {
-    const b = this.ball, p = a.p, ds = (a.dribSt ??= { t: 0, steps: 0 }), hv = Math.hypot(b.vx, b.vz);
+  dribbleKick(a, dx, dz, dt, maxAng, pivot = true) {
+    const b = this.ball, p = a.p, ds = (a.dribSt ??= { t: 0, steps: 0 }), hv = Math.hypot(b.vx, b.vz), want = Math.atan2(dx, dz);
+    // адресат далі, ніж дозволяє удар з ходу (за спиною чи збоку): гальмує, підходить до м'яча впритул і підошвою перекочує його в
+    // бік паса, а не женеться за ним дугою. Раніше тримався ~1.05 м за м'ячем, дотик (ближче 0.95 м) не наставав, і пас назад
+    // ішов за таймаутом через ~1.1 с, поки адресат відбігав на кілька метрів
+    const pv = Math.hypot(p.vx, p.vz), tk = !pivot ? 0 : smooth01((Math.abs(angDiff(pv > 0.6 ? Math.atan2(p.vx, p.vz) : p.bodyYaw, want)) - maxAng + 0.3) / 0.9);
     let ux = dx, uz = dz;
-    if (hv > 1) { const cur = Math.atan2(b.vx, b.vz), na = cur + clamp(angDiff(cur, Math.atan2(dx, dz)), -1.25, 1.25); ux = Math.sin(na); uz = Math.cos(na); }
+    if (hv > 1) { const cur = Math.atan2(b.vx, b.vz), lim = 1.25 + (Math.PI - 1.25) * tk, na = cur + clamp(angDiff(cur, want), -lim, lim); ux = Math.sin(na); uz = Math.cos(na); }
     a.avx = a.avz = 0;
-    a.move(b.x + b.vx * 0.2 - ux * 0.55, b.z + b.vz * 0.2 - uz * 0.55, (a.side > 0 ? this.myTeam : this.oppTeam).speed * 0.85 * (0.84 + 0.34 * a.sk.pace), dt);
-    if (Math.hypot(p.vx, p.vz) > 0.5) p.yaw = Math.atan2(p.vx, p.vz);
+    const back = 0.55 * (1 - 0.7 * tk);
+    a.move(b.x + b.vx * 0.2 - ux * back, b.z + b.vz * 0.2 - uz * back, (a.side > 0 ? this.myTeam : this.oppTeam).speed * 0.85 * (0.84 + 0.34 * a.sk.pace) * (1 - 0.6 * tk), dt);
+    if (tk > 0.5) p.yaw = want; else if (Math.hypot(p.vx, p.vz) > 0.5) p.yaw = Math.atan2(p.vx, p.vz);
     dribbleStep(ds, p, b, ux, uz, dt); keepBallIn(b);
     // де м'яч буде відносно тіла в мить контакту (через ~0.13 с замаху): нога дістає до ~1 м, і м'яч має бути попереду
     const T = 0.13, rx = b.x + (b.vx - p.vx) * T - p.x, rz = b.z + (b.vz - p.vz) * T - p.z, d = Math.hypot(rx, rz), al = rx * Math.sin(p.bodyYaw) + rz * Math.cos(p.bodyYaw);
@@ -1046,6 +1052,8 @@ export class Match {
         // корпус повернутий достатньо (пас — внутрішньою стороною стопи, до ~85° від бігу; довгий — до ~45°)
         k.w += dt;
         if (k.q && (k.chk -= dt) <= 0) { this.recheckPass(a, k); if (this.pendKick !== k) return; }
+        // розвертається туди, де адресат зараз, а не де він був у мить рішення: за час розвороту той пробігає метри
+        if (k.q) { const ux = k.q.p.x - b.x, uz = k.q.p.z - b.z, ul = Math.hypot(ux, uz) || 1; k.dx = ux / ul; k.dz = uz / ul; }
         if (this.dribbleKick(a, k.dx, k.dz, dt, k.pw > 0.6 ? 0.8 : 1.75) || k.w > 1.1) { a.p.yaw = Math.atan2(k.dx, k.dz); k.swing(); k.t = 0.13; a.kickV = null; }
         else this.matesTackle(a, dt);                                // поки ще веде м'яч під пас, його можна встигнути відібратиться
       } else {                                                       // замах на бігу: м'яч котиться до ноги, тіло його наздоганяє
@@ -1509,8 +1517,8 @@ export class Match {
   procAt(sd, lx, d, sp, out) {
     const tz = this.view.tunnel.userData.startZ, lz = LZ, cx = sd * 1.1, L2 = Math.abs(lx - cx), dir = Math.sign(lx - cx) || 1;
     const R = clamp(L2, 0.6, 3.2), S1 = lz - R - tz, A = Math.PI * R / 2, Lt = S1 + A + (L2 - R), b = 0.9;
-    let s = d, v = d >= 0 ? sp : 0;
-    if (d > Lt - b) { const e = Math.exp(-(d - (Lt - b)) / b); s = Lt - b * e; v = sp * e; }
+    let s = d, v = sp, k = 1;                                       // і в тунелі (d < 0) колона йде разом із ведучим: швидкість 0 там вмикала позу «стоїть», а на виході — ривок 0 → 1.6 м/с
+    if (d > Lt - b) { const e = Math.exp(-(d - (Lt - b)) / b); s = Lt - b * e; v = sp * e; k = e; }
     if (s < S1) { out.x = cx; out.z = tz + s; out.vx = 0; out.vz = v; }                   // s < 0 — ще в тунелі, у черзі
     else if (s < S1 + A) {                                                                    // дуга: центр (cx + dir·R, lz − R)
       const th = (s - S1) / R, sn = Math.sin(th), cs = Math.cos(th);
@@ -1518,6 +1526,7 @@ export class Match {
     } else { out.x = cx + dir * (R + (s - S1 - A)); out.z = lz; out.vx = dir * v; out.vz = 0; }
     out.yaw = Math.atan2(out.vx || (s >= S1 ? dir : 0), out.vz || (s < S1 ? 1 : 0));
     out.done = v < 0.12 && d > Lt;                                                            // майже зупинився — розвертається до трибуни
+    out.k = k;                                                                                // частка швидкості кроку на зупинці (1 — іде)
     out.hidden = false;                                                                       // у тунелі видно — вони там стоять із самого початку
     return out;
   }
@@ -1557,7 +1566,10 @@ export class Match {
           // свій бік у колоні — лише на прямій від тунелю; за ~3 м до повороту плавно сходить нанівець (без зсуву на повороті)
           { const d0 = lead - (10 - i) * COL_GAP, L1 = LZ - this.view.tunnel.userData.startZ; R.x += 0.28 * (jr - 0.5) * clamp((L1 - 3.4 - d0) / 2.5, 0, 1); }   // сходить нанівець до початку дуги
           a.p.root.visible = !R.hidden;
-          x = R.x; z = R.z; vx = R.vx; vz = R.vz; yaw = R.done ? 0.24 * (jr - 0.5) : R.yaw;
+          x = R.x; z = R.z; vx = R.vx; vz = R.vz; yaw = R.yaw;
+          // до трибуни розвертається ще на гальмуванні, плавно за ~0.8 с. Раніше курс перескакував на 90° у мить зупинки: корпус
+          // крутився на межі швидкості, упирався в опорну стопу, стояв, поки вона переступить, і рвучко крутився знову
+          if (R.k < 0.3 || R.done) { a._tt ??= t; yaw = R.yaw + angDiff(R.yaw, 0.2 * (jr - 0.5)) * smooth01((t - a._tt) / 0.8); }
           // на ходу кожен по-своєму: аплодує трибунам, махає, показує в небо, цілує емблему, розминає шию…
           if (!R.hidden && !R.done && dt > 0) {
             a._wg = (a._wg ?? 0.5 + 2.5 * jr) - dt;
@@ -2232,7 +2244,10 @@ export class Match {
         // веде м'яч — б'є з ходу: удар у бік бігу одразу; під кутом — рішучий розворот із м'ячем на бігу (без зупинки) і удар,
         // щойно кут прийнятний (пас — внутрішньою стороною стопи до ~90°, удар — до ~35°). Перед ударом трохи прискорюється
         const want = Math.atan2(sh.dirx, sh.dirz), okA = sh.power < 0.45 ? 1.55 : 0.6;
-        const hd = this.carry(a, dt, want, 5.5, (3.6 + 1.6 * sh.power) * (0.84 + 0.34 * a.sk.pace));
+        // великий кут: гальмує й розвертається з м'ячем майже на місці, як гравець, що зупиняє м'яч підошвою. На повній
+        // швидкості поворот іде дугою з радіусом v²/a, і удар назад виходив через ~1 с і 4 м бігу, частіше за таймаутом
+        const hv = Math.hypot(h.vx, h.vz), rem = Math.abs(angDiff(hv > 0.6 ? Math.atan2(h.vx, h.vz) : (a.carryH ?? h.bodyYaw), want)), tk = smooth01((rem - okA) / 0.8);
+        const hd = this.carry(a, dt, want, 5.5 + 3.5 * tk, (3.6 + 1.6 * sh.power) * (0.84 + 0.34 * a.sk.pace) * (1 - 0.72 * tk), tk > 0.5);
         if (Math.abs(angDiff(hd, want)) < okA || w.t > 1.0) {
           w.kicked = true; this.windT = 0.13; h.yaw = this.kickYaw(h, sh.dirx, sh.dirz); h.kick(sh.power, undefined, this.ball);
         }

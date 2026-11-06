@@ -211,11 +211,20 @@ export class Gait {
       // і закрутка: опорна стопа повернута відносно корпусу більше ніж на ~43° (розворот) — переступає, а не скручує ногу
       const tw = f.st === 'stance' ? Math.abs(angDiff(f.yaw, yaw)) : 0;
       if (f.st === 'stance' && (lagged || tw > 0.75) && (o.st === 'stance' || o.u > 0.6 || this.runW > 0.5 || this.running || (v > 2.4 && tw > 0.75)) && f.age > (lagged ? 0.02 : 0.06)) {   // на швидкості можна й у короткий політ
-        this.phi = mod1(f.off + beta); f.ul = beta; o.ul = mod1(this.phi - o.off);
-        this.liftOff(f, (1 - beta) / fStride, v, st, Lw); continue;
+        // рівний ритм: у ході рефлекс веде кожен крок, а відстань між ногами він сам не тримає, тож зсув застигав на 0.37 / 0.48 с
+        // (шкутильгання на 1.4–1.8 м/с). Мах трохи коротшає чи довшає, щоб стопа сіла посередині між приземленнями другої
+        let T = (1 - beta) / fStride;
+        if (!this.shuffle && !this.back && o.st === 'stance' && f.tdT > 0 && o.tdT > f.tdT) {
+          const c0 = this.time + T, want = o.tdT + (c0 - f.tdT) / 2;
+          T = clamp(T + 0.6 * (want - c0), 0.8 * T, 1.2 * T);
+        }
+        T = this.walkCap(o, T, v, lagMax, mdx, mdz);
+        const u0 = clamp(1 - T * fStride, 0, 0.98);                         // фаза, з якою мах закінчиться саме за T
+        this.phi = mod1(f.off + u0); f.ul = u0; o.ul = mod1(this.phi - o.off);
+        this.liftOff(f, T, v, st, Lw); continue;
       }
       // відрив: фаза дійшла до кінця опори, або за ритмом нога вже мала б бути в маху, а друга її підстраховує
-      if (f.st === 'stance' && ul >= beta && (prev < beta || o.st === 'stance') && !(v < 0.3 && o.st === 'stance')) this.liftOff(f, Math.max(0.14, (1 - ul) / fStride), v, st, Lw);
+      if (f.st === 'stance' && ul >= beta && (prev < beta || o.st === 'stance') && !(v < 0.3 && o.st === 'stance')) this.liftOff(f, this.walkCap(o, Math.max(0.14, (1 - ul) / fStride), v, lagMax, mdx, mdz), v, st, Lw);
       else if (f.st === 'swing' && (f.t >= f.T || (wrapped && f.u > 0.3))) this.touchDown(f, o);   // на самому початку маху фаза могла перескочити через рефлекс другої ноги: нога доносить крок, а не сідає позаду
     }
     this.feet[0].age += dt; this.feet[1].age += dt;
@@ -519,6 +528,18 @@ export class Gait {
   }
 
   /** Відрив стопи: мах триває T секунд; висота п'яти в махові росте зі швидкістю (на спринті п'ята б'є в сідницю). */
+  /**
+   * Мах у ході не довший, ніж опорна нога ще може нести тіло: інакше на розгоні (ритм відстає від швидкості) опорна
+   * відривалась раніше, ніж махова сідала, — короткий політ у ході, і таз за кадр падав на 2–3 см.
+   */
+  walkCap(o, T, v, lagMax, mdx, mdz) {
+    if (this.running || this.runW > 0.5 || this.shuffle || this.back || o.st !== 'stance' || v < 0.5 || v > 2.1) return T;
+    this.hip(o.side);
+    const rem = ((o.x - this.hx) * mdx + (o.z - this.hz) * mdz + lagMax) / v;   // скільки ще опорна стопа до межі «відстала»
+    const cap = Math.min(T, Math.max(0.65 * T, 0.14, 0.85 * rem));
+    return cap + (T - cap) * smooth(clamp((v - 1.7) / 0.4, 0, 1));            // від ~2 м/с — підтюпцем, короткий політ природний
+  }
+
   liftOff(f, T, v, st, Lw) {
     if (f.tdT) this.contacts = lerp(this.contacts || f.age, f.age, 0.3);
     f.st = 'swing'; f.sx = f.x; f.sz = f.z; f.t = 0; f.T = T; f.u = 0; f.yaw0 = f.yaw; f.psi0 = f.psi;

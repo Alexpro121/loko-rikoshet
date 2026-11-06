@@ -36,6 +36,7 @@
 | Хто отримає пас | `pickMyReceiver`, `pickOppReceiver` |
 | Пас і удар гравця | `launchShot`, `doPass`, `passTo`, `startShot` |
 | Розбіг перед ударом | `kickApproach`, `kickReady`, `kickFollow` |
+| Розворот із м'ячем перед пасом чи ударом під великим кутом | суперник: `tk` у `dribbleKick` (гальмування, перекат підошвою, ціль паса стежить за адресатом у `updateTaker`); наш гравець: `tk` у гілці `w.carry` стану `wind` |
 | Ведення м'яча | `carry`, `dribbleKick`, `dribbleStep`, `keepBallIn` у `src/match/dribble.js` |
 | Сповільнення часу | `updateSlow`, `clearSlow`, `slowFactor` у `spec` |
 | Рішення суперника з м'ячем | `takerThink`, `updateTaker`, `choosePass` |
