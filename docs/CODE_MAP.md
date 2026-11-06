@@ -9,11 +9,11 @@
 
 - Експорти: CLUB:4, CHRONICLE:15, FACTS:31, LEGENDS:43, ALUMNI:44, HONOURS:46, STADIUM:51, randomFact:61
 
-## src/config.js (196 рядків)
+## src/config.js (206 рядків)
 
 Усі числові константи гри в одному місці.
 
-- Експорти: PITCH:3, PHYS:20, COL:35, KIT_LOKO:42, KITS:44, KIT_GK_LOKO:49, KIT_CLASH:52, kitDist:55, pickKit:60, LEAGUES:74, STAT_KEYS:88, GK_KEYS:89, LINE_OF:90, FORMATIONS:95, FIXTURES:105, matchSpec:111, STRIKERS:134, shotSkill:144, KEEPERS:146, ACADEMY:154, STADIUM_TIERS:174, STADIUM_TIER_NAMES:175, SETTINGS_DEFAULT:177, CAM_PRESETS:189
+- Експорти: PITCH:3, PHYS:20, COL:35, KIT_LOKO:42, KITS:44, KIT_GK_LOKO:49, KIT_CLASH:52, kitDist:55, pickKit:60, LEAGUES:74, STAT_KEYS:88, GK_KEYS:89, LINE_OF:90, FORMATIONS:95, FIXTURES:105, SEASON_HEAT:116, heatOf:117, matchSpec:120, STRIKERS:144, shotSkill:154, KEEPERS:156, ACADEMY:164, STADIUM_TIERS:184, STADIUM_TIER_NAMES:185, SETTINGS_DEFAULT:187, CAM_PRESETS:199
 
 ## src/core/audio-bank.js (153 рядків)
 
@@ -433,12 +433,12 @@ World: фізика м'яча з кроком 120 Гц: борти, штанги
 - Експорти: S:121, subscribe:126, onSaveError:129, holdSave:132, flush:134, commit:142, resetAll:147
 - Внутрішні функції: merge:31, cleanPlayer:52, cleanSquad:64, normalize:78, load:102
 
-## src/state/squad.js (264 рядків)
+## src/state/squad.js (268 рядків)
 
 Склад: реальний ROSTER, навички, рівні, заміни, тренування, склади суперників (oppSquad).
 
-- Експорти: STAT_NAMES:10, STAT_HINT:11, keysFor:15, ROLE_UA:16, myKit:34, matchKit:36, makeStats:39, ovr:44, xpNeed:49, trainCost:50, tierOf:51, newEntry:57, ROSTER:71, defaultSquad:94, ensureSquad:102, allPlayers:116, swapPlayers:119, CAREER_FORMS:131, setTactic:137, swapStarters:139, bestLine:144, oppSquad:156, skillOf:183, gkBonus:190, squadLook:197, lookSig:204, customizeLook:207, resetLook:214, gainXp:221, trainStat:237, signGraduate:246, squadRating:264
-- Внутрішні функції: rosterEntry:82, relabelSquad:133
+- Експорти: STAT_NAMES:10, STAT_HINT:11, keysFor:15, ROLE_UA:16, myKit:34, matchKit:36, makeStats:39, ovr:44, xpNeed:49, trainCost:51, tierOf:52, newEntry:58, ROSTER:72, defaultSquad:95, ensureSquad:103, allPlayers:117, swapPlayers:120, CAREER_FORMS:132, setTactic:138, swapStarters:140, bestLine:145, oppSquad:157, skillOf:187, gkBonus:194, squadLook:201, lookSig:208, customizeLook:211, resetLook:218, gainXp:225, trainStat:241, signGraduate:250, squadRating:268
+- Внутрішні функції: rosterEntry:83, relabelSquad:134
 
 ## src/style.css (1675 рядків)
 
