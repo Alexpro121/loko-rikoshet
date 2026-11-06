@@ -35,12 +35,14 @@ const MIGRATIONS = [
      at INTEGER NOT NULL
    );
    CREATE INDEX coin_ledger_player ON coin_ledger(player_id);`,
+  `CREATE INDEX sessions_expires ON sessions(expires_at);`,
 ];
 
 export function openDb(file) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+  // WAL + synchronous=NORMAL: запис без fsync на кожну зміну, після збою живлення втрачається хіба остання мить, а не база
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA cache_size = -8000; PRAGMA temp_store = MEMORY;');
   const done = db.prepare('PRAGMA user_version').get().user_version;
   for (let v = done; v < MIGRATIONS.length; v++) {
     tx(db, () => {

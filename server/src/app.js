@@ -9,6 +9,8 @@ export const API_VERSION = 1;
 const BODY_LIMIT = 64 * 1024;
 const SESSION_SEC = 30 * 24 * 3600;
 const AUTH_PER_MIN = 20;                 // спроб входу з однієї адреси за хвилину
+const CALLS_PER_MIN = 120;               // усіх запитів з однієї адреси за хвилину: гра робить кілька за матч
+const SESSIONS_KEEP = 5;                 // сесій на гравця (телефон, комп'ютер...): старіші видаляються
 
 const hashToken = (t) => createHash('sha256').update(t).digest('hex');
 
@@ -35,7 +37,7 @@ function readJson(req) {
 
 export function createApp({ db, config, newClub, now = () => Date.now() }) {
   const sec = () => Math.floor(now() / 1000);
-  const hits = new Map();                // ip -> [хвилина, кількість]
+  const hits = new Map();                // 'кошик:ip' -> [хвилина, кількість]
 
   const q = {
     upsertPlayer: db.prepare(`INSERT INTO players (id, name, username, created_at, last_seen) VALUES (?, ?, ?, ?, ?)
@@ -43,17 +45,19 @@ export function createApp({ db, config, newClub, now = () => Date.now() }) {
     player: db.prepare('SELECT id, name, username, banned FROM players WHERE id = ?'),
     addSession: db.prepare('INSERT INTO sessions (token_hash, player_id, expires_at) VALUES (?, ?, ?)'),
     session: db.prepare('SELECT player_id, expires_at FROM sessions WHERE token_hash = ?'),
-    dropExpired: db.prepare('DELETE FROM sessions WHERE expires_at < ?'),
+    trimSessions: db.prepare(`DELETE FROM sessions WHERE player_id = ? AND token_hash NOT IN
+      (SELECT token_hash FROM sessions WHERE player_id = ? ORDER BY rowid DESC LIMIT ${SESSIONS_KEEP})`),
+    ping: db.prepare('SELECT 1 AS ok'),
     club: db.prepare('SELECT data, coins, rating, lvl FROM clubs WHERE player_id = ?'),
     addClub: db.prepare('INSERT INTO clubs (player_id, data, coins, rating, lvl, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
     ledger: db.prepare('INSERT INTO coin_ledger (player_id, delta, reason, at) VALUES (?, ?, ?, ?)'),
   };
 
-  function rateLimited(ip) {
-    const minute = Math.floor(now() / 60000);
-    const h = hits.get(ip);
-    if (!h || h[0] !== minute) { hits.set(ip, [minute, 1]); if (hits.size > 10000) hits.clear(); return false; }
-    return ++h[1] > AUTH_PER_MIN;
+  function rateLimited(ip, bucket, max) {
+    const minute = Math.floor(now() / 60000), key = bucket + ':' + ip;
+    const h = hits.get(key);
+    if (!h || h[0] !== minute) { if (hits.size > 20000) hits.clear(); hits.set(key, [minute, 1]); return false; }
+    return ++h[1] > max;
   }
 
   function auth(req) {
@@ -69,10 +73,10 @@ export function createApp({ db, config, newClub, now = () => Date.now() }) {
   const clubOut = (row) => (row ? { ...JSON.parse(row.data), coins: row.coins, rating: row.rating, lvl: row.lvl } : null);
 
   const routes = {
-    'GET /health': () => ({ ok: true, api: API_VERSION }),
+    'GET /health': () => ({ ok: q.ping.get().ok === 1, api: API_VERSION }),
 
     'POST /auth/telegram': async (req, ip) => {
-      if (rateLimited(ip)) throw new HttpError(429, 'slow_down');
+      if (rateLimited(ip, 'auth', AUTH_PER_MIN)) throw new HttpError(429, 'slow_down');
       const body = await readJson(req);
       const user = verifyInitData(body.initData, config.botToken, sec());
       if (!user) throw new HttpError(401, 'bad_init_data');
@@ -81,7 +85,7 @@ export function createApp({ db, config, newClub, now = () => Date.now() }) {
       tx(db, () => {
         q.upsertPlayer.run(user.id, user.name, user.username, t, t);
         q.addSession.run(hashToken(token), user.id, t + SESSION_SEC);
-        q.dropExpired.run(t);
+        q.trimSessions.run(user.id, user.id);   // прострочені чистить нічне обслуговування
       });
       const p = q.player.get(user.id);
       if (p.banned) throw new HttpError(403, 'banned');
@@ -137,6 +141,7 @@ export function createApp({ db, config, newClub, now = () => Date.now() }) {
     if (!route) return send(404, { error: 'not_found' });
     // за Caddy справжня адреса гравця в X-Forwarded-For; без проксі беремо адресу з'єднання
     const ip = (config.behindProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
+    if (path !== '/health' && rateLimited(ip, 'all', CALLS_PER_MIN)) return send(429, { error: 'slow_down' });
     try {
       send(200, await route(req, ip));
     } catch (e) {

@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Оновлення сервера гри до свіжого коду з гілки (за замовчуванням main).
+# Оновлення сервера гри до свіжого коду з гілки (за замовчуванням main), разом із налаштуваннями служб.
 #   sudo bash /opt/loko-game/app/server/deploy/update.sh
+# Спершу підтягує код, потім запускає вже новий install.sh (без apt: пакети оновлює unattended-upgrades).
 set -euo pipefail
 APP=/opt/loko-game
 BRANCH="${BRANCH:-main}"
 [ "$(id -u)" -eq 0 ] || { echo "Потрібні права root"; exit 1; }
-sudo -u loko-game git -C "$APP/app" fetch -q origin "$BRANCH"
+sudo -u loko-game git -C "$APP/app" fetch -q --depth 1 origin "$BRANCH"
 sudo -u loko-game git -C "$APP/app" reset -q --hard "origin/$BRANCH"
-(cd "$APP/app/server" && sudo -u loko-game npm ci --omit=dev --no-audit --no-fund)
-systemctl restart loko-game
-sleep 3
-systemctl is-active --quiet loko-game && echo "Оновлено: $(git -C "$APP/app" log --oneline -1)" || { journalctl -u loko-game -n 30 --no-pager; exit 1; }
+SKIP_APT=1 BRANCH="$BRANCH" exec bash "$APP/app/server/deploy/install.sh"

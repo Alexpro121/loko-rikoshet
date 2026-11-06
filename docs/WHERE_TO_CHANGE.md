@@ -182,7 +182,8 @@
 | Завдання | Де |
 |---|---|
 | Вкладка «Онлайн» | `src/online/screen.js` |
-| Адреса сервера гри, власний PeerJS і ретранслятор | `SERVER_URL` у `src/online/server.js`, `peerConfig` у `src/online/net.js`; сам сервер у `server/` |
+| Адреса сервера гри, власний PeerJS і ретранслятор | `SERVER_URL` у `src/online/server.js`, `openPeer` у `src/online/net.js`; сам сервер у `server/` |
+| Обмеження сервера гри (частота запитів, сесії, пам'ять, ретранслятор) | `server/src/app.js` (`CALLS_PER_MIN`, `SESSIONS_KEEP`), `server/deploy/loko-game.service`, `limits.conf`, `turnserver.conf` |
 | Заборонені назви клубу, перевірка вводу | `OnlineScreen.input` |
 | Герої, риси, рідкість | `TRAITS`, `RARITY`, `newHero` у `src/online/profile.js` |
 | Імена героїв: списки, частки зразків за рідкістю | `FIRST_NAMES`, `ENKO`, `COSSACK`, `EPIC`, `MIX`, `newName` у `src/online/names.js` |

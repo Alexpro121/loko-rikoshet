@@ -116,21 +116,25 @@ GAME-LOKO/
 ├── server/                          сервер гри (Node.js 24): вхід через Telegram, онлайн-клуби, PeerJS, coturn
 │   ├── deploy/
 │   │   ├── Caddyfile                HTTPS і проксі: API та PeerJS на /p/
-│   │   ├── install.sh               встановлення на Ubuntu: Node, Caddy, coturn, служба, фаєрвол, Litestream
+│   │   ├── install.sh               встановлення на Ubuntu: Node, Caddy, coturn, служба, обмеження, swap, фаєрвол, Litestream
+│   │   ├── journald.conf            журнал сервера не більше 500 МБ
+│   │   ├── limits.conf              процесор і пам'ять для coturn, Caddy, Litestream: бот LOKO головніший
 │   │   ├── litestream.yml           безперервна копія бази в R2 чи B2
-│   │   ├── loko-game.service        служба systemd з обмеженням пам'яті
-│   │   ├── turnserver.conf          ретранслятор coturn з тимчасовими паролями
-│   │   └── update.sh                оновлення сервера до свіжого коду
+│   │   ├── loko-game.service        служба systemd: вага процесора, стеля пам'яті, перезапуск
+│   │   ├── turnserver.conf          ретранслятор coturn з тимчасовими паролями й обмеженням швидкості
+│   │   └── update.sh                оновлення сервера до свіжого коду й налаштувань
 │   ├── src/
-│   │   ├── app.js                   маршрути API, сесії, CORS, обмеження частоти входу
+│   │   ├── app.js                   маршрути API, сесії, CORS, обмеження частоти запитів
 │   │   ├── config.js                налаштування з оточення
 │   │   ├── db.js                    SQLite і міграції схеми
+│   │   ├── maintenance.js           нічне обслуговування: прострочені сесії, копія бази
 │   │   ├── rules.js                 правила гри з src/online/profile.js із заглушками браузера
 │   │   ├── server.js                запуск API і PeerJS
 │   │   ├── telegram.js              перевірка підпису Telegram (initData)
 │   │   └── turn.js                  тимчасові паролі coturn
 │   ├── test/
-│   │   └── api.test.js              тести сервера: node --test
+│   │   ├── api.test.js              тести API: node --test
+│   │   └── maintenance.test.js      тести нічного обслуговування
 │   ├── README.md                    що вміє сервер, запуск і встановлення
 │   ├── package-lock.json            зафіксовані версії залежностей сервера
 │   └── package.json                 залежність peer; скрипти start і test

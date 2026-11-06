@@ -126,3 +126,23 @@ test('дуже велике тіло запиту відхиляється', asy
     assert.equal(r.status, 413);
   } finally { await s.close(); }
 });
+
+test('на гравця лишається не більше п\'яти сесій, найновіші', async () => {
+  const s = await start();
+  try {
+    const tokens = [];
+    for (let i = 0; i < 7; i++) tokens.push((await s.call('POST', '/auth/telegram', { body: { initData: initData(9) } })).body.token);
+    assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE player_id = 9').get().n, 5);
+    assert.equal((await s.call('GET', '/me', { token: tokens[6] })).status, 200);
+  } finally { await s.close(); }
+});
+
+test('загальне обмеження частоти не чіпає перевірку стану', async () => {
+  const s = await start();
+  try {
+    let last;
+    for (let i = 0; i < 125; i++) last = await s.call('GET', '/me');
+    assert.equal(last.status, 429);
+    assert.equal((await s.call('GET', '/health')).body.ok, true);
+  } finally { await s.close(); }
+});

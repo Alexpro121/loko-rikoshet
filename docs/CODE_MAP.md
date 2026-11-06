@@ -350,14 +350,14 @@ Walkout: декорації виходу команд: прапори, кили�
 
 - Експорти: FIRST_NAMES:7, newName:52, SURNAME_POOLS:64
 
-## src/online/net.js (209 рядків)
+## src/online/net.js (232 рядків)
 
 Мережа онлайн-матчу: кімната за кодом через PeerJS (публічний сервер лише знайомить двох гравців), далі — пряме
 
 - Експорти: PROTO:14, makeCode:15, cleanCode:16
-- Внутрішні функції: tabToken:31, loadPeer:37, peerConfig:43, openPeer:50
-- **Net** :62
-  constructor:63, on:68, emit:69, kept:72, watch:78, host:86, join:108, attach:124, setupStream:141, onMsg:152, startPing:159, send:171, sendFrame:173, drop:179, offline:182, lost:184, rejoin:192, close:199
+- Внутрішні функції: tabToken:31, loadPeer:37, ownConfig:46, openPeer:54, openWith:65
+- **Net** :76
+  constructor:77, on:82, emit:83, kept:86, watch:92, host:100, join:122, connectTo:134, attach:147, setupStream:164, onMsg:175, startPing:182, send:194, sendFrame:196, drop:202, offline:205, lost:207, rejoin:215, close:222
 
 ## src/online/profile.js (269 рядків)
 
@@ -373,12 +373,12 @@ Walkout: декорації виходу команд: прапори, кили�
 - **OnlineScreen** :30
   constructor:31, onMenu:58, subKey:66, playState:67, html:69, clubCard:86, clubTiles:92, kitsHtml:97, clubHtml:101, feHtml:121, dice:122, thumb:123, feGen:124, feField:132, feEmblem:137, feColors:155, feExtra:162, rollCands:168, remember:169, patchFlag:171, patchFe:178, flagDone:188, syncSoon:191, look:194, afterRender:195, heroDetail:196, heroesHtml:208, revealHero:210, playHtml:219, stampOf:256, oppCard:258, patchOpp:263, input:275, setColor:296, act:297, copy:348, showResult:354
 
-## src/online/server.js (48 рядків)
+## src/online/server.js (86 рядків)
 
 Сервер гри (папка server/): вхід через Telegram, власний PeerJS і паролі до ретранслятора.
 
-- Експорти: SERVER_URL:6, serverOn:11, peerServer:14, login:30, iceServers:41
-- Внутрішні функції: api:20
+- Експорти: SERVER_URL:8, serverOn:18, markDown:20, peerServer:23, login:50, iceServers:77
+- Внутрішні функції: api:29, stored:42, store:45, authed:65
 
 ## src/online/session.js (284 рядків)
 

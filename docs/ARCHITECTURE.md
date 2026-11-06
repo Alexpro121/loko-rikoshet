@@ -218,7 +218,7 @@ state/* → config.js, club.js лише дані
 
 ## Онлайн
 
-Модель: господар рахує все, гість лише показує й шле команди. PeerJS тільки знайомить гравців: публічний сервер або власний, якщо в `SERVER_URL` (`src/online/server.js`) задано адресу сервера гри. Тоді `peerConfig` у `src/online/net.js` бере ще й тимчасовий пароль до ретранслятора сервера (`iceServers`); будь-який збій входу лишає STUN і публічний TURN.
+Модель: господар рахує все, гість лише показує й шле команди. PeerJS тільки знайомить гравців: публічний сервер або власний, якщо в `SERVER_URL` (`src/online/server.js`) задано адресу сервера гри. Тоді `openPeer` у `src/online/net.js` бере ще й тимчасовий пароль до ретранслятора сервера (`iceServers`); будь-який збій входу лишає STUN і публічний TURN. Якщо свій сервер кімнат не відповідає, `openPeer` відкриває кімнату на публічному PeerJS, а `markDown` хвилину не дає чіпати сервер; гість, що не знайшов кімнату на своєму сервері, шукає її ще й на публічному (`join`). Сесія входу живе в `localStorage` (`loko-server-session`), паролі ретранслятора 6 годин у пам'яті, тож сервер бачить гравця раз на кілька тижнів, а не щоматчу.
 
 ```text
 Господар: Match ── HostLink ── Net ═══ WebRTC ═══ Net ── Online ── GuestMatch :Гість
@@ -270,7 +270,7 @@ state/* → config.js, club.js лише дані
 
 ## Сервер гри
 
-Папка `server/` це окремий застосунок Node.js 24, його не збирає Vite і не публікує GitHub Pages. Він перевіряє підпис Telegram (`initData`) токеном бота гри, зберігає онлайн-клуби в SQLite (`server/src/db.js`, міграції в кінець `MIGRATIONS`) і видає паролі до coturn. Клуб створює `newClub` із `src/online/profile.js`, який сервер імпортує із заглушками `localStorage` і `addEventListener` (`server/src/rules.js`). Гра поки тримає клуб у `localStorage`, сервер лише знайомить і ретранслює. Встановлення й оновлення: `server/deploy/`, опис у `server/README.md`.
+Папка `server/` це окремий застосунок Node.js 24, його не збирає Vite і не публікує GitHub Pages. Він перевіряє підпис Telegram (`initData`) токеном бота гри, зберігає онлайн-клуби в SQLite (`server/src/db.js`, міграції в кінець `MIGRATIONS`) і видає паролі до coturn. Клуб створює `newClub` із `src/online/profile.js`, який сервер імпортує із заглушками `localStorage` і `addEventListener` (`server/src/rules.js`). Гра поки тримає клуб у `localStorage`, сервер лише знайомить і ретранслює. Раз на добу вночі `server/src/maintenance.js` чистить прострочені сесії й кладе цілісну копію бази в `data/backups` (14 днів). Сервер ділить машину з ботом LOKO, тож служби гри мають меншу вагу процесора, стелю пам'яті й першими гинуть при її нестачі (`server/deploy/loko-game.service`, `limits.conf`), а coturn обмежено за швидкістю й кількістю з'єднань. Встановлення й оновлення: `server/deploy/`, опис у `server/README.md`.
 
 ## Деплой
 
