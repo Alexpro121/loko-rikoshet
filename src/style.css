@@ -19,6 +19,13 @@
   --pad-r: max(calc(var(--u) * 2.2), var(--safe-r));
   --pad-t: max(calc(var(--u) * 1.6), var(--safe-t));
   --pad-b: max(calc(var(--u) * 1.6), var(--safe-b));
+  /* Смуга кнопок Telegram у повному екрані (--tg-content-safe-area-inset-top): «Назад» у лівому куті, «⌄ ⋮» у правому,
+     середина вільна. Табло матчу й пауза стоять у цій смузі збоку від кнопок, а не під нею: інакше все сповзає вниз.
+     min(смуга × 99, ширина) дає 0 поза Telegram і запас на кнопку, коли смуга є. */
+  --tgb: var(--tg-content-safe-area-inset-top, 0px);
+  --tgb-l: min(calc(var(--tgb) * 99), 104px);
+  --tgb-r: min(calc(var(--tgb) * 99), 92px);
+  --hud-t: max(calc(var(--u) * 1.6), calc(var(--safe-t) - var(--tgb) + max(0px, (var(--tgb) - 34px) / 2)));
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
@@ -118,7 +125,7 @@ svg { display: block; }
 .joy-prev { width: calc(var(--u) * 20); height: calc(var(--u) * 20); display: grid; place-items: center; overflow: hidden; border-radius: calc(var(--u) * 1.2); background: #0a3a28; opacity: var(--joy-a); }
 .joy-prev .joy-ring { width: calc(var(--u) * 12.5 * var(--joy-s)); height: calc(var(--u) * 12.5 * var(--joy-s)); } .joy-prev .joy-knob { width: calc(var(--u) * 5.5 * var(--joy-s)); height: calc(var(--u) * 5.5 * var(--joy-s)); }
 
-.joy-bar { position: absolute; top: calc(var(--pad-t) + var(--u) * 1); left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: calc(var(--u) * 1.4); padding: calc(var(--u) * 1) calc(var(--u) * 1.6); background: var(--deep); border: var(--edge) solid #fff; border-radius: 99px; font-weight: 800; font-size: var(--fs-s); white-space: nowrap; }
+.joy-bar { position: absolute; top: calc(var(--hud-t) + var(--u) * 1); left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: calc(var(--u) * 1.4); padding: calc(var(--u) * 1) calc(var(--u) * 1.6); background: var(--deep); border: var(--edge) solid #fff; border-radius: 99px; font-weight: 800; font-size: var(--fs-s); white-space: nowrap; }
 .joy-bar .btn { min-height: 36px; padding: 0 calc(var(--u) * 2); }
 .joy-mv { min-height: 40px; align-self: center; }
 .joy-set { grid-template-columns: 1fr 1fr auto auto; }
@@ -223,14 +230,20 @@ svg { display: block; }
 
 /* ---------- HUD ---------- */
 .hud { position: absolute; inset: 0; padding: var(--pad-t) var(--pad-r) 0 var(--pad-l); }
-.team { position: absolute; top: var(--pad-t); display: flex; align-items: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 0.8) calc(var(--u) * 1.6); background: var(--deep); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.8); box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.28); }
-.team.me { left: var(--pad-l); } .team.opp { right: calc(var(--pad-r) + var(--u) * 11.4); }
+.team { position: absolute; top: var(--hud-t); display: flex; align-items: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 0.8) calc(var(--u) * 1.6); background: var(--deep); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.8); box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.28); }
+.team.me { left: calc(var(--pad-l) + var(--tgb-l)); } .team.opp { right: calc(var(--pad-r) + var(--tgb-r) + var(--u) * 11.4); }
 .crest-box { position: relative; width: calc(var(--u) * 7); height: calc(var(--u) * 8); flex: none; } .crest-box .crest { width: 100%; height: 100%; }
 .crest-t { position: absolute; inset: 0 0 calc(var(--u) * 1) 0; display: grid; place-items: center; font-weight: 800; font-size: max(9px, calc(var(--u) * 2.2)); color: #fff; -webkit-text-stroke: calc(var(--u) * 0.4) var(--ink); paint-order: stroke fill; }
 .team-txt { display: flex; flex-direction: column; align-items: center; line-height: 1; } .team-txt span { font-size: max(9px, calc(var(--u) * 2)); font-weight: 800; letter-spacing: 0.04em; } .team-txt b { font-size: calc(var(--u) * 7.2); font-weight: 800; }
 .team.opp .team-txt { order: -1; }
-.pause-btn { position: absolute; top: var(--pad-t); right: var(--pad-r); background: var(--deep); }
-.hud-mid { position: absolute; top: var(--pad-t); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.8); }
+.pause-btn { position: absolute; top: var(--hud-t); right: calc(var(--pad-r) + var(--tgb-r)); background: var(--deep); width: max(34px, calc(var(--u) * 7.2)); height: max(34px, calc(var(--u) * 7.2)); padding: max(8px, calc(var(--u) * 1.6)); border-width: max(1.5px, calc(var(--edge) * 0.75)); opacity: 0.5; transition: opacity 0.3s; }
+/* Пауза не має заважати грі: менша, напівпрозора, а коли під нею м'яч — ледь видна (Minimap.pauseCheck). Перші секунди матчу й під пальцем — повністю.
+   Зона дотику ширша за саму кнопку: менший значок не робить її важчою для пальця. */
+.pause-btn::before { content: ''; position: absolute; inset: min(-10px, calc(var(--u) * -2)); }
+.pause-btn.wake, .pause-btn:active { opacity: 1; }
+@media (hover: hover) { .pause-btn:hover { opacity: 1; } }   /* на телефоні :hover «прилипає» після дотику */
+.pause-btn.dim:not(:active) { opacity: 0.15; }
+.hud-mid { position: absolute; top: var(--hud-t); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.8); }
 .plate { display: flex; flex-direction: column; align-items: center; padding: calc(var(--u) * 0.6) calc(var(--u) * 3.4); background: var(--deep); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.8); box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.28); min-width: calc(var(--u) * 25); }
 .plate-t { font-size: max(9px, calc(var(--u) * 2)); font-weight: 800; white-space: nowrap; color: #bfe9d2; } .plate-time { font-size: calc(var(--u) * 6.4); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .urgent .plate-time { color: #ff6671; animation: pulse 0.5s ease-in-out infinite; }
@@ -238,20 +251,18 @@ svg { display: block; }
 .mcoins svg { width: calc(var(--u) * 3.8); height: calc(var(--u) * 3.8); }
 .bump { animation: bump 0.35s; }
 .warn { position: absolute; top: calc(var(--u) * 22); left: 50%; transform: translateX(-50%); padding: calc(var(--u) * 0.9) calc(var(--u) * 3); background: var(--red); border: var(--edge) solid #fff; border-radius: 99px; font-size: var(--fs-m); font-weight: 800; white-space: nowrap; animation: blink 0.6s steps(2) infinite; }
-.combo { position: absolute; top: 34%; left: 50%; transform: translateX(-50%); font-size: calc(var(--u) * 8.5); font-weight: 800; color: var(--gold); -webkit-text-stroke: calc(var(--u) * 0.8) var(--ink); paint-order: stroke fill; white-space: nowrap; }
-.combo.pop { animation: combo 0.5s cubic-bezier(0.2, 1.6, 0.4, 1); }
+.combo { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: max(12px, calc(var(--u) * 3.4)); font-weight: 800; letter-spacing: 0.08em; color: #f2cf6b; white-space: nowrap; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+.combo.pop { animation: combo 0.35s cubic-bezier(0.2, 1.2, 0.4, 1); }
 .banner { position: absolute; left: 0; right: 0; top: 36%; display: flex; justify-content: center; }
 .banner.go .banner-in { animation: banner 2.3s both; }
 .banner-in { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.6); padding: calc(var(--u) * 2) calc(var(--u) * 8); background: var(--deep); border-block: var(--edge) solid #fff; text-align: center; min-width: 52%; }
 .banner h2 { font-size: calc(var(--u) * 10); line-height: 1; font-weight: 800; color: #fff; -webkit-text-stroke: calc(var(--u) * 0.7) var(--ink); paint-order: stroke fill; } .banner small { font-size: var(--fs-s); color: var(--gold); font-weight: 800; } .banner em { font-style: normal; font-size: var(--fs-s); color: var(--mint); }
-.goaltxt { position: absolute; top: 30%; left: 0; right: 0; text-align: center; animation: goal 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
-.goaltxt h1 { font-size: calc(var(--u) * 20); line-height: 0.95; font-weight: 800; color: var(--gold); -webkit-text-stroke: calc(var(--u) * 1.4) var(--ink); paint-order: stroke fill; text-shadow: 0 calc(var(--u) * 1.4) 0 var(--ink); }
-.goaltxt.opp h1 { color: #ff7a85; font-size: calc(var(--u) * 12); } .goaltxt p { margin-top: calc(var(--u) * 0.6); font-size: var(--fs-l); font-weight: 800; color: #fff; -webkit-text-stroke: calc(var(--u) * 0.6) var(--ink); paint-order: stroke fill; }
 .hint { position: absolute; left: 50%; bottom: calc(var(--u) * 6); transform: translateX(-50%); display: flex; align-items: center; gap: calc(var(--u) * 2); padding: calc(var(--u) * 1.2) calc(var(--u) * 3); background: rgba(13, 77, 51, 0.92); border: var(--edge) solid #fff; border-radius: 99px; font-size: var(--fs-m); font-weight: 800; white-space: nowrap; }
 .hand { position: relative; width: calc(var(--u) * 11); height: calc(var(--u) * 4); } .hand::before { content: ''; position: absolute; top: 50%; left: 0; width: calc(var(--u) * 3.6); height: calc(var(--u) * 3.6); margin-top: calc(var(--u) * -1.8); border-radius: 50%; background: #fff; animation: drag 1.6s ease-in-out infinite; } .hand::after { content: ''; position: absolute; top: 50%; left: 0; right: 0; border-top: calc(var(--u) * 0.6) dotted #fff; opacity: 0.7; }
 .floats { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.float { position: absolute; transform: translate(-50%, -50%); font-size: var(--fs-m); font-weight: 800; color: #fff; white-space: nowrap; -webkit-text-stroke: calc(var(--u) * 0.55) var(--ink); paint-order: stroke fill; animation: rise 1.05s ease-out forwards; }
-.float.coin { color: var(--gold); } .float.good { color: var(--mint); } .float.warn { color: #ff8a92; } .float.ram { color: #ffb15c; font-size: var(--fs-l); }
+/* дрібні події (ВІДБІР, ВРЯТУВАВ, ПАС, ШТАНГА…): підказка, а не крик — лише текст, без плашки; тінь тільки для читабельності на газоні */
+.float { position: absolute; transform: translate(-50%, -50%); font-size: max(10px, calc(var(--u) * 2.3)); font-weight: 700; letter-spacing: 0.06em; color: rgba(246, 244, 236, 0.92); white-space: nowrap; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); animation: rise 1s cubic-bezier(0.25, 0.8, 0.3, 1) forwards; }
+.float.coin { color: #f2cf6b; } .float.good { color: #b4e6cf; } .float.warn { color: #f2b0b5; } .float.ram { color: #f3c08a; }
 .cine { position: absolute; inset: 0; pointer-events: none; }
 .cine .lb { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .cine .lb.t { top: 0; } .cine .lb.b { bottom: 0; }
@@ -282,12 +293,11 @@ svg { display: block; }
 @keyframes pulse { 50% { transform: translate(var(--tx, 0), var(--ty, 0)) scale(1.06); } }
 @keyframes bob { 50% { transform: translateY(calc(var(--u) * -0.7)); } }
 @keyframes sheetin { from { opacity: 0; transform: translateY(calc(var(--u) * 3)) scale(0.96); } }
-@keyframes rise { 0% { opacity: 0; margin-top: 0; transform: translate(-50%, -50%) scale(0.6); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 100% { opacity: 0; margin-top: calc(var(--u) * -9); transform: translate(-50%, -50%) scale(1); } }
+@keyframes rise { 0% { opacity: 0; transform: translate(-50%, -30%) scale(0.92); } 18% { opacity: 0.9; transform: translate(-50%, -50%) scale(1); } 70% { opacity: 0.8; } 100% { opacity: 0; transform: translate(-50%, -110%) scale(1); } }
 @keyframes bump { 40% { transform: scale(1.35); } }
 @keyframes blink { 50% { opacity: 0.35; } }
-@keyframes combo { from { transform: translateX(-50%) scale(0.4); opacity: 0; } }
+@keyframes combo { from { transform: translateX(-50%) translateY(30%); opacity: 0; } }
 @keyframes banner { 0% { transform: translateX(-110%); } 14%, 80% { transform: translateX(0); } 100% { transform: translateX(110%); } }
-@keyframes goal { from { transform: scale(0.2) rotate(-6deg); opacity: 0; } }
 @keyframes drag { 0% { transform: translateX(calc(var(--u) * 7.4)); } 55% { transform: translateX(0); } 100% { transform: translateX(0); opacity: 0.2; } }
 @keyframes flash { from { opacity: 0.9; } to { opacity: 0; } }
 @keyframes toast { 0% { opacity: 0; transform: translate(-50%, calc(var(--u) * 2)); } 10%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
@@ -345,7 +355,7 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 
 /* ===== серія пенальті ===== */
 .pen { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
-.pen-top { position: absolute; top: calc(var(--pad-t) + var(--u) * 1); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: calc(var(--u) * 0.6); padding: calc(var(--u) * 1) calc(var(--u) * 2); background: rgba(8, 40, 30, 0.88); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.6); }
+.pen-top { position: absolute; top: calc(var(--hud-t) + var(--u) * 1); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: calc(var(--u) * 0.6); padding: calc(var(--u) * 1) calc(var(--u) * 2); background: rgba(8, 40, 30, 0.88); border: var(--edge) solid #fff; border-radius: calc(var(--u) * 1.6); }
 .pen-row { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 3); font-size: var(--fs-s); font-weight: 800; }
 .pd { display: flex; gap: calc(var(--u) * 0.7); } .pd i { width: calc(var(--u) * 3); height: calc(var(--u) * 3); border-radius: 50%; background: #0a3a28; border: max(1px, calc(var(--u) * 0.25)) solid rgba(255, 255, 255, 0.4); } .pd i.g { background: #3fe08f; border-color: #fff; } .pd i.x { background: #ff3b4a; border-color: #fff; }
 .pen-msg { position: absolute; left: 50%; bottom: calc(var(--pad-b) + var(--u) * 14); transform: translateX(-50%); text-align: center; font-size: var(--fs-l); font-weight: 800; -webkit-text-stroke: calc(var(--u) * 0.5) var(--ink); paint-order: stroke fill; }
@@ -359,7 +369,7 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 .pen-move button { width: calc(var(--u) * 9); height: calc(var(--u) * 9); border-radius: 50%; border: max(2px, calc(var(--u) * 0.5)) solid #fff; background: rgba(8, 40, 30, 0.88); color: #fff; font-size: var(--fs-l); font-weight: 800; touch-action: none; user-select: none; -webkit-user-select: none; }
 .pen-move button:active { background: #1f7a52; }
 .res-pens { margin-top: calc(var(--u) * 0.8); font-size: var(--fs-m); font-weight: 800; color: var(--gold); text-align: center; }
-.pen-top { top: calc(var(--pad-t) + var(--u) * 15); }
+.pen-top { top: calc(var(--hud-t) + var(--u) * 15); }
 .pen-msg { left: calc(var(--pad-l) + var(--u) * 2); bottom: calc(var(--pad-b) + var(--u) * 2); transform: none; text-align: left; max-width: 46vw; font-size: var(--fs-m); }
 
 /* ===== адаптація вікон під низькі екрани (телефон у ландшафті): вміст прокручується, кнопка «закрити» завжди на місці ===== */
@@ -386,7 +396,7 @@ img.crest { display: block; width: 100%; height: 100%; object-fit: contain; }
 }
 
 /* ===== табло як на телебаченні: компактна плашка зліва вгорі ===== */
-.bug.hud-mid { left: var(--pad-l); top: var(--pad-t); transform: none; align-items: stretch; gap: calc(var(--u) * 0.5); }
+.bug.hud-mid { left: calc(var(--pad-l) + var(--tgb-l)); top: var(--hud-t); transform: none; align-items: stretch; gap: calc(var(--u) * 0.5); }
 .bug-top { display: flex; align-items: center; gap: calc(var(--u) * 1); padding: 0 calc(var(--u) * 1.2); font-size: max(8px, calc(var(--u) * 1.8)); }
 .bug-top .plate-t { color: #dff3e8; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 1px 0 rgba(0,0,0,.6); }
 .bug-main { display: flex; align-items: stretch; height: calc(var(--u) * 7.4); border-radius: calc(var(--u) * 0.9); overflow: hidden; box-shadow: 0 calc(var(--u) * 0.5) calc(var(--u) * 1.4) rgba(0, 0, 0, 0.45); background: rgba(8, 20, 16, 0.92); }
@@ -1007,6 +1017,88 @@ button.purse:active { transform: translate(calc(var(--U) * 0.4), calc(var(--U) *
 @media (max-height: 420px) { .sc-goals { display: none; } .scard { bottom: calc(10vh + var(--u) * 1); } }
 @media (prefers-reduced-motion: reduce) { .scard *, .bug-goal, .bug-goal *, .bug-x, .bug-x * { animation: none !important; } }
 
+/* ---------- напис гола й автогола: заголовок у центрі згасає, плашка автора внизу лишається до повтору ---------- */
+.goaltxt { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.gt-mid { position: absolute; left: 0; right: 0; top: 22%; display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 1.4); animation: gtfade 0.45s 3.3s ease-in forwards; }
+@keyframes gtfade { to { opacity: 0; transform: translateY(calc(var(--u) * -4)) scale(0.92); } }
+.gt-t { display: flex; justify-content: center; font-size: calc(var(--u) * 19); line-height: 0.92; font-weight: 800; letter-spacing: 0.02em; color: var(--gold); -webkit-text-stroke: calc(var(--u) * 1.3) var(--ink); paint-order: stroke fill; text-shadow: 0 calc(var(--u) * 1.3) 0 var(--ink); white-space: nowrap; }
+.gt-t s { display: inline-block; text-decoration: none; animation: gtletter 0.55s calc(var(--i) * 0.045s) cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+@keyframes gtletter { from { opacity: 0; transform: translateY(-55%) scale(1.8) rotate(-8deg); } }
+.goaltxt.opp .gt-t { color: #ff7a85; font-size: calc(var(--u) * 12); }
+.goaltxt.og .gt-t { color: #ffb52e; transform: rotate(-3deg); }
+.goaltxt.og.opp .gt-t { color: #ff7a85; }
+.goaltxt.og .gt-t s:nth-child(odd) { animation-name: gtletterog; }
+@keyframes gtletterog { from { opacity: 0; transform: translateY(55%) scale(1.8) rotate(10deg); } }
+.gt-late span { display: block; padding: calc(var(--u) * 0.5) calc(var(--u) * 2.4); background: #d4202c; color: #fff; font-size: var(--fs-m); font-weight: 800; letter-spacing: 0.14em; transform: skewX(-9deg); box-shadow: calc(var(--u) * 0.6) calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.45); animation: gtrib 0.45s 0.3s cubic-bezier(0.2, 1.3, 0.4, 1) both, gtpulse 0.8s 0.9s ease-in-out 3; }
+@keyframes gtrib { from { opacity: 0; transform: skewX(-9deg) translateX(calc(var(--u) * -14)); } }
+@keyframes gtpulse { 50% { opacity: 0.6; } }
+.gt-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u) * 1); }
+.gt-chips span { display: flex; align-items: center; gap: calc(var(--u) * 0.6); padding: calc(var(--u) * 0.45) calc(var(--u) * 1.6); background: #0c1311; color: #f6f4ec; font-size: var(--fs-s); font-weight: 800; letter-spacing: 0.08em; transform: skewX(-9deg); box-shadow: calc(var(--u) * 0.5) calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.4); animation: gtchip 0.35s calc(0.45s + var(--i) * 0.08s) cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+.gt-chips span.tag { background: #f6f4ec; color: #0c1311; }
+.gt-chips .ic { width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.2); }
+@keyframes gtchip { from { opacity: 0; transform: skewX(-9deg) translateY(60%); } }
+.gt-plate { position: absolute; left: 0; right: 0; bottom: calc(10vh + var(--u) * 2.6); display: flex; justify-content: center; padding: 0 var(--pad-r) 0 var(--pad-l); }
+.gt-card { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; max-width: 100%; animation: gtcard 0.5s 0.55s cubic-bezier(0.2, 1.1, 0.3, 1) both; }
+@keyframes gtcard { from { opacity: 0; transform: translateY(calc(var(--u) * 5)); } }
+.gt-lab { position: relative; z-index: 1; margin-left: calc(var(--u) * 1); padding: calc(var(--u) * 0.35) calc(var(--u) * 1.4); background: var(--rd); color: var(--cr); font-style: normal; font-size: var(--fs-s); font-weight: 800; letter-spacing: 0.12em; transform: skewX(-9deg); }
+.goaltxt.opp .gt-lab { background: var(--cb, #254e9c); color: var(--cbt, #fff); }
+.goaltxt.og .gt-lab { background: #ffb52e; color: #0c1311; }
+.gt-row { display: flex; align-items: center; gap: calc(var(--u) * 1.8); min-width: 0; max-width: 100%; padding: calc(var(--u) * 1) calc(var(--u) * 2.4) calc(var(--u) * 1.2) calc(var(--u) * 1.4); background: #0c1311; color: #f6f4ec; box-shadow: calc(var(--u) * 0.7) calc(var(--u) * 0.7) 0 rgba(0, 0, 0, 0.45), inset 0 calc(var(--u) * -0.6) 0 var(--rd); }
+.goaltxt.opp .gt-row { box-shadow: calc(var(--u) * 0.7) calc(var(--u) * 0.7) 0 rgba(0, 0, 0, 0.45), inset 0 calc(var(--u) * -0.6) 0 var(--cb, #254e9c); }
+.goaltxt.og .gt-row { box-shadow: calc(var(--u) * 0.7) calc(var(--u) * 0.7) 0 rgba(0, 0, 0, 0.45), inset 0 calc(var(--u) * -0.6) 0 #ffb52e; }
+.gt-cr { position: relative; flex: none; width: calc(var(--u) * 5.6); height: calc(var(--u) * 6.4); }
+.gt-cr .crest, .gt-cr img { width: 100%; height: 100%; }
+.gt-who { display: flex; flex-direction: column; min-width: 0; }
+.gt-who b { font-size: calc(var(--u) * 4.6); font-weight: 800; line-height: 1.05; letter-spacing: 0.03em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gt-who small { margin-top: calc(var(--u) * 0.3); font-size: var(--fs-s); font-weight: 600; color: #a9bdb4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.goaltxt.og .gt-who small { color: #ffb52e; }
+.gt-row em { flex: none; padding-left: calc(var(--u) * 1.6); border-left: 1px solid rgba(246, 244, 236, 0.18); font-style: normal; font-size: calc(var(--u) * 4); font-weight: 800; color: #ffb52e; font-variant-numeric: tabular-nums; }
+.bug-goal.og b { background: #ffb52e; color: #0c1311; }
+.sc-goals .og, .rs-goals .og { font-style: normal; font-size: 0.8em; color: #ffb52e; }
+@media (max-height: 420px) { .gt-mid { top: 18%; } .gt-t { font-size: calc(var(--u) * 16); } .gt-plate { bottom: calc(10vh + var(--u) * 1.2); } }
+
+/* ---------- представлення суперника на виході команд ---------- */
+/* довга назва: fitText зменшує шрифт, а як не вистачає — переносить; трикрапки немає */
+.fit { text-overflow: clip !important; }
+.fit.wrap { white-space: normal !important; overflow-wrap: anywhere; line-height: 1.05; }
+.mday { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 var(--pad-r) 0 var(--pad-l); pointer-events: none; z-index: 3; }
+.md-in { width: min(calc(var(--u) * 128), 100%); display: flex; flex-direction: column; align-items: stretch; gap: calc(var(--u) * 1.2); }
+.md-top { align-self: center; display: flex; align-items: stretch; gap: calc(var(--u) * 0.8); font-size: var(--fs-s); font-weight: 800; letter-spacing: 0.1em; animation: mdtop 0.35s 0.05s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.md-top > * { padding: calc(var(--u) * 0.45) calc(var(--u) * 1.6); background: #0c1311; color: #f6f4ec; transform: skewX(-9deg); box-shadow: calc(var(--u) * 0.5) calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.4); }
+.md-top b { background: #f6f4ec; color: #0c1311; }
+.md-top span { font-weight: 700; color: #cfe0d8; }
+.md-top .fin { background: #ffb52e; color: #0c1311; font-weight: 800; }
+.md-top .rev { background: #d4202c; color: #fff; font-weight: 800; }
+@keyframes mdtop { from { opacity: 0; transform: translateY(calc(var(--u) * -3)); } }
+.md-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; }
+.md-side { min-width: 0; display: flex; background: var(--k); color: var(--kt); box-shadow: calc(var(--u) * 0.8) calc(var(--u) * 0.8) 0 rgba(0, 0, 0, 0.45), inset 0 calc(var(--u) * -1) 0 var(--k2); transform: skewX(-9deg); }
+.md-side.me { justify-content: flex-end; animation: mdleft 0.45s cubic-bezier(0.2, 1, 0.3, 1) both; }
+.md-side.opp { animation: mdright 0.45s cubic-bezier(0.2, 1, 0.3, 1) both; }
+.md-un { display: flex; align-items: center; gap: calc(var(--u) * 2); min-width: 0; padding: calc(var(--u) * 2) calc(var(--u) * 3) calc(var(--u) * 2.6); transform: skewX(9deg); }
+.md-side.me .md-un { flex-direction: row-reverse; text-align: right; }
+.md-cr { position: relative; flex: none; width: calc(var(--u) * 10); height: calc(var(--u) * 11.4); }
+.md-cr .crest, .md-cr img { width: 100%; height: 100%; }
+.md-name { display: flex; flex-direction: column; gap: calc(var(--u) * 0.4); min-width: 0; }
+.md-side.me .md-name { align-items: flex-end; }
+.md-name b { max-width: 100%; font-size: calc(var(--u) * 6); font-weight: 800; line-height: 1; letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.md-name small { font-size: var(--fs-s); font-weight: 700; opacity: 0.8; }
+.md-pw { font-style: normal; font-size: var(--fs-s); font-weight: 700; opacity: 0.85; } .md-pw b { font-size: inherit; }
+.md-form { display: flex; gap: calc(var(--u) * 0.5); } .md-form u { width: calc(var(--u) * 1.8); height: calc(var(--u) * 1.8); background: #9aa5a0; box-shadow: 0 0 0 calc(var(--u) * 0.25) rgba(0, 0, 0, 0.35); }
+.md-form u.w { background: #2fbf6a; } .md-form u.l { background: #e0414f; }
+.md-vs { position: relative; z-index: 1; display: grid; place-items: center; margin: 0 calc(var(--u) * -1.4); padding: 0 calc(var(--u) * 2.2); background: #0c1311; color: #f6f4ec; transform: skewX(-9deg); box-shadow: calc(var(--u) * 0.8) calc(var(--u) * 0.8) 0 rgba(0, 0, 0, 0.45); animation: mdvs 0.4s 0.28s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.md-vs b { font-size: calc(var(--u) * 5.4); font-weight: 800; letter-spacing: 0.04em; transform: skewX(9deg); }
+@keyframes mdleft { from { opacity: 0; transform: skewX(-9deg) translateX(-45%); } }
+@keyframes mdright { from { opacity: 0; transform: skewX(-9deg) translateX(45%); } }
+@keyframes mdvs { from { opacity: 0; transform: skewX(-9deg) scale(0.3); } }
+.mday.out .md-side.me { animation: mdleftout 0.32s cubic-bezier(0.6, 0, 0.8, 0.4) forwards; }
+.mday.out .md-side.opp { animation: mdrightout 0.32s cubic-bezier(0.6, 0, 0.8, 0.4) forwards; }
+.mday.out .md-vs, .mday.out .md-top { animation: mdfade 0.25s ease-in forwards; }
+@keyframes mdleftout { to { opacity: 0; transform: skewX(-9deg) translateX(-35%); } }
+@keyframes mdrightout { to { opacity: 0; transform: skewX(-9deg) translateX(35%); } }
+@keyframes mdfade { to { opacity: 0; } }
+@media (max-height: 420px) { .md-un { padding: calc(var(--u) * 1.4) calc(var(--u) * 2.2) calc(var(--u) * 1.8); } .md-cr { width: calc(var(--u) * 8); height: calc(var(--u) * 9.2); } .md-name b { font-size: calc(var(--u) * 5); } }
+@media (prefers-reduced-motion: reduce) { .goaltxt *:not(.gt-mid), .mday * { animation-duration: 0.01s !important; animation-delay: 0s !important; } }
+
 /* годинник: хвилина перекидається, секунди біжать рівно, смужка тайму; до розведення годинник стоїть (блимає двокрапка) */
 .bug-t b { display: flex; align-items: center; line-height: 1; }
 .tm-m { display: inline-grid; overflow: hidden; height: 1.05em; line-height: 1.05; }
@@ -1555,8 +1647,8 @@ button.purse:active { transform: translate(calc(var(--U) * 0.4), calc(var(--U) *
 .map-zones.on { visibility: visible; pointer-events: auto; background: rgba(4, 14, 10, 0.55); box-shadow: 0 0 0 100vmax rgba(4, 14, 10, 0.55); }
 .map-zones.on::before { content: ''; position: fixed; inset: 0; }   /* тінь дотиків не ловить: смуга безпечної зони теж має бути закрита */
 .map-zones i { position: absolute; display: grid; place-items: center; border: 2px dashed rgba(255, 255, 255, 0.4); border-radius: calc(var(--u) * 1.2); font-style: normal; font-size: var(--fs-s); font-weight: 800; color: rgba(255, 255, 255, 0.6); text-align: center; line-height: 1.05; box-sizing: border-box; overflow: hidden; }
-.z-bug { left: 0; top: 0; width: calc(var(--u) * 74); height: calc(var(--u) * 12.6); }   /* найгірший випадок: рахунок 12:11, доданий час, смужка гола */
-.z-pause { right: 0; top: 0; width: calc(var(--u) * 9.6); height: calc(var(--u) * 9.6); }
+.z-bug { left: var(--tgb-l); top: calc(var(--hud-t) - var(--pad-t)); width: calc(var(--u) * 74); height: calc(var(--u) * 12.6); }   /* найгірший випадок: рахунок 12:11, доданий час, смужка гола */
+.z-pause { right: var(--tgb-r); top: calc(var(--hud-t) - var(--pad-t)); width: calc(var(--u) * 9.6); height: calc(var(--u) * 9.6); }
 .z-pause span { font-size: max(7px, calc(var(--u) * 1.5)); }
 .z-card { left: 0; bottom: 0; width: calc(var(--u) * 47); height: calc(var(--u) * 16); }   /* картка росте з довжиною імені */
 .hand-left .z-card { left: auto; right: 0; }

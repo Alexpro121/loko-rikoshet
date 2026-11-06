@@ -4,7 +4,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PITCH } from '../config.js';
 import { VoxelBuilder, rng } from './voxel.js';
 import { whenLogo } from './logo.js';
-import { netTexture, netPlane, grassTexture, boardTexture, ANISO } from './textures.js';
+import { netTexture, netPlane, grassTexture, ANISO } from './textures.js';
+import { Boards, FRAME_LEN, BOARD_H } from './boards.js';
 
 const { L, W, G, CH, WALL, WALL_H, GOAL_D } = PITCH;
 const LINE = '#e6ede3';
@@ -98,8 +99,7 @@ export function buildPitch() {
 
   // --- борти: корпус + шапка; рекламні панелі нижче окремим мешем
   const wallPlanes = [];
-  const bt = boardTexture(), texW = bt.width * 0.0049;
-  let cum = 0;
+  const bt = new Boards();
   for (let i = 0; i < 8; i++) {
     const [x1, z1] = OUTLINE[i], [x2, z2] = OUTLINE[(i + 1) % 8];
     // кожен відрізок ділимо на дві частини, якщо це торцева стінка з воротами
@@ -121,21 +121,25 @@ export function buildPitch() {
       const ry = -Math.atan2(dz, dx);
       b.box(cx, WALL_H / 2 - 0.5, cz, L2, WALL_H + 1, WALL, '#262c30', ry);
       b.box(cx, WALL_H + 0.06, cz, L2, 0.12, WALL + 0.12, '#4a5358', ry);
-      // рекламна панель: на внутрішній (side=1) і на зовнішній стороні
-      const u0 = cum / texW, u1 = (cum + len) / texW;
-      for (const side of [1, -1]) {
-        const g2 = new THREE.PlaneGeometry(len, 1.02), uv2 = g2.attributes.uv;
-        uv2.setXY(0, u0, 1); uv2.setXY(1, u1, 1); uv2.setXY(2, u0, 0); uv2.setXY(3, u1, 0);
-        g2.rotateY(Math.atan2(-nx * side, -nz * side));
-        const off = side > 0 ? -0.02 : WALL + 0.02;
-        g2.translate(mx + nx * off, 0.6, mz + nz * off);
-        wallPlanes.push(g2);
+      // рекламні модулі (boards.js): відрізок ділимо на цілу кількість модулів ~FRAME_LEN; зріз кута — один обрізаний модуль.
+      // Кожен модуль — свій прямокутник на внутрішній (side=1) і зовнішній стороні, UV.x = номер модуля + частка, UV.y — висота
+      const corner = len < FRAME_LEN * 0.6, n = corner ? 1 : Math.max(1, Math.round(len / FRAME_LEN)), ml = len / n;
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) * ml, px = ax + ux * t, pz = az + uz * t, s = bt.addSlot(px, pz, corner);
+        const r = corner ? len / FRAME_LEN : 1, x0 = s + 0.5 - r / 2, x1 = s + 0.5 + r / 2;
+        for (const side of [1, -1]) {
+          const g2 = new THREE.PlaneGeometry(ml, BOARD_H), uv2 = g2.attributes.uv;
+          uv2.setXY(0, x0, 1); uv2.setXY(1, x1, 1); uv2.setXY(2, x0, 0); uv2.setXY(3, x1, 0);
+          g2.rotateY(Math.atan2(-nx * side, -nz * side));
+          const off = side > 0 ? -0.02 : WALL + 0.02;
+          g2.translate(px + nx * off, 0.6, pz + nz * off);
+          wallPlanes.push(g2);
+        }
       }
-      cum += len;
     }
   }
   group.add(b.mesh());
-  const boards = new THREE.Mesh(mergeGeometries(wallPlanes), new THREE.MeshBasicMaterial({ map: bt.texture, color: 0xf2f2f2 }));       // LED-борти світяться самі
+  const boards = new THREE.Mesh(mergeGeometries(wallPlanes), bt.material);       // LED-борти світяться самі: один меш, один виклик малювання
   boards.matrixAutoUpdate = false;
   group.add(boards);
 

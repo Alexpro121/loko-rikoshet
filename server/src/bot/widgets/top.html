@@ -1,0 +1,76 @@
+<style>
+[hidden]{display:none!important}
+:root{--h:var(--tg-theme-hint-color,#8a9099);--s:var(--tg-theme-secondary-bg-color,#8882)}
+body{margin:0;padding:0 0 max(12px,env(safe-area-inset-bottom));font:15px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--tg-theme-text-color)}
+.hd{overflow:hidden;padding:12px 12px 0;color:#f6f4ec;background:repeating-linear-gradient(90deg,#0f4d34 0 26px,#0b3d2a 26px 52px)}
+.xb{display:block;max-width:100%;height:auto;overflow:visible}
+.xb text{font:italic 900 34px system-ui,sans-serif;stroke-linejoin:round;fill:var(--z);stroke:#06120d;stroke-width:0}
+.xb :first-child{fill:#06120d;stroke-width:5}
+.xb :last-child{fill:var(--f);stroke-width:2.5;paint-order:stroke}
+.xg{--f:#f6f4ec;--z:#1f8f3f}.xr{--f:#e02a38;--z:#7d1219}
+#tt{margin-bottom:6px;animation:st .5s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes st{0%{transform:scale(1.6) rotate(-5deg);opacity:0}}
+#pd{display:grid;grid-template-columns:1fr 1.15fr 1fr;align-items:end;gap:8px}
+.pc{min-width:0;text-align:center}
+.in .pc{animation:ri .8s cubic-bezier(.2,1.2,.4,1) both}
+@keyframes ri{0%{transform:translateY(100%)}}
+.av{position:relative;width:38px;height:38px;margin:0 auto;display:grid;place-items:center;font:italic 900 19px system-ui,sans-serif;transform:skewX(-10deg);box-shadow:3px 3px 0 #06120d,0 0 0 2px #06120d}
+.p1{position:relative}
+.p1 .av{width:44px;height:44px;margin-top:40px;font-size:22px}
+.ju{position:absolute;left:50%;top:18px;margin-left:-6px;transform-origin:50% 100%;animation:ju .48s linear infinite}
+.ju svg{display:block;animation:sp 1.1s linear infinite}
+@keyframes ju{0%,to{transform:scale(1.2,.8)}8%{transform:translateY(-8px);animation-timing-function:cubic-bezier(.33,.67,.67,1)}50%{transform:translateY(-26px);animation-timing-function:cubic-bezier(.33,0,.67,.33)}92%{transform:translateY(-8px)}}
+@keyframes sp{to{transform:rotate(-1turn)}}
+.pc p,.pc small,li p{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc p{margin-top:7px;font-size:14px;font-weight:800}
+.pc small{display:block;font-size:12px;color:#f6f4ecb0}
+.pc em{display:block;margin:1px 0 6px;font:italic 900 15px system-ui,sans-serif;color:#f6f4ec}
+.pb{display:grid;place-items:center;height:22px;border:2px solid #06120d;border-bottom:0;background:#cd8a4a;color:#06120d;font:italic 900 20px system-ui,sans-serif}
+.p1 .pb{height:38px;font-size:26px;background:#e8b923}
+.p2 .pb{height:30px;background:#c9ced4}
+#me{display:flex;align-items:center;gap:6px;margin:10px 12px 0;padding:4px 14px 6px 6px;background:#06120d;color:#f6f4ec;animation:st .5s 1.1s cubic-bezier(.3,1.6,.5,1) both}
+#me p{min-width:0;margin:0;font-size:13px;color:#f6f4ecc8}
+#me b{display:block;font-size:15px;color:#f6f4ec}
+ol{margin:10px 12px 0;padding:4px 0;list-style:none;background:var(--s)}
+li{display:flex;align-items:center;gap:10px;height:30px;padding:0 12px}
+.in li{animation:sl .45s both}
+@keyframes sl{0%{transform:translateX(24px);opacity:0}}
+.nw{animation:nw 1.8s ease-out}
+@keyframes nw{0%{background:#e8b92366}}
+li i{width:20px;text-align:right;font:italic 900 14px system-ui,sans-serif;color:var(--h)}
+li u{flex:none;width:7px;height:20px;transform:skewX(-14deg);box-shadow:0 0 0 1px #0003}
+li p{flex:1;min-width:0;font-weight:700}
+li small{margin-left:7px;font-size:12px;font-weight:400;color:var(--h)}
+li b{font:italic 900 16px system-ui,sans-serif}
+s{font-size:12px;font-weight:800;text-decoration:none;color:#20a050}
+.dn{color:#e02a38}
+li.me{box-shadow:inset 0 0 0 2px #e02a38}
+.no{justify-content:center;height:56px;color:var(--h)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<div class="hd"><div id="tt"></div><div id="pd"></div></div>
+<div id="me" hidden><div id="mk"></div><p><b>Твоє місце</b><span id="mt"></span></p></div>
+<ol id="ol"></ol>
+<script>
+const T=window.TelegramWidget,$=i=>document.getElementById(i),J=s=>{try{return JSON.parse(s)}catch(e){}},
+X=c=>/^#[0-9a-f]{6}$/i.test(c)?c:'#888888',Y=c=>[1,3,5].reduce((a,i,k)=>a+parseInt(c.slice(i,i+2),16)*[.3,.59,.11][k],0),
+E=s=>String(s??'').replace(/[&<>]/g,c=>'&#'+c.charCodeAt()+';'),
+B=(t,c)=>{const n=[...t].length*25+16;let u='',k=5;for(;k--;)u+='<text x="'+k+'" y="'+k+'">'+t+'</text>';
+ return'<svg width="'+n+'" height="44" viewBox="0 0 '+n+' 44" class="'+c+'"><g transform="translate(6 33) skewX(-10)">'+u+'</g></svg>'};
+let L,prev,P={top:[['Олекса','КАЖАНИ',1084,'#254e9c'],['Марта','ГРІМ',1061,'#c8102e'],['Іван','ВОВКИ',1032,'#1f9d4a'],['Сашко','ЛЕВИ',1008,'#e8b923'],['Ната','ЧАЙКИ',991,'#5fb3e6'],['Богдан','ДНІПРО',975,'#6b4fbb'],['Ліза','ВІТЕР',962,'#e4e8ec'],['Тарас','СОКОЛИ',948,'#ff7a00'],['Ярема','ГРАНІТ',930,'#555555'],['Оля','КАШТАН',917,'#8b5a2b']],n:57,t:'19:40',r:1};
+$('tt').innerHTML=B('РЕЙТИНГ','xb xg');
+function draw(){const p=T?J(T.publicData):P;if(p&&(!L||(p.r|0)>=(L.r|0)))L=p;
+ const d=Object(L),top=[].concat(d.top||[]).filter(Array.isArray).slice(0,10),was=prev,m=Object(T?J(T.chatData):{k:12,r:1042,n:'КАЖАНИ'}),me=m.k|0,
+ R=top.map((x,i)=>{const k=x[0]+'|'+x[1],o=was&&was[k];return{x,i,k,c:X(x[3]),cl:(was&&!(o&&o[1]==x[2])?' nw':'')+(me==i+1?' me':''),dl:o?o[0]-i:0}});
+ prev={};R.map(r=>prev[r.k]=[r.i,r.x[2]]);document.body.className=was?'':'in';
+
+ $('pd').innerHTML=R.slice(0,3).map(r=>'<div class="pc p'+(r.i+1)+r.cl+'" style="order:'+[1,0,2][r.i]+';animation-delay:'+[.6,.4,.25][r.i]+'s"><div class="av" style="background:'+r.c+';color:'+(Y(r.c)>150?'#06120d':'#fff')+'">'+E([...String(r.x[0]||'?')][0].toUpperCase())+'</div>'
+  +(r.i?'':'<i class="ju"><svg width="20" height="20" viewBox="-12 -12 24 24"><circle r="11" fill="#fff" stroke="#06120d" stroke-width="1.6"/><path d="M0-5 5-1.5 3 4h-6l-2-5.5z" fill="#06120d"/></svg></i>')+'<p>'+E(r.x[0])+'</p><small>'+E(r.x[1])+'</small><em>'+(r.x[2]|0)+'</em><div class="pb">'+(r.i+1)+'</div></div>').join('');
+ $('ol').innerHTML=top.length?R.slice(3).map(r=>'<li class="'+r.cl+'" style="animation-delay:'+(.5+r.i*.05)+'s"><i>'+(r.i+1)+'</i><u style="background:'+r.c+'"></u><p>'+E(r.x[0])+'<small>'+E(r.x[1])+'</small></p>'
+  +(r.dl?'<s'+(r.dl<0?' class="dn">':'>+')+(r.dl<0?'−':'')+Math.abs(r.dl)+'</s>':'')+'<b>'+(r.x[2]|0)+'</b></li>').join(''):'<li class="no">Ще ніхто не зіграв. Будь першим!</li>';
+ $('ol').hidden=top.length>0&&top.length<4;
+ $('me').hidden=!me||me<=top.length;$('mk').innerHTML=B('#'+me,'xb xr');$('mt').textContent=(m.r|0)+' рейтингу'+(m.n?' · '+m.n:'')}
+draw();
+if(T){T.onEvent('publicDataChanged',draw);T.onEvent('chatDataChanged',draw);T.isPreview||T.watchPublicData();T.ready&&T.ready()}
+else{document.documentElement.style.colorScheme='light dark';setTimeout(()=>{P=J(JSON.stringify(P));P.top[5][2]=1020;P.top.sort((a,b)=>b[2]-a[2]);P.r=2;draw()},3500)}
+</script>

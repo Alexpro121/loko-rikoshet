@@ -6,17 +6,18 @@
 
 | Завдання | Де |
 |---|---|
-| Складність суперника за номером матчу | `matchSpec` у `src/config.js` |
+| Складність суперника за номером матчу | `matchSpec` у `src/config.js`; ріст між сезонами: `SEASON_HEAT`, `heatOf` |
 | Тривалість матчу | поле `time` у `matchSpec`; тайми й хвилини: `periodBound`, `gameMin` |
 | Розмір поля, воріт, м'яча | `PITCH` у `src/config.js` |
 | Сила удару, тертя, відскоки | `PHYS` у `src/config.js`, `BALL` у `src/physics/ballmodel.js` |
 | Швидкість наших гравців | `speed: 9.2` у `Match.start` |
 | Шанс відбору | `tackleChance`, `resolveTackle` |
 | Вплив навичок на удар | `shotSkill` у `src/config.js`, `shotMul`, `kickErr` |
-| Ліги, клуби, форма суперників | `LEAGUES` у `src/config.js`; при зміні кількості клубів також `* 13` в `oppSquad` |
+| Ліги, клуби, форма суперників | `LEAGUES` у `src/config.js` |
 | Схеми команд | `FORMATIONS` у `src/config.js`; наша схема в кар'єрі: `S.tactic`, запасна `MY_FORMATION` |
 | Нападники й воротарі в трансферах | `STRIKERS`, `KEEPERS` у `src/config.js` |
 | Ціна й дохід стадіону | `src/state/economy.js` |
+| Ціна тренування навички | `trainCost` у `src/state/squad.js` |
 | Яруси стадіону | `STADIUM_TIERS`, `STADIUM_TIER_NAMES` у `src/config.js`, `Island.buildStadium` |
 | Нагороди за матч | `Match.end` |
 | Реальний склад клубу | `ROSTER` у `src/state/squad.js` |
@@ -62,7 +63,7 @@
 | Перерва | `startBreak`, `updateBreak` |
 | Як м'яч поводиться в сітці після гола | `net`, `NET_BACK`, `NET_OUT` у `src/physics/world.js` |
 | Що вважати сейвом, досвід воротаря | `creditSave`, `onBody`, `trapMine` у `src/match/match.js` |
-| Автор гола, автогол | `byTeam` в `onGoal`, `goalsBy` у `src/match/match.js` |
+| Автор гола, автогол, гольовий пас | `goalCredit`, `kicked`, `touched`, `passer`, `headingIn` у `src/match/match.js`; голи в картки: `goalsBy`; онлайн: фільтр `og` у `Online.finish` |
 | Коли суддя свистить кінець тайму | `calmBall`, `ballFlying` у `src/match/match.js` |
 | Межі штрафного | `PITCH.BOX_D`, `PITCH.BOX_W` у `src/config.js` |
 | Напрям і пунктир удару ШІ | `aimCounter`, `counterPath` у `src/match/match.js` |
@@ -81,7 +82,9 @@
 | Падіння | `Player.knock`, `src/graphics/ragdoll.js` |
 | Руки й ноги дістають ціль | `solveReach`, `handsIK`, `plantFeet`, `solveArms` |
 | Стрибок воротаря | `gkDive`, `planDive`, `diveKin`; накриття грудьми вперед: `gkSmother`, `diveFwd`, `FWD_K`; ривки рук: `capQ` у `handsIK`, `armGuard` |
-| Блок коліном і гомілкою воротаря | вибір у `updateKeepers` (поріг `catchLimit`), відскік `legDeflect` у `src/match/match.js`; поза `gkShin`, `shinIK`, `SHIN_*` у `src/graphics/player.js` |
+| Блок коліном і гомілкою воротаря | вибір у `updateKeepers` (поріг `catchLimit`), відскік `legDeflect` у `src/match/match.js`; поза `gkShin`, `shinIK`, `SHIN_*` у `src/graphics/player.js`; удар ногою `gkFoot` веде той самий `shinIK` (`FOOT_F`) |
+| Воротар не встиг зреагувати на удар | `lateReflex`, `lateReflexAt` (виклик в `onGoal`), спільний старт стрибка `launchDive` у `src/match/match.js` |
+| Затримка реакції воротаря, зокрема після рикошету | `reactT` у `Match.start`, ворота реакції в `updateKeepers` (`seenT`, `deflT`) |
 | Стрибок воротаря вгору за часом прильоту | `gkJump(T)`, виклики в `src/match/match.js` і `src/match/penalty.js` |
 | Обличчя, зачіски, номери | конструктор `Player`, `setLook`, `playerAtlas` у `src/graphics/textures.js` |
 | Вибір вигляду в редакторі | `allHairs`, `allSkins` в `ACADEMY`; `renderCustom` в `src/ui/ui.js` |
@@ -104,7 +107,12 @@
 | Завдання | Де |
 |---|---|
 | Поле, борти, ворота, сітка | `buildPitch` у `src/graphics/pitch.js`, рух сітки: `netBulge` |
+| Реклама й кадри на LED-бортах | малюнки `PAINT` і `LIVE`, ротація `POOL` у `src/graphics/boards.js`; перегляд у `boards.html` |
+| Як борти реагують на гру | `Boards.cue` і `Boards.step`; виклики `boards.cue` у `src/match/match.js` і `penalty.js` |
 | Трибуни й реакції глядачів | `src/graphics/stands.js` |
+| Рухи глядачів у реакціях і співах | `crReact` і `crowdPos` у шейдері `CROWD_VS`, тривалість `DUR`, номер типу `RX`, згасання старої реакції `FADE` у `src/graphics/stands.js` |
+| Як натовп стежить за грою (погляд, напруга біля воріт) | `Stands.track` і блок напруги в `crowdPos` (`CROWD_VS`); реакція на промах і сейв: `missReact` у `src/match/cinema.js`, `saveReact` у `src/match/match.js` |
+| Гойдання плакатів, прапорів і хвиля полотнищ | шейдер `BAN_VS` (`BAN_NORMAL`, `BAN_POS`), фази в `Stands.update` (`phB`, `phF`, `amp`) |
 | Час доби й світло | `MatchView.setEnv` у `src/match/view.js` |
 | Дощ і сніг | `src/graphics/weather.js` |
 | Острів у меню | `src/graphics/island.js` |
@@ -146,11 +154,21 @@
 | Пауза | `UI.pause` |
 | Екран результату | `showResult`, `renderResult` |
 | Табло й написи в матчі | `src/ui/hud.js`; для онлайну також `HUD_FWD` і `applyEvent` |
+| Напис гола, автогола й пенальті | `Hud.goal`, тексти `GOAL_TAG`, `GOAL_LATE` у `src/ui/hud.js`; ключі ставить `goalImportance`; стилі `.gt-*` у `src/style.css` |
+| Кільце під м'ячем: кольори, пороги, пульс | `RingTone` у `src/match/ring.js`; вхідні дані: `danger` (`updateDanger`), `shotQuality` у кінці `Match.syncView` і в `GuestMatch.header` |
+| Дрібні написи подій (ВІДБІР, ВРЯТУВАВ, ПАС, ШТАНГА) | текст і частота: `floatAt` (лише в живій грі й не раніше 3.5 с після розстановки `formT`, пауза 1.6 с, `key` — завжди; `Hud.clearFloats` на розведенні), коли писати «ПАС!»: `bigPass` у `src/match/match.js`; вигляд: `.float`, `@keyframes rise`, `.combo` у `src/style.css` |
+| Представлення суперника перед матчем | `Hud.matchday`; дані дають `Match.start` і `GuestMatch.start`; стилі `.md-*` у `src/style.css` |
+| Довгі назви клубів і прізвища без трикрапки | `fitText` у `src/ui/hud.js` і клас `.fit` (картка суперника, напис гола, табло рахунку, екран результату) |
 | Мінімапа: вигляд, лінії | `Minimap` у `src/ui/minimap.js` (`bake` для поля, `drawBallPath`, `drawRuns`, `SAMPLE`, `BALL_CAP`) |
 | Зразок мінімапи в налаштуваннях | `DemoMatch` у `src/ui/minimap-demo.js`; схема екрана: `planHtml`, `SPOTS` у `src/ui/minimap.js` |
 | Мінімапа: місце, розмір, обхід HUD | `MapHud.compute`, зони `.z-*` у `src/style.css`; поля `map*` у `SETTINGS_DEFAULT`; вкладка `map` у `renderSettings` |
 | Іконки | `src/ui/icons.js`, `src/ui/vox.js` |
 | Звуки й музика | `AudioEngine` у `src/core/audio.js`; для онлайну також `SND_FWD` і `SND_OK` |
+| Послухати й порівняти звук, заміри | `/sound.html`, `src/lab/sound.js` (`SOUNDS`, `SCENE`, `TESTS`, `window.soundLab`) |
+| Новий запис звуку | файл `<слот>_<варіант><дубль>.mp3` у `src/audio`, рядок у `src/audio/SOURCES.md`, порядок у `ORDER`, `LOOP_LEN` для петлі (`src/core/audio-bank.js`) |
+| Рівні мікса, простір, приглушення верху | `AudioEngine.attach`, `makeIR`; рівні натовпу `BED`, `TENSE`, `CHANT`, музики `MUS` |
+| Реакції натовпу | `AudioEngine.crowdReact` (кличе `Stands.react`), `goal`, `concede`; напруга біля воріт `track`, `syncCrowd` |
+| Як поєднуються записи | шари в `kick`, `save`, `goal`, `concede`, `crowdReact`, `win`, `lose`; зміна гулу `rotateBed`, `tick`, `swapQuiet` |
 | Клавіші, дотики, повний екран | `Game.bindInput`, `UI.key` |
 | Звук на зупиненому контексті | `AudioEngine.live` у `src/core/audio.js` |
 | Коли наша форма міняється на матч | `pickKit`, `KIT_CLASH` у `src/config.js`, `matchKit` у `src/state/squad.js` |
@@ -165,6 +183,11 @@
 | Завдання | Де |
 |---|---|
 | Вкладка «Онлайн» | `src/online/screen.js` |
+| Адреса сервера гри, власний PeerJS і ретранслятор | `SERVER_URL` у `src/online/server.js`, `openPeer` у `src/online/net.js`; сам сервер у `server/` |
+| Бот гри: меню, команди, тексти, описи профілю | `server/src/bot/texts.js`; логіка в `server/src/bot/index.js` |
+| Вигляд карток бота (клуб, виклик, рейтинг) | `server/src/bot/widgets/*.html` (до 4 КБ стиснутого, тест у `server/test/bot.test.js`) |
+| Запрошення в кімнату з лобі | `on-share` у `src/online/screen.js`, `roomShareId` у `src/online/server.js`, `tgShareMessage` і `tgShareRoom` у `src/core/telegram.js` |
+| Обмеження сервера гри (частота запитів, сесії, пам'ять, ретранслятор) | `server/src/app.js` (`CALLS_PER_MIN`, `SESSIONS_KEEP`), `server/deploy/loko-game.service`, `limits.conf`, `turnserver.conf` |
 | Заборонені назви клубу, перевірка вводу | `OnlineScreen.input` |
 | Герої, риси, рідкість | `TRAITS`, `RARITY`, `newHero` у `src/online/profile.js` |
 | Імена героїв: списки, частки зразків за рідкістю | `FIRST_NAMES`, `ENKO`, `COSSACK`, `EPIC`, `MIX`, `newName` у `src/online/names.js` |
@@ -204,5 +227,7 @@
 | Кнопка «назад» Telegram, підтвердження виходу | `bindTelegram` у `src/core/telegram.js`, `UI.goBack`, `UI.canGoBack` |
 | Хмарна копія збереження | `pullCloud`, `pushCloud`, `CLOUD_KEYS` у `src/core/telegram.js` |
 | Відступи від вирізу екрана й кнопок Telegram | `--safe-*`, `--pad-*` у `src/style.css` |
+| Розмір і прозорість кнопки паузи в матчі (напівпрозора, ледь видна над м'ячем, повна перші 3 с) | `.pause-btn` у `src/style.css`, `Minimap.pauseCheck`, `Hud.pauseDim` і `show` у `src/ui/hud.js` |
+| Табло й пауза матчу поруч із кнопками Telegram («Назад», «⌄ ⋮») у повному екрані | `--tgb`, `--tgb-l`, `--tgb-r`, `--hud-t` у `src/style.css`; зони мінімапи `.z-bug`, `.z-pause` |
 | Офлайн-кеш, прийняття релізу | `adopt`, `shell`, `fits` у `public/sw.js` |
 | Частота кадрів у паузі, помилка в кадрі | `still` у `Game.step`, `Game.onFrameError` у `src/core/game.js` |

@@ -3,7 +3,7 @@
 // У кеші під одним ключем (SHELL, без ?room=) лежить лише сторінка, усі файли якої вже збережені: реліз приймається цілком
 // (adopt) і лише тоді прибираються старі файли, тому обрив посеред завантаження лишає робочою попередню версію. Чужа
 // відповідь (портал Wi-Fi, 5xx) кеш не чіпає. Перше прийняття йде вже в install: офлайн працює після першого візиту.
-const CACHE = 'loko-rikoshet-v6';
+const CACHE = 'loko-rikoshet-v7';
 const SHELL = new URL('./', location.href).href;
 const OURS = /id=["']?gl["']?/;                                    // канва гри в index.html: без неї це не наша сторінка
 const LOGO = new URL('loko-logo.svg', SHELL).href;                 // на неї посилається лише код, а не HTML
@@ -29,7 +29,7 @@ function grab(c, url) {
 /**
  * Прийняти збірку цієї сторінки: докачати її файли, покласти сторінку в кеш і прибрати файли інших збірок. Будь-який збій
  * обов'язкового файлу кидає виняток, і кеш лишається при попередній робочій версії (наступна навігація спробує знову).
- * Обов'язкові: файли з HTML і шрифти з CSS. Ледачі чанки (PeerJS) і картинки за можливістю, бо гра стартує і без них.
+ * Обов'язкові: файли з HTML і шрифти з CSS. Ледачі чанки (PeerJS), картинки й записи звуку (.mp3 у коді) за можливістю, бо гра стартує і без них.
  */
 async function adopt(c, r) {
   const html = await r.clone().text(), old = await c.match(SHELL);
@@ -47,7 +47,7 @@ async function adopt(c, r) {
       if (!fits(f, u)) { if (hard) throw new Error('bad ' + u); continue; }
     }
     if (/\.css$/.test(u)) add(refs(await f.text(), /url\(["']?\.\/([\w.-]+\.woff2)["']?\)/g, u), hard);
-    else if (/\.js$/.test(u)) add(refs(await f.text(), /["'`]\.\/([\w.-]+-[\w-]{6,}\.(?:js|css))["'`]/g, u), false);
+    else if (/\.js$/.test(u)) { const t = await f.text(); add(refs(t, /["'`]\.\/([\w.-]+-[\w-]{6,}\.(?:js|css))["'`]/g, u), false); add(refs(t, /["'`](?:\.\/)?([\w.-]+-[\w-]{6,}\.mp3)["'`]/g, u), false); }
   }
   for (const q of list) if (q.hard && !(await c.match(q.u))) throw new Error('not stored ' + q.u);
   await c.put(SHELL, r);

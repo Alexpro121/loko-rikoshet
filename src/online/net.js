@@ -5,11 +5,13 @@
 // Пінг раз на секунду дає затримку (RTT) і пульс: обрив — понад 8 с тиші, лише якщо й саме з'єднання вже не «connected».
 // Тишу кадрів при живому з'єднанні (господар згорнув гру) ловить гість: guest.js, NET_SILENCE.
 
+import { peerServer, iceServers, markDown } from './server.js';
+
 const PREFIX = 'lokorush-v1-';
 const TK_KEY = 'loko-online-tk';
 const FRAME_QUEUE = 16e3;                            // ~5 кадрів (250 мс): кадр — 3.2 КБ, 20/с, тобто 64 КБ/с. Далі черга лише старить картинку, свіжий кадр важливіший
 const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';     // без 0/O, 1/I — код легко продиктувати
-export const PROTO = 1;
+export const PROTO = 2;
 export const makeCode = () => Array.from({ length: 5 }, () => ALPH[(Math.random() * ALPH.length) | 0]).join('');
 export const cleanCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 
@@ -37,10 +39,33 @@ async function loadPeer() {
   return PeerCls;
 }
 
-function openPeer(Peer, id) {
+const OWN_WAIT = 6000;                               // свій сервер кімнат відповідає за мить; довше чекати нема сенсу
+const SERVER_FAIL = ['network', 'server-error', 'socket-error', 'timeout'];
+
+/** Свій сервер гри (src/online/server.js) знайомить гравців і дає ретранслятор; без нього публічний PeerJS. */
+async function ownConfig() {
+  const [stunG, stunCf, publicTurn] = PEER_CFG.config.iceServers;
+  const relay = await iceServers();                 // спершу API: якщо сервер лежить, peerServer() далі дасть null
+  const own = peerServer();
+  return own && { ...own, config: { iceServers: [stunG, stunCf, ...relay, publicTurn] }, debug: 0 };
+}
+
+/** Peer на своєму сервері, а якщо він недоступний — на публічному. peer.via каже, де саме ('own' | 'public'). */
+async function openPeer(Peer, id, publicOnly = false) {
+  const own = !publicOnly && peerServer() && await ownConfig();
+  if (own) {
+    try { return Object.assign(await openWith(Peer, id, own, OWN_WAIT), { via: 'own' }); } catch (e) {
+      if (!SERVER_FAIL.includes(e.type)) throw e;
+      markDown();
+    }
+  }
+  return Object.assign(await openWith(Peer, id, PEER_CFG, 12000), { via: 'public' });
+}
+
+function openWith(Peer, id, cfg, wait) {
   return new Promise((res, rej) => {
-    const p = id ? new Peer(id, PEER_CFG) : new Peer(PEER_CFG);
-    const to = setTimeout(() => { rej(Object.assign(new Error('timeout'), { type: 'timeout' })); try { p.destroy(); } catch (_) { /* ignore */ } }, 12000);
+    const p = id ? new Peer(id, cfg) : new Peer(cfg);
+    const to = setTimeout(() => { rej(Object.assign(new Error('timeout'), { type: 'timeout' })); try { p.destroy(); } catch (_) { /* ignore */ } }, wait);
     // лише до відкриття: пізніша помилка (сервер кімнат моргнув, збій WebRTC) не має знищувати peer разом із живим з'єднанням
     const onErr = (e) => { clearTimeout(to); try { p.destroy(); } catch (_) { /* ignore */ } rej(e); };
     p.once('open', () => { clearTimeout(to); p.off('error', onErr); res(p); });
@@ -93,12 +118,21 @@ export class Net {
     return this.code;
   }
 
-  /** Приєднатися за кодом. */
+  /** Приєднатися за кодом. Кімнати немає на своєму сервері — шукаємо на публічному: у господаря наш сервер міг бути недоступний. */
   async join(code) {
     const Peer = await loadPeer(); this.role = 'guest'; this.code = cleanCode(code);
     if (!this.peer || this.peer.destroyed) { this.peer = this.kept(await openPeer(Peer)); this.watch(this.peer); }
-    const peer = this.peer;
-    if (peer.disconnected) throw Object.assign(new Error('network'), { type: 'network' });   // сервер кімнат ще недоступний: rejoin спробує ще
+    try { await this.connectTo(this.peer); } catch (e) {
+      if (e.type !== 'no-room' || this.peer.via !== 'own') throw e;
+      const pub = this.kept(await openPeer(Peer, undefined, true));
+      try { await this.connectTo(pub); } catch (e2) { try { pub.destroy(); } catch (_) { /* ignore */ } throw e2; }
+      try { this.peer.destroy(); } catch (_) { /* ignore */ }
+      this.peer = pub; this.watch(pub);
+    }
+  }
+
+  connectTo(peer) {
+    if (peer.disconnected) return Promise.reject(Object.assign(new Error('network'), { type: 'network' }));   // сервер кімнат ще недоступний: rejoin спробує ще
     return new Promise((res, rej) => {
       const fail = (e) => { cleanup(); rej(e); };
       const onErr = (e) => { if (e.type === 'peer-unavailable') fail(Object.assign(new Error('no-room'), { type: 'no-room' })); else fail(e); };

@@ -1,0 +1,119 @@
+// Старий синтез (до оновлення звуку) для порівняння на сторінці прослуховування. У гру не потрапляє.
+export class OldAudio {
+  attach(ctx, opts = {}) {
+    this.ctx = ctx; this.tOff = 0; this.lastWall = -1;
+    this.master = ctx.createGain(); this.master.gain.value = 0.8;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.ratio.value = 6;
+    this.master.connect(comp); comp.connect(opts.dest || ctx.destination);
+    this.sfx = ctx.createGain(); this.sfx.connect(this.master);
+    this.mus = ctx.createGain(); this.mus.gain.value = 0.32; this.mus.connect(this.master);
+    const len = ctx.sampleRate;
+    this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = this.noise.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const s = ctx.createBufferSource(); s.buffer = this.noise; s.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 650; bp.Q.value = 0.4;
+    this.crowdGain = ctx.createGain(); this.crowdGain.gain.value = 0;
+    s.connect(bp); bp.connect(this.crowdGain); this.crowdGain.connect(this.sfx);
+    s.start();
+  }
+  clock() { return this.ctx.currentTime + this.tOff; }
+  tone(type, f0, f1, dur, vol, when = 0, dest = this.sfx) {
+    const c = this.ctx, t = this.clock() + when;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  hiss(freq, q, dur, vol, when = 0, type = 'bandpass', dest = this.sfx) {
+    const c = this.ctx, t = this.clock() + when;
+    const s = c.createBufferSource(); s.buffer = this.noise; s.loop = true;
+    const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(dest);
+    s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
+  }
+  kick(power = 1) { this.tone('sine', 190, 52, 0.16, 0.7 * (0.5 + power * 0.5)); this.hiss(1400, 0.8, 0.07, 0.25 + power * 0.25); }
+  wall(n = 0, speed = 20) {
+    const now = this.clock();
+    if (now - this.lastWall < 0.045) return;
+    this.lastWall = now;
+    const v = Math.min(0.5, 0.12 + speed / 90);
+    this.tone('triangle', 260 + Math.min(n, 9) * 55, 200 + Math.min(n, 9) * 40, 0.09, v);
+    this.hiss(2200, 1.2, 0.04, v * 0.4);
+  }
+  coin(chain = 0) {
+    const k = Math.pow(1.0595, Math.min(chain, 12) * 2);
+    this.tone('square', 880 * k, 880 * k, 0.07, 0.16);
+    this.tone('square', 1318 * k, 1318 * k, 0.12, 0.16, 0.06);
+  }
+  pass() { this.tone('triangle', 520, 780, 0.1, 0.3); }
+  save() { this.tone('triangle', 330, 160, 0.14, 0.4); this.hiss(900, 0.7, 0.08, 0.25); }
+  whistle(long = false) {
+    const c = this.ctx, t = this.clock(), dur = long ? 0.9 : 0.4;
+    const o = c.createOscillator(), g = c.createGain(), l = c.createOscillator(), lg = c.createGain();
+    o.type = 'sine'; o.frequency.value = 2850;
+    l.frequency.value = 26; lg.gain.value = 140; l.connect(lg); lg.connect(o.frequency);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.28, t + 0.02);
+    g.gain.setValueAtTime(0.28, t + dur - 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.sfx); o.start(t); l.start(t); o.stop(t + dur + 0.02); l.stop(t + dur + 0.02);
+  }
+  horn() {
+    const c = this.ctx, t = this.clock(), dur = 1.15;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1300;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.38, t + 0.06);
+    g.gain.setValueAtTime(0.38, t + dur - 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.connect(g); g.connect(this.sfx);
+    for (const f of [233, 294, 349]) {
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = (Math.random() - 0.5) * 12;
+      o.connect(lp); o.start(t); o.stop(t + dur + 0.02);
+    }
+  }
+  goal() { this.horn(); this.hiss(900, 0.5, 1.8, 0.5, 0.05); this.hiss(2400, 0.6, 1.2, 0.2, 0.1); }
+  concede() { this.tone('sawtooth', 300, 120, 0.7, 0.28); this.hiss(500, 0.5, 0.9, 0.22); }
+  bell() { this.tone('sine', 1040, 1040, 0.35, 0.3); this.tone('sine', 1560, 1560, 0.28, 0.14); }
+  rumble() { this.hiss(130, 0.7, 2.2, 0.6, 0, 'lowpass'); }
+  click() { this.tone('sine', 760, 520, 0.05, 0.28); }
+  back() { this.tone('sine', 520, 360, 0.06, 0.25); }
+  buy() { [523, 659, 784, 1047].forEach((f, i) => this.tone('square', f, f, 0.09, 0.14, i * 0.06)); }
+  deny() { this.tone('square', 150, 110, 0.14, 0.2); }
+  win() { [392, 523, 659, 784, 1047].forEach((f, i) => this.tone('triangle', f, f, 0.22, 0.3, i * 0.11)); }
+  lose() { [330, 262, 196].forEach((f, i) => this.tone('triangle', f, f * 0.98, 0.3, 0.28, i * 0.18)); }
+  slowmo(on) {
+    if (on) { this.tone('sine', 520, 70, 0.4, 0.45); this.hiss(900, 0.6, 0.35, 0.18, 0, 'lowpass'); this.crowd(0.18); }
+    else { this.tone('sine', 90, 640, 0.22, 0.32); this.hiss(2800, 0.8, 0.18, 0.2); this.crowd(0.7); }
+  }
+  beat(danger = 0) { this.tone('sine', 80, 42, 0.2, 0.34 + danger * 0.3); if (danger > 0.55) this.tone('sine', 80, 42, 0.16, 0.22, 0.17); }
+  slide() { this.hiss(1500, 0.5, 0.28, 0.34); this.tone('sine', 140, 70, 0.18, 0.2); }
+  clap() { this.hiss(2300, 1.1, 0.06, 0.6); this.hiss(900, 0.9, 0.04, 0.35); this.tone('sine', 260, 120, 0.04, 0.18); }
+  thud() { this.tone('sine', 110, 50, 0.16, 0.4); this.hiss(400, 0.7, 0.1, 0.25); }
+  crowd(level) { this.crowdGain.gain.setTargetAtTime(level * 0.07, this.clock(), 0.4); }
+  // цього не було в старому двигуні: так старий двигун відтворив би ті самі моменти гри
+  post(impact = 16) { this.wall(5, impact); }
+  net() { this.wall(0, 12); }
+  crowdReact() {}
+  /** Старий секвенсор музики: один проміжок для офлайн-заміру. */
+  renderMusic(mode, dur) { this.startMusic(); this.scheduleMusic(mode, this.clock() + dur); }
+  startMusic() { this.mS = 0; this.mT = this.clock() + 0.05; }
+  /** Спланувати ноти до моменту until, продовжуючи мелодію з того самого місця. */
+  scheduleMusic(mode, until) {
+    const bpm = mode === 'match' ? 126 : 104, dt = 60 / bpm / 4, scale = [220, 261.6, 293.7, 329.6, 392, 440, 523.3, 587.3];
+    const pat = [0, 2, 4, 2, 5, 4, 2, 3, 0, 2, 4, 6, 5, 4, 2, 1];
+    for (; this.mT < until; this.mS++, this.mT += dt) {
+      const s = this.mS, w = this.mT - this.clock();
+      if (s % 4 === 0) this.tone('sine', 110, 55, 0.14, 0.5, w, this.mus);
+      if (s % 4 === 2) this.hiss(5200, 1.5, 0.03, 0.12, w, 'highpass', this.mus);
+      if (s % 8 === 3 || s % 8 === 5) this.hiss(2600, 2, 0.025, 0.09, w, 'bandpass', this.mus);
+      if (s % 2 === 0) { const n = scale[pat[(s >> 1) % pat.length] % scale.length]; this.tone('triangle', n, n, 0.18, 0.18, w, this.mus); }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+[Unit]
+Description=LOKO RUSH: сервер гри (API і PeerJS)
+After=network-online.target
+Wants=network-online.target
+# не здаватися після кількох падінь поспіль: перезапуск раз на 5 с нічого не навантажує
+StartLimitIntervalSec=0
+
+[Service]
+User=loko-game
+Group=loko-game
+WorkingDirectory=/opt/loko-game/app/server
+EnvironmentFile=/etc/loko-game/env
+ExecStart=/usr/bin/node --max-old-space-size=192 src/server.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+# Сервер спільний із ботом LOKO, і бот головніший:
+#  - процесор: при змаганні бот отримує вдвічі більше (вага 50 проти 100) і гра не бере понад одне ядро з двох;
+#  - пам'ять: від 300 МБ ядро стискає гру, на 400 МБ зупиняє, а при нестачі пам'яті першою жертвою буде гра, не бот.
+CPUWeight=50
+CPUQuota=100%
+IOWeight=50
+Nice=5
+MemoryHigh=300M
+MemoryMax=400M
+OOMScoreAdjust=300
+TasksMax=64
+LimitNOFILE=8192
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/loko-game/data
+
+[Install]
+WantedBy=multi-user.target

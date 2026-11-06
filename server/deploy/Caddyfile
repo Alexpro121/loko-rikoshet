@@ -1,0 +1,30 @@
+# Caddy сам отримує й оновлює сертифікат Let's Encrypt для @DOMAIN@.
+{
+	# лише HTTP/1.1 і HTTP/2: HTTP/3 потребує ще й UDP 443, а виграшу для кількох запитів гри немає
+	servers {
+		protocols h1 h2
+		timeouts {
+			read_header 10s
+			read_body 10s
+			idle 2m
+		}
+	}
+}
+
+@DOMAIN@ {
+	encode gzip
+	# PeerJS: клієнт гри ходить на /p/, сервер PeerJS слухає без префікса (тут довгі WebSocket-з'єднання)
+	handle_path /p/* {
+		reverse_proxy 127.0.0.1:9000
+	}
+	handle {
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy 127.0.0.1:8787 {
+			transport http {
+				keepalive 30s
+			}
+		}
+	}
+}

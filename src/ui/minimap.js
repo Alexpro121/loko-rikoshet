@@ -287,7 +287,7 @@ export class MapHud {
     this.planPos = null;
     this.drag = -1; this.dx = 0; this.dy = 0; this.snap = '';
     this.initDrag();
-    addEventListener('resize', () => this.apply());
+    addEventListener('resize', () => { this.pauseR = null; this.apply(); });
   }
 
   /** Змінились налаштування, розмір вікна чи стан матчу. */
@@ -401,6 +401,7 @@ export class MapHud {
       this.mm.tick(dt, m || null, g);
       if (m && !this.editing) this.ballCheck(m, g);
     }
+    if (ui.matchActive && g.match) this.pauseCheck(g.match, g);
     if (this.prevOn) {
       if (!this.prev.cv || !this.prev.cv.isConnected || ui.el.settings.hidden) this.prevOn = false;
       else this.prev.tick(dt, null, g);
@@ -414,6 +415,17 @@ export class MapHud {
     const x = (_v.x + 1) * 0.5 * g.w, y = (1 - _v.y) * 0.5 * g.h;
     const f = x > r.l - pad && x < r.l + r.w + pad && y > r.t - pad && y < r.t + r.h + pad ? FADE : 1;
     if (f !== this.fade) { this.fade = f; this.applyAlpha(); }
+  }
+
+  /** М'яч підкотився до паузи на екрані: вона ледь видна, поки він там. Прямокутник кнопки читаємо раз (і після зміни розміру), не щокадру. */
+  pauseCheck(m, g) {
+    const hud = this.ui.hud, el = hud && hud.t.pause;
+    if (!el || !m.view || !m.view.ball) return;
+    if (!this.pauseR || !this.pauseR.width) this.pauseR = el.getBoundingClientRect();
+    const r = this.pauseR, pad = 40;
+    _v.copy(m.view.ball.group.position).project(g.matchCam);
+    const x = (_v.x + 1) * 0.5 * g.w, y = (1 - _v.y) * 0.5 * g.h;
+    hud.pauseDim(x > r.left - pad && x < r.right + pad && y > r.top - pad && y < r.bottom + pad);
   }
 
   /** Живий зразок на вкладці налаштувань. */
