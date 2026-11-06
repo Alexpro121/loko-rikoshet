@@ -1,6 +1,6 @@
 // Склад: реальний ROSTER, навички, рівні, заміни, тренування, склади суперників (oppSquad).
 import { S, commit } from './save.js';
-import { ACADEMY, FIXTURES, FORMATIONS, KITS, STAT_KEYS, GK_KEYS, LINE_OF, pickKit } from '../config.js';
+import { ACADEMY, FORMATIONS, KITS, STAT_KEYS, GK_KEYS, LINE_OF, pickKit, heatOf } from '../config.js';
 import { striker, keeper, keeperTier } from './economy.js';
 import { rng } from '../graphics/voxel.js';
 import { rivalOf, hashStr } from './rivals.js';
@@ -47,7 +47,8 @@ export function ovr(e) {
   return Math.round(s / t);
 }
 export const xpNeed = (lvl) => 50 + 30 * (lvl - 1);
-export const trainCost = (v) => Math.max(25, Math.round(30 * Math.pow(1.17, v - 34)));
+/** Ціна +1 до навички: 50 → ~180, 60 → ~570, 70 → ~1770, 80 → ~5500 монет (при 1.17 було 370, 1780, 8550, 41000: тренування не рухало склад). */
+export const trainCost = (v) => Math.max(25, Math.round(30 * Math.pow(1.12, v - 34)));
 export const tierOf = (o) => (o >= 80 ? 'gold' : o >= 62 ? 'silver' : 'bronze');
 
 const FIRST_UA = ACADEMY.firstNames, LAST_UA = ACADEMY.lastNames;
@@ -154,9 +155,12 @@ export function bestLine(e) {
  * (техніка — пас і дриблінг, сила — відбір), а за кожну нашу перемогу над ними — реванш (rivals.js).
  */
 export function oppSquad(spec) {
-  const d = spec.fixtureIdx + spec.season * FIXTURES.length, h = hashStr(spec.club.name), rnd = rng(h % 1e6 + 13), dev = rng(h % 1e6 + 7919 * (spec.season + 1));
+  const d = heatOf(spec.fixtureIdx, spec.season), h = hashStr(spec.club.name), rnd = rng(h % 1e6 + 13), dev = rng(h % 1e6 + 7919 * (spec.season + 1));
   const rv = rivalOf(spec), bias = rv.style.bias || {};
-  const base = clamp(16 + d * 2.8 + (spec.no - 1) * 0.6 + rv.revenge, 16, 92), names = spec.league >= 3 ? 'int' : 'ua';
+  // сила складу — найбільший важіль складності (симулятор: склад першого матчу на місці 10-го дає 100% перемог). Наш склад
+  // росте лише на ~0.3 рейтингу за матч, тож суперник +1 за матч (було +2.8, і кар'єра впиралась у Лігу чемпіонів):
+  // рейтинг ~35 у першому матчі (наш ~46), рівня нашого складу досягає на Чемпіонаті світу; стеля — для старих сезонів
+  const base = clamp(25 + d + (spec.no - 1) * 0.6 + rv.revenge, 25, 78), names = spec.league >= 3 ? 'int' : 'ua';
   const roles = FORMATIONS[spec.formation];
   const sq = [newEntry(GK_ROLE, 0, rnd, base + 2, names)];
   roles.forEach((r, i) => sq.push(newEntry(r, i + 1, rnd, base, names)));

@@ -6,17 +6,18 @@
 
 | Завдання | Де |
 |---|---|
-| Складність суперника за номером матчу | `matchSpec` у `src/config.js` |
+| Складність суперника за номером матчу | `matchSpec` у `src/config.js`; ріст між сезонами: `SEASON_HEAT`, `heatOf` |
 | Тривалість матчу | поле `time` у `matchSpec`; тайми й хвилини: `periodBound`, `gameMin` |
 | Розмір поля, воріт, м'яча | `PITCH` у `src/config.js` |
 | Сила удару, тертя, відскоки | `PHYS` у `src/config.js`, `BALL` у `src/physics/ballmodel.js` |
 | Швидкість наших гравців | `speed: 9.2` у `Match.start` |
 | Шанс відбору | `tackleChance`, `resolveTackle` |
 | Вплив навичок на удар | `shotSkill` у `src/config.js`, `shotMul`, `kickErr` |
-| Ліги, клуби, форма суперників | `LEAGUES` у `src/config.js`; при зміні кількості клубів також `* 13` в `oppSquad` |
+| Ліги, клуби, форма суперників | `LEAGUES` у `src/config.js` |
 | Схеми команд | `FORMATIONS` у `src/config.js`; наша схема в кар'єрі: `S.tactic`, запасна `MY_FORMATION` |
 | Нападники й воротарі в трансферах | `STRIKERS`, `KEEPERS` у `src/config.js` |
 | Ціна й дохід стадіону | `src/state/economy.js` |
+| Ціна тренування навички | `trainCost` у `src/state/squad.js` |
 | Яруси стадіону | `STADIUM_TIERS`, `STADIUM_TIER_NAMES` у `src/config.js`, `Island.buildStadium` |
 | Нагороди за матч | `Match.end` |
 | Реальний склад клубу | `ROSTER` у `src/state/squad.js` |
