@@ -196,6 +196,7 @@
 | Адреса сервера гри, власний PeerJS і ретранслятор | `SERVER_URL` у `src/online/server.js`, `openPeer` у `src/online/net.js`; сам сервер у `server/` |
 | Бот гри: меню, команди, тексти, описи профілю | `server/src/bot/texts.js`; логіка в `server/src/bot/index.js` |
 | Вигляд карток бота (клуб, виклик, рейтинг) | `server/src/bot/widgets/*.html` (до 4 КБ стиснутого, тест у `server/test/bot.test.js`) |
+| Вхід за посиланням-запрошенням: одразу в кімнату без заставок | `invite` і `onMenu` у `src/online/screen.js`, `tgStartRoom` у `src/core/telegram.js`, `skipToRoom` у `src/ui/ui.js` (виклик у `src/main.js`), текст помилки в `Online.join` (`src/online/session.js`) |
 | Запрошення в кімнату з лобі | `on-share` у `src/online/screen.js`, `roomShareId` у `src/online/server.js`, `tgShareMessage` і `tgShareRoom` у `src/core/telegram.js` |
 | Обмеження сервера гри (частота запитів, сесії, пам'ять, ретранслятор) | `server/src/app.js` (`CALLS_PER_MIN`, `SESSIONS_KEEP`), `server/deploy/loko-game.service`, `limits.conf`, `turnserver.conf` |
 | Заборонені назви клубу, перевірка вводу | `OnlineScreen.input` |

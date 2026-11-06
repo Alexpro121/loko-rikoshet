@@ -69,12 +69,16 @@ export class Online {
     catch (e) { if (this.net !== net) return; this.close(); this.err = this.why(e); }
     this.refresh();
   }
-  async join(code) {
+  /** invite: код прийшов із посилання-запрошення, тож «перевір код» гравцю нічого не скаже. */
+  async join(code, invite = false) {
     code = cleanCode(code);
     if (code.length !== 5) { this.setErr('Код — 5 символів'); return; }
     this.close(); this.mode = 'friend'; this.state = 'joining'; this.code = code; this.err = ''; this.refresh();
     const net = (this.net = new Net()); this.bind(net);
-    try { await net.join(code); } catch (e) { if (this.net !== net) return; this.close(); this.err = this.why(e); this.refresh(); }
+    try { await net.join(code); } catch (e) {
+      if (this.net !== net) return;
+      this.close(); this.err = invite && e && e.type === 'no-room' ? 'Кімнати із запрошення вже немає — попроси друга надіслати нове посилання' : this.why(e); this.refresh();
+    }
   }
   // ------------------------------------------------------------------ швидкий матч
   /** Обійти маяки (seek.js); нікого — відкрити кімнату й засвітити маяк. Стан 'seeking' триває, доки суперник не зайде в кімнату. */

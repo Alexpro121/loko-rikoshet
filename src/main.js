@@ -27,6 +27,7 @@ async function boot() {
   try { game = new Game(document.getElementById('gl'), ui); }
   catch (e) { console.error(e); gfxFail('Не вдалося запустити графіку. Для гри потрібен WebGL2: онови браузер або увімкни апаратне прискорення.'); return; }
   ui.online = new OnlineScreen(ui, game);
+  if (ui.online.invite) ui.skipToRoom();                        // посилання-запрошення: без екрана ЛОКО РАШ і заставки одразу в кімнату
   window.__loko = game;
   bindTelegram(ui, game, flush);
 }
