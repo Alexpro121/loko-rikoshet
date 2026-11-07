@@ -317,12 +317,12 @@ Walkout: декорації виходу команд: прапори, кили�
 - **Walkout** :102
   constructor:103, start:122, hide:138, wave:141, update:152, fireworks:204
 
-## src/online/cloud.js (207 рядків)
+## src/online/cloud.js (220 рядків)
 
 Онлайн-хаб на сервері гри (контракт API 2, server/README.md): клуб, підтверджений результат матчу, квести, таблиця.
 
 - **Cloud** :13
-  constructor:14, refresh:18, open:22, ironGot:36, dirty:42, save:47, flush:49, resync:51, train:53, buy:67, sell:87, marketLoad:98, marketBuy:100, marketRefresh:110, iron:120, stars:129, reset:131, ticketOk:141, start:146, report:152, questsOn:170, loadQuests:171, setQuests:172, view:179, ready:188, claim:190, rollover:203, loadTop:206
+  constructor:14, refresh:18, open:22, ironGot:36, dirty:42, save:47, flush:49, resync:51, snap:53, recheck:59, train:66, buy:80, sell:100, marketLoad:111, marketBuy:113, marketRefresh:123, iron:133, stars:142, reset:144, ticketOk:154, start:159, report:165, questsOn:183, loadQuests:184, setQuests:185, view:192, ready:201, claim:203, rollover:216, loadTop:219
 
 ## src/online/codec.js (86 рядків)
 
@@ -416,14 +416,14 @@ Walkout: декорації виходу команд: прапори, кили�
 - **Online** :29
   constructor:30, role:43, inMatch:44, sendVis:45, onVis:47, busy:59, unready:61, refresh:62, setErr:63, create:66, join:74, seek:89, qloop:109, patchSeek:129, unqueue:134, relight:136, seekJoin:149, retrySeek:162, reseek:164, stopSeek:169, why:171, bind:181, hello:217, sync:219, onMsg:224, setReady:269, buildSpec:278, me:289, startMatch:291, beginGuest:311, onTicket:330, finish:338, guestEnd:354, leave:362, techLoss:372, stopMatch:378, oppLeft:385, dropped:399, rematch:406, toLobby:410, close:418
 
-## src/online/shop.js (444 рядків)
+## src/online/shop.js (469 рядків)
 
 Магазин онлайн-хабу: «Вагони» (скаут і паки з чесними шансами й гарантом), «Ринок» (готові гравці), «Лава» (запас і продаж).
 
-- Експорти: benchCap:34, ironMode:39, shortOf:44
-- Внутрішні функції: fallbackTrain:51, trainFn:64
-- **Shop** :70
-  constructor:72, s:73, re:74, img:77, card:78, mineFor:80, cmpWith:86, html:93, afterRender:98, wagonsHtml:104, market:130, loadMarket:138, marketHtml:147, leftTxt:163, tick:168, ironHtml:181, traitBtn:205, ironBuy:210, stars:235, benchHtml:248, act:262, say:283, toStart:286, sell:295, freeHtml:305, open:317, request:350, failed:361, reveal:372, showCard:396, closeOpen:403, marketBuy:411, marketRefresh:432
+- Експорти: benchCap:34, ironMode:39, shortOf:47
+- Внутрішні функції: fallbackTrain:54, trainFn:67
+- **Shop** :73
+  constructor:75, s:76, re:77, img:80, card:81, mineFor:83, cmpWith:89, html:96, afterRender:101, wagonsHtml:107, market:133, loadMarket:141, marketHtml:150, leftTxt:166, tick:171, ironHtml:184, traitBtn:208, lost:213, ironBuy:219, stars:244, benchHtml:257, act:271, say:292, toStart:295, sell:304, freeHtml:314, open:326, request:359, failed:375, reveal:386, showCard:410, closeOpen:417, marketBuy:425, marketRefresh:451
 
 ## src/physics/aim.js (123 рядків)
 

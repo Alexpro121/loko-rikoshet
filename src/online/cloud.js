@@ -49,6 +49,19 @@ export class Cloud {
   async flush() { if (!this.pending) return; clearTimeout(this.saveT); await this.save(); }
   /** Сервер відмовив у дії: його клуб правильний, беремо весь. */
   async resync() { const r = await meOnServer(); if (r && r.club && adoptServer(r.club, true)) this.refresh(); }
+  /** Знімок перед покупкою: після тайм-ауту по ньому видно, чи сервер її провів. */
+  snap() { return { ids: allHeroes().map((e) => e.id), coins: OP.coins, iron: OP.iron | 0, slots: OP.slots | 0 }; }
+  /**
+   * Відповідь на покупку не дійшла (null). Тайм-аут не означає відмови: сервер міг списати й посадити гравця на лаву.
+   * Беремо клуб із сервера й порівнюємо зі знімком b. null — сервер і далі мовчить (невідомо);
+   * { done: false } — покупки не було; { done: true, hero } — пройшла (hero — новий гравець, якщо він є).
+   */
+  async recheck(b) {
+    const r = await meOnServer();
+    if (!r || !r.club || !adoptServer(r.club, true)) return null;
+    const hero = allHeroes().find((e) => !b.ids.includes(e.id)) || null;
+    return { done: !!hero || OP.coins < b.coins || (OP.iron | 0) < b.iron || (OP.slots | 0) > b.slots, hero };
+  }
   /** Тренування вже зроблено на пристрої (кнопка реагує одразу); сервер підтверджує ціну й навичку або повертає свій стан. */
   async train(i, k) {
     if (!has('club')) return;

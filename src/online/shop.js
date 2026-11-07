@@ -38,6 +38,9 @@ export const benchCap = () => (typeof PR.benchCap === 'function' ? PR.benchCap(O
  */
 export const ironMode = () => (!PR.IRON ? null : has('iron') ? 'srv' : has('club') ? null : 'local');
 /** «Бракує 7 Iron Dollar»: і де їх узяти. */
+// відповідь на покупку не дійшла: тайм-аут не означає відмови, тож «монети не списано» обіцяємо лише після Cloud.recheck
+const NET_UNSURE = 'Немає зв’язку із сервером гри. Якщо покупка встигла пройти, вона з’явиться в клубі: глянь, перш ніж купувати знову';
+const NET_NONE = 'Зв’язок обірвався, покупки не було. Спробуй ще раз';
 const shortIron = (price) => `Бракує ${price - (OP.iron | 0)} Iron Dollar · тижневі квести дають по 2–3`;
 
 /** «Бракує 270 монет · ≈ 3 перемоги»: скільки ще й скільки це матчів. */
@@ -197,7 +200,7 @@ export class Shop {
     const stars = Array.isArray(PR.STARS) ? PR.STARS : [], sOn = has('stars') && inTelegram();
     const top = stars.map((p) => `<button class="sh-star ${sOn ? '' : 'dim'}" data-act="sh-stars:${esc(p.id)}"><b>${p.iron}${I.iron}</b><span>★ ${p.stars}</span></button>`).join('');
     const topup = stars.length ? `<section class="sh-tops on-a"><b class="hub-tile-h">Поповнити зірками Telegram</b><div class="sh-stars">${top}</div>
-      ${sOn ? '' : `<small class="sh-short">${inTelegram() ? 'Оплата зірками відкриється, щойно її ввімкне сервер гри' : 'Зірками можна платити лише в грі всередині Telegram'}</small>`}</section>` : '';
+      ${sOn ? '' : `<small class="sh-short">${inTelegram() ? 'Оплата зірками відкриється, щойно її ввімкне сервер гри' : 'Зірками можна платити лише в грі всередині Telegram'}</small>`}<small class="sh-ip">Питання щодо оплати — /paysupport у боті</small></section>` : '';
     const earn = `<p class="sh-note on-a">Де заробити Iron Dollar: тижневі квести (по 2–3), новий рівень клубу (+2), рейтинг тижня (до 30, лише із сервером гри), зірки Telegram. У тебе зараз <b>${have}</b>.</p>`;
     return `<div class="sh-wgs">${tiles}</div>${topup}${earn}`;
   }
@@ -205,6 +208,12 @@ export class Shop {
   traitBtn(sel) {
     const C = PR.IRON; if (!C || !ironMode() || C.trait == null) return '';
     return `<button class="btn alt on-scout ${(OP.iron | 0) >= C.trait ? '' : 'dim'}" data-act="sh-trait:${sel}"><b>НОВА РИСА · ${C.trait}</b>${I.iron}</button>`;
+  }
+  /** Відповідь сервера на покупку не дійшла: дочитуємо клуб (b — знімок до покупки). Пройшла — { done, hero }, інакше null і пояснення. */
+  async lost(b) {
+    const v = await this.s.cloud.recheck(b);
+    if (!v) this.say(NET_UNSURE); else if (!v.done) this.say(NET_NONE);
+    return v && v.done ? v : null;
   }
   /** Покупка за доларами: kind — 'slot', 'bag' або 'trait' (i — герой у спільному списку). Другий дотик підтверджує. */
   async ironBuy(kind, i, el) {
@@ -217,7 +226,7 @@ export class Shop {
     if (!this.sc.armed(el, `ТОЧНО? ${price} $`)) return;
     this.busy = true;
     let r;
-    if (mode === 'srv') r = await this.s.cloud.iron(kind, h ? { hero: h.id } : {});
+    if (mode === 'srv') { const b = this.s.cloud.snap(); r = await this.s.cloud.iron(kind, h ? { hero: h.id } : {}); if (r === null && (r = await this.lost(b)) === null) { this.busy = false; return this.re(); } }
     else r = kind === 'slot' ? PR.buySlotHere() : kind === 'bag' ? PR.ironBagHere() : PR.traitHere(i);
     this.busy = false;
     if (!r || r.error) {
@@ -351,8 +360,13 @@ export class Shop {
     const H = OP.heroes, weak = () => H.reduce((b, e, k) => (k && ovr(e) < ovr(H[b]) ? k : b), 1);
     let r;
     if (has('club')) {
+      const b = this.s.cloud.snap();
       r = await this.s.cloud.buy(kind, slot ?? (has('shop') ? undefined : weak()));   // старий сервер без лави міняє героя на слоті
-      if (r === null) throw { error: 'net' };
+      if (r === null) {                                          // тайм-аут: сервер міг провести покупку, дочитуємо клуб
+        const v = await this.s.cloud.recheck(b);
+        if (!v || !v.hero) throw { error: !v ? 'net' : v.done ? 'net_done' : 'net_none' };
+        r = { hero: v.hero, replaced: OP.heroes.some((e) => e.id === v.hero.id) };
+      }
     } else r = buyPack(kind, slot);
     if (!r || r.error || !r.hero) throw { error: (r && r.error) || 'server' };
     this.sc.tac.seen = -1; this.sc.bump = true; this.s.sync(true);
@@ -360,7 +374,7 @@ export class Shop {
   }
   failed(out, r) {
     this.ui.revealClose = null;
-    const e = r && r.error, t = e === 'net' ? 'Немає зв’язку із сервером гри. Монети не списано, спробуй ще раз'
+    const e = r && r.error, t = e === 'net' ? NET_UNSURE : e === 'net_none' ? NET_NONE : e === 'net_done' ? 'Покупка пройшла: глянь лаву'
       : e === 'no_coins' ? 'Бракує монет' : e === 'no_iron' ? 'Бракує Iron Dollar' : e === 'bench_full' ? 'Лава повна: продай когось' : 'Відкриття не вдалося. Монети не списано';
     audio.deny(); vibrate(20);
     out.hidden = false; out.innerHTML = `<div class="sh-fail"><b>${t}</b><button class="btn alt" data-act="sh-rv-close"><b>ЗАКРИТИ</b></button></div>`;
@@ -414,8 +428,13 @@ export class Shop {
     if ((OP.bench || []).length >= benchCap()) { this.say('Лава повна: продай когось'); this.sub = 'bench'; return this.re(); }
     if (!this.sc.armed(el, 'ТОЧНО? ' + fmt(x.price))) return;
     this.busy = true;
-    const srv = has('market'), slot = x.slot ?? k;
-    const r = srv ? await this.s.cloud.marketBuy(slot) : PR.marketTake(slot, Date.now());
+    const srv = has('market'), slot = x.slot ?? k, b = srv && this.s.cloud.snap();
+    let r = srv ? await this.s.cloud.marketBuy(slot) : PR.marketTake(slot, Date.now());
+    if (srv && r === null) {                                     // тайм-аут: дочитуємо клуб і вітрину
+      this.mkt = null; r = await this.lost(b);
+      if (r === null) { this.busy = false; return this.re(); }
+      if (!r.hero) { this.busy = false; this.say('Покупка пройшла: глянь лаву'); return this.re(); }
+    }
     this.busy = false;
     if (!r || r.error) {
       const e = r && r.error;
@@ -435,7 +454,13 @@ export class Shop {
     if (iron ? (OP.iron | 0) < price : OP.coins < price) return this.say(iron ? shortIron(price) : shortOf(price));
     if (!this.sc.armed(el, 'ТОЧНО? ' + fmt(price) + (iron ? ' $' : ''))) return;
     this.busy = true;
-    const srv = has('market'), r = srv ? await this.s.cloud.marketRefresh(iron) : iron ? PR.marketRenewIron(Date.now()) : PR.marketRenew(Date.now());
+    const srv = has('market'), b = srv && this.s.cloud.snap();
+    let r = srv ? await this.s.cloud.marketRefresh(iron) : iron ? PR.marketRenewIron(Date.now()) : PR.marketRenew(Date.now());
+    if (srv && r === null) {                                     // тайм-аут: дочитуємо клуб, вітрину завантажимо заново
+      const v = await this.lost(b); this.busy = false; this.mkt = null;
+      if (v) this.ui.toast('Вітрину оновлено');
+      return this.re();
+    }
     this.busy = false;
     if (!r || r.error) { this.say(r === null ? 'Немає зв’язку із сервером гри' : iron ? shortIron(price) : 'Бракує монет'); return this.re(); }
     if (srv) this.mkt = normMk(r);
