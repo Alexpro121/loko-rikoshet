@@ -141,7 +141,7 @@ state/* → config.js, club.js лише дані
 |---|---|
 | Вихід команд | `driveIntro`, `Walkout`, таймінги `A_END`…`HS_T` на початку `src/match/match.js`; картка суперника `Hud.matchday` (ховає її `skipIntroPart`, `endIntro` або будь-який дотик) |
 | Гол і святкування | `onGoal`, `goalImportance`, `setupCelebration`, `updateCelebration` |
-| Повтори й нарізки | `Replay`, `markMoment`, `playClips` |
+| Повтори й нарізки | `Replay`, `markMoment`, `playClips`; режисура кліпу `Replay.plan` (раз на кліп, у `c.plan`): A — загальний план до удару, B — сповільнений удар з ракурсу без перекриття, C — м'яч у сітці чи автор гола; камеру кадру дає `replayCam` |
 | Перерва | `startBreak`, `updateBreak` |
 | Після свистка | `endCelebrate`, `endShake`, `endTalk`, `endCam` |
 | Пенальті | `Penalties` (`phase === 'pens'`), вхід через `startPens` |

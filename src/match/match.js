@@ -1910,7 +1910,8 @@ export class Match {
     const H = this.hl; H.i++;
     if (H.i >= H.list.length) { this.endClips(); return; }
     const c = H.list[H.i], a = c.ts[0], b = c.ts[c.n - 1];
-    this.rp = { a, b, slowAt: Math.max(a + 0.3, c.tE - 1.15), t: a, side: c.side, view: (Math.random() * 2) | 0, hold: 0, clip: c };
+    const plan = c.plan || (c.plan = this.replay.plan(c, c.kind, c.side, c.tE, Math.random()));   // режисура: плани A/B/C за геометрією моменту (cinema.js)
+    this.rp = { a, b, slowAt: plan.tA, t: a, side: c.side, hold: 0, clip: c, plan };
     const name = { goal: 'ГОЛ', save: 'ПОРЯТУНОК', post: 'ШТАНГА' }[c.kind];
     this.ui.hud.clearGoal();
     this.ui.hud.cine(true, H.list.length > 1 ? H.title + ' · ' + name + ' ' + (H.i + 1) + '/' + H.list.length : H.title);
@@ -1918,9 +1919,11 @@ export class Match {
     this.replay.applyClip(c, a);
   }
   updateClip(rawDt) {
-    const r = this.rp, slow = r.t >= r.slowAt;
-    if (slow && !r.slowOn) { r.slowOn = true; this.ui.flash('rgba(255,255,255,.22)'); }
-    if (r.t < r.b) r.t = Math.min(r.b, r.t + rawDt * (slow ? 0.4 : 1)); else r.hold += rawDt;
+    const r = this.rp, P = r.plan, slow = r.t >= r.slowAt;
+    if (slow && !r.slowOn) { r.slowOn = true; this.ui.flash('rgba(255,255,255,.18)'); }
+    // темп: реальний до плану B, далі за ~0.25 с плавно до ×0.38 (мить удару), після гола (план C) — ×0.55
+    const sp = r.t >= P.tB ? 0.55 : 1 - 0.62 * clamp((r.t - P.tA) / 0.25, 0, 1);
+    if (r.t < r.b) r.t = Math.min(r.b, r.t + rawDt * sp); else r.hold += rawDt;
     this.time += rawDt;                                                 // натовп і погода живуть далі
     this.replay.applyClip(r.clip, r.t);
     // сітка в повторі прогинається так само, як у грі (за положенням м'яча з запису)
@@ -1936,15 +1939,28 @@ export class Match {
     this.ui.flash('rgba(255,255,255,.35)');
     if (H && H.done) H.done();
   }
+  /**
+   * Камера повтору за планом із Replay.plan: кожен план — окремий кадр (shot), між ними склейка без перельоту.
+   * A стежить за м'ячем пружиною з боку камери гри; B стоїть (з легким наїздом) і м'яко веде погляд за м'ячем; C — м'яч
+   * у сітці (камера стоїть, погляд за м'ячем) або автор гола (камера йде за ним). Без алокацій: _c1/_c2.
+   */
   replayCam() {
-    const r = this.rp, B = this.replay.ball, sd = r.side, gx = sd * L, tE = r.clip ? r.clip.tE : r.b;
-    // 1) реальний темп — загальний план з боку головної трибуни, супровід м'яча
-    if (r.t < r.slowAt) return { p: _c1.set(B.x - sd * 5, 8.5, Math.min(W - 6, B.z + 21)), l: _c2.set(B.x + sd * 2, 0.6, B.z * 0.7), fov: 34, shot: 'rpA', rate: 3 };
-    // 2) сповільнено — низько за м'ячем: попереду ворота й воротар
-    if (r.t < tE - 0.2) return { p: _c1.set(B.x - sd * 5.5, 1.5, B.z * 0.85 + (B.z > 0 ? -1.2 : 1.2)), l: _c2.set(gx, 1.2, B.z * 0.4), fov: 38, shot: 'rpB', rate: 5, dof: 0.01 };
-    // 3) удар у сітку — збоку воріт, з поля біля стійки (видно, як м'яч перетинає лінію й прогинає сітку), або згори над сіткою
-    if (r.view === 0) return { p: _c1.set(gx - sd * 2.6, 1.35, (B.z >= 0 ? -1 : 1) * (G + 4.5)), l: _c2.set(gx + sd * 0.8, 1.0, B.z), fov: 40, shot: 'rpC', rate: 6, dof: 0.012 };
-    return { p: _c1.set(gx + sd * (PITCH.GOAL_D + 2.5), 6.2, B.z * 0.3), l: _c2.set(gx - sd * 1.5, 0.6, B.z * 0.8), fov: 44, shot: 'rpD', rate: 5, dof: 0.008 };
+    const r = this.rp, B = this.replay.ball, P = r.plan, sd = r.side;
+    if (r.t < P.tA) {
+      const px = clamp(B.x - sd * 4, -L + 2, L - 2), pz = clamp(B.z + 26, 8, W + 10);
+      return { p: _c1.set(px, 9 + Math.max(0, 14 - (pz - B.z)) * 0.35, pz), l: _c2.set(B.x + sd * 2.5, 0.5, B.z * 0.85), fov: 30, shot: 'rpA', rate: 3 };
+    }
+    if (r.t < P.tB) {
+      const c = P.B, f = clamp((r.t - P.tA) / Math.max(0.4, P.tS - P.tA + 0.8), 0, 1), k = c.push * f;   // повільний наїзд уздовж удару
+      // погляд наполовину за м'ячем: камера стоїть, а м'яч, що приходить пасом чи відлітає після сейву, лишається в кадрі
+      return { p: _c1.set(c.p.x + P.ux * k, c.p.y, c.p.z + P.uz * k), l: _c2.set(c.l.x * 0.55 + B.x * 0.45, c.l.y * 0.55 + Math.max(0.4, B.y) * 0.45, c.l.z * 0.55 + B.z * 0.45), fov: c.fov, shot: 'rpB' + c.id, rate: 4, dof: 0.01 };
+    }
+    const c = P.C;
+    if (c.id === 'scorer') {
+      const q = this.view.players[P.si].root.position;
+      return { p: _c1.set(q.x - sd * 2.2, 2.1, q.z + (q.z > W - 8 ? -6 : 6)), l: _c2.set(q.x, 1.3, q.z), fov: c.fov, shot: 'rpCs', rate: 3, dof: 0.012 };
+    }
+    return { p: _c1.set(c.p.x, c.p.y, c.p.z), l: _c2.set(B.x, Math.max(0.5, B.y * 0.8 + 0.2), B.z), fov: c.fov, shot: 'rpCn', rate: 6, dof: 0.012 };
   }
   /** Тап під час святкування гола — одразу далі гра. */
   skipCine() {
