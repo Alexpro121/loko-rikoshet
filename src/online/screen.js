@@ -8,7 +8,7 @@ import { VOX } from '../ui/vox.js';
 import { Tactics, formName } from '../ui/tactics.js';
 import { STAT_NAMES, STAT_HINT, ROLE_UA, keysFor, ovr, xpNeed, bestLine } from '../state/squad.js';
 import { fmt } from '../state/economy.js';
-import { OP, saveOP, resetOP, esc, plain, flagSvg, matchClub, kitOf, gkKitOf, teamRating, trainPrice, trainHero, buyPack, PACKS, SCOUT_PRICE, clubXpNeed, TRAITS, RARITY, ONLINE_FORMS, setForm, allHeroes, swapAny, moveDeny, sellHero, sellPrice, SELL, BENCH_MAX, isKeeper } from './profile.js';
+import { OP, saveOP, resetOP, esc, plain, flagSvg, matchClub, kitOf, gkKitOf, teamRating, trainPrice, trainHero, SCOUT_PRICE, clubXpNeed, TRAITS, RARITY, ONLINE_FORMS, setForm, allHeroes, swapAny, moveDeny, sellHero, sellPrice, isKeeper } from './profile.js';
 import { FLAG_COLS, FLAG_PATS, FLAG_EMB, FLAG_PLATES, FLAG_OVS, FLAG_EDGES, FLAG_STYLES, flagUri, emblemSvg, rollFlag, normFlag } from './flag.js';
 import { Online } from './session.js';
 import { cleanCode } from './net.js';
@@ -17,6 +17,8 @@ import { serverOn, roomShareId } from './server.js';
 import { MODES, modeTabs } from './modes.js';
 import { syncQuests } from './quests.js';
 import { has } from './server.js';
+import { Shop, benchCap } from './shop.js';
+import * as PR from './profile.js';
 
 const STYLE_UA = { any: 'Усі', classic: 'Класика', herald: 'Геральдика', modern: 'Сучасний', wild: 'Дикий' };
 const FE_TABS = { gen: 'Генератор', field: 'Поле', emblem: 'Знак', colors: 'Кольори', extra: 'Оздоба' };
@@ -36,19 +38,15 @@ const tile = (label, val, cls = '') => `<div class="on-tile ${cls}"><small>${lab
 const TABS = [{ id: 'play', name: 'Матч', ic: VOX.match }, { id: 'quests', name: 'Квести', ic: VOX.clipboard }, { id: 'shop', name: 'Магазин', ic: VOX.shop }, { id: 'heroes', name: 'Герої', ic: VOX.team }];
 /** Таблиця рейтингу: лише коли сервер гри її веде (features 'top'), бо рейтинг інших клубів знає тільки він. */
 const TOP_TAB = { id: 'top', name: 'Рейтинг', ic: VOX.podium };
-const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 /** Воксельний предмет кожного квесту (id із quests.js); невідомий квест — м'яч. */
 const QUEST_ART = { play2: 'ball', goals3: 'goal', unbeaten: 'shield', win: 'cup', clean: 'glove', back: 'boot', big: 'goal', four: 'goal', comeback: 'score', giant: 'crown', 'w-win8': 'cup', 'w-goals20': 'goal', 'w-play12': 'ball' };
 const questArt = (id) => VOX[QUEST_ART[id] || 'ball'];
-/** Вітрина магазину: скаут — бінокль, паки — контейнери кольору рідкості. */
-const PACK_ART = { scout: 'binoculars', rare: 'crateRare', epic: 'crateEpic' };
 /** «7 год 12 хв», «2 дн 5 год», «12 хв»: скільки до оновлення квестів. */
 const left = (ms) => {
   const m = Math.max(1, Math.ceil(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mi = m % 60;
   return d ? `${d} дн ${h} год` : h ? `${h} год ${mi} хв` : `${mi} хв`;
 };
 const clock = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-const lastName = (n) => String(n).split(' ').slice(-1)[0];
 /** Лава запасних є, коли клуб веде пристрій або сервер уміє лаву ('shop'); старий сервер без неї — лише основа. */
 const benchOn = () => !has('club') || has('shop');
 /** Кнопка з підтвердженням: перший дотик просить ще один, за 3 с повертається. true — це був другий дотик. */
@@ -80,6 +78,7 @@ export class OnlineScreen {
     ui.root.addEventListener('change', (e) => { if (e.target.matches('[data-ocol]')) this.patchFe(); });   // свій колір: панель перемальовуємо лише після вибору, інакше палітра закриється
     this.s = new Online(game, ui); this.s.onOpp = () => this.patchOpp();
     this.s.screen = this;
+    this.shop = new Shop(this);                               // магазин: вагони, ринок, лава й відкриття (shop.js)
     this.s.onFound = () => { this.tab = 'play'; this.tac.swapFrom = null; };   // суперник знайшовся, поки гравець був у «Клубі» чи «Героях»: одразу в лобі
     // пінг у лобі, годинник пошуку й час до нових квестів оновлюються самі (без перемальовування панелі — щоб не збивати натискання)
     setInterval(() => {
@@ -87,6 +86,7 @@ export class OnlineScreen {
       const P = ui.el.panel, n = this.s.net, ping = P.querySelector('.on-ping'), sk = P.querySelector('[data-seekt]');
       if (ping && n && n.rtt) ping.textContent = 'пінг ' + Math.round(n.rtt) + ' мс';
       if (sk) sk.textContent = clock(Date.now() - this.s.seekAt);
+      this.shop.tick();
       const ql = P.querySelectorAll('[data-qleft]');
       if (ql.length) {
         const L = this.s.cloud.view().left;
@@ -144,7 +144,7 @@ export class OnlineScreen {
         <button class="hub-back" data-act="close-panel" aria-label="Назад у кар’єру">${I.back}<b>Кар’єра</b></button>
         <div class="on-h-fl" data-hflag>${flagSvg(c.flag)}</div>
         <div class="on-h-t"><h2 data-hname>${esc(c.name)}</h2><span class="hub-lvl"><em>рів. ${OP.lvl}</em><i class="hub-xp" title="${OP.xp} / ${need}"><u style="width:${Math.min(100, (OP.xp / need) * 100)}%"></u></i><small>рейтинг ${OP.rating}</small></span></div>
-        ${seek}<button class="hub-clubb ${t === 'club' ? 'on' : ''}" data-act="on-tab:club" ${t === 'club' ? 'aria-current="page"' : ''}><span class="hub-ic">${I.pennant}</span><b>Клуб</b></button><span class="on-purse ${bump ? 'bump' : ''}"><b>${fmt(OP.coins)}</b>${I.coin}</span>
+        ${seek}<button class="hub-clubb ${t === 'club' ? 'on' : ''}" data-act="on-tab:club" ${t === 'club' ? 'aria-current="page"' : ''}><span class="hub-ic">${I.pennant}</span><b>Клуб</b></button><span class="on-purse ${bump ? 'bump' : ''}"><b>${fmt(OP.coins)}</b>${I.coin}</span><button class="on-purse iron ${bump ? 'bump' : ''}" data-act="on-iron" aria-label="Iron Dollar: магазин"><b>${fmt(OP.iron | 0)}</b>${I.iron}</button>
       </header>
       <div class="sheet-b on-b">${body}</div>
       <nav class="hub-nav" aria-label="Розділи онлайну">${nav}</nav></div>`;
@@ -153,9 +153,10 @@ export class OnlineScreen {
   // ------------------------------------------------------------------ квести
   questCard(q, i) {
     const pct = Math.round((q.p / q.n) * 100);
+    const dol = q.d ? `<b>+${q.d}</b>${I.iron}` : '';                    // тижневий квест дає ще й Iron Dollar
     const end = q.got ? `<span class="hub-qok">${I.check}<b>Забрано</b></span>`
-      : q.done ? `<button class="btn go hub-claim" data-act="on-claim:${q.kind}:${q.i}"><b>ЗАБРАТИ +${q.c}</b>${I.coin}</button>`
-        : `<span class="hub-qr"><b>+${q.c}</b>${I.coin}</span>`;
+      : q.done ? `<button class="btn go hub-claim" data-act="on-claim:${q.kind}:${q.i}"><b>ЗАБРАТИ +${q.c}</b>${I.coin}${dol}</button>`
+        : `<span class="hub-qr"><b>+${q.c}</b>${I.coin}${dol}</span>`;
     return `<div class="hub-qc on-a ${q.done ? 'done' : ''} ${q.got ? 'got' : ''}" style="--d:${i}"><span class="hub-qa">${questArt(q.id)}</span><div class="hub-qt"><b>${esc(q.t)}</b><small>${q.p} / ${q.n}</small></div><i class="on-bar"><u style="width:${pct}%"></u></i>${end}</div>`;
   }
   questsHtml() {
@@ -170,10 +171,15 @@ export class OnlineScreen {
     const T = this.s.cloud.top;
     if (!T) return `<div class="on-play"><section class="on-card on-busy on-a"><div class="on-wheel">${emblemSvg('wheel')}</div><b>Завантажуємо таблицю<span class="on-dots"><u></u><u></u><u></u></span></b></section></div>`;
     const n = (v) => (Number.isFinite(+v) ? Math.round(+v) : 0), me = T.me || {};
-    const rows = T.list.slice(0, 50).map((e, i) => `<li class="${n(e.place) === n(me.place) ? 'me' : ''}"><b>${n(e.place) || i + 1}</b><span class="hub-tf">${flagSvg(normFlag(e.flag))}</span><span class="hub-tn">${esc(plain(e.name || ''))}</span><small>рів. ${n(e.lvl)} · ${n(e.w)}-${n(e.d)}-${n(e.l)}</small><em>${n(e.rating)}</em></li>`).join('');
-    return `<div class="hub-top on-a"><header><span class="hub-top-a">${VOX.podium}</span><b>Рейтинг клубів</b>${me.place ? `<small>твоє місце <span>${n(me.place)}</span> · ${n(me.rating)}</small>` : ''}</header><ol>${rows}</ol></div>`;
+    // нагорода тижня за місце (IRON_TOP у profile.js, нараховує сервер щопонеділка): біля кожного місця й своє зараз
+    const prize = (p) => (typeof PR.ironForPlace === 'function' && p > 0 ? PR.ironForPlace(p) : 0);
+    const rows = T.list.slice(0, 50).map((e, i) => { const p = n(e.place) || i + 1, z = prize(p); return `<li class="${n(e.place) === n(me.place) ? 'me' : ''}"><b>${p}</b><span class="hub-tf">${flagSvg(normFlag(e.flag))}</span><span class="hub-tn">${esc(plain(e.name || ''))}</span><small>рів. ${n(e.lvl)} · ${n(e.w)}-${n(e.d)}-${n(e.l)}</small><em>${n(e.rating)}</em>${z ? `<i class="hub-tz">+${z}${I.iron}</i>` : '<i class="hub-tz"></i>'}</li>`; }).join('');
+    const tiers = Array.isArray(PR.IRON_TOP) ? PR.IRON_TOP : [];
+    let from = 1; const tl = tiers.map((r) => { const t = `${from === r.to ? r.to : from + '–' + r.to}: ${r.n}`; from = r.to + 1; return t; }).join(' · ');
+    const mine = prize(n(me.place));
+    const week = tl ? `<p class="hub-tw">Нагорода тижня в Iron Dollar (щопонеділка): ${tl}.${me.place ? (mine ? ` Твоє місце зараз дає <b>+${mine}</b>${I.iron}` : ' Твоє місце поки без нагороди') : ''}</p>` : '';
+    return `<div class="hub-top on-a"><header><span class="hub-top-a">${VOX.podium}</span><b>Рейтинг клубів</b>${me.place ? `<small>твоє місце <span>${n(me.place)}</span> · ${n(me.rating)}</small>` : ''}</header>${week}<ol>${rows}</ol></div>`;
   }
-  /** Квести дня коротко на вкладці «Матч»: що лишилось і скільки нагород чекає. */
 
   // ------------------------------------------------------------------ клуб
   /** Картка клубу: прапор на сцені, назва, цифри. Спільна для гри, кімнати й лобі. */
@@ -286,7 +292,9 @@ export class OnlineScreen {
 
   // ------------------------------------------------------------------ герої
   look(e) { const gk = e.line === 'G'; return { kit: gk ? gkKitOf(OP.club) : kitOf(OP.club), num: e.num, skin: e.skin, hair: e.hair, hairCol: e.hairCol, beard: e.beard || 0, gk, scale: 0.9 }; }
-  afterRender() { if (this.tab === 'heroes') this.tac.afterRender(); else { this.mountStar(); this.featInit(); } }
+  afterRender() { if (this.tab === 'heroes') this.tac.afterRender(); else if (this.tab === 'shop') this.shop.afterRender(); else { this.mountStar(); this.featInit(); } }
+  /** Кнопка з підтвердженням (для shop.js). */
+  armed(el, ask) { return armed(el, ask); }
   heroDetail(e, sel) {
     const pop = this.popKey; this.popKey = null;
     const o = ovr(e), R = RARITY[e.rar] || RARITY.c, T = TRAITS[e.trait], need = xpNeed(e.lvl), B = e.line === 'G' ? null : bestLine(e);
@@ -294,7 +302,7 @@ export class OnlineScreen {
       const v = e.stats[k], c = trainPrice(v), can = OP.coins >= c && v < 99, tr = T && T.stat === k;
       return `<div class="st ${tr ? 'tr' : ''} ${pop === k ? 'pop' : ''}"><div class="st-t"><span>${STAT_NAMES[k]}${tr ? ' ★' : ''}</span><b>${v}</b></div><i><u style="width:${v}%"></u></i><button class="btn buy ${can ? 'can' : ''}" data-act="on-train:${sel}:${k}" ${v >= 99 ? 'disabled' : ''}><b>+1 · ${fmt(c)}</b>${I.coin}</button><small>${STAT_HINT[k]}</small>${pop === k ? '<u class="on-plus">+1</u>' : ''}</div>`;
     }).join('');
-    const onB = sel >= 11, full = OP.bench.length >= BENCH_MAX;
+    const onB = sel >= 11, full = OP.bench.length >= benchCap();
     const fit = !onB && B && B.ovr - o >= 2 ? `<p class="on-fit">Не на своїй лінії: у ${LINE_UA[B.line]}і рейтинг був би ${B.ovr}</p>` : '';
     // лава: продаж (з підтвердженням) і підказка, як випустити в основу; основа: скаут шукає новачка на цю позицію
     const act = onB
@@ -302,40 +310,12 @@ export class OnlineScreen {
       : benchOn()
         ? `<button class="btn alt on-scout ${OP.coins >= SCOUT_PRICE && !full ? '' : 'dim'}" data-act="on-scout:${sel}"><b>${full ? 'ЛАВА ПОВНА: ПРОДАЙ КОГОСЬ' : 'СКАУТ: НОВАЧОК НА ЦЮ ПОЗИЦІЮ · ' + SCOUT_PRICE}</b>${full ? '' : I.coin}</button>`
         : `<button class="btn alt on-scout ${OP.coins >= SCOUT_PRICE ? '' : 'dim'}" data-act="on-scout:${sel}"><b>СКАУТ: ІНШИЙ ГЕРОЙ · ${SCOUT_PRICE}</b>${I.coin}</button>`;
-    return `<div class="on-hd"><div class="on-hd-t"><p><span class="on-rar">${R.name}</span> №${e.num} · ${ROLE_UA[e.role] || e.role}${onB ? ' · запас' : ''} · рейтинг <b>${o}</b></p>${T ? `<p class="on-trait">★ ${T.name}: ${T.tip}</p>` : ''}${fit}
+    return `<div class="on-hd"><div class="on-hd-t"><button class="on-card-b" data-act="sh-card:${sel}" style="--rc:${R.col}"><b>Картка</b></button><p><span class="on-rar">${R.name}</span> №${e.num} · ${ROLE_UA[e.role] || e.role}${onB ? ' · запас' : ''} · рейтинг <b>${o}</b></p>${T ? `<p class="on-trait">★ ${T.name}: ${T.tip}</p>` : ''}${fit}
       <i class="on-bar"><u style="width:${Math.min(100, (e.xp / need) * 100)}%"></u></i><small>Рівень ${e.lvl} · досвід ${e.xp}/${need} · матчів ${e.apps} · голів ${e.goals}</small>
-      ${act}</div></div><div class="st-grid">${tiles}</div>`;
+      ${act}${this.shop.traitBtn(sel)}</div></div><div class="st-grid">${tiles}</div>`;
   }
   heroesHtml() { return this.tac.html(); }
-  /** Новий герой від скаута: картка відкривається з променями кольору рідкості; закриття веде назад у панель. */
-  revealHero(h, kind, place) {
-    const R = RARITY[h.rar] || RARITY.c, T = TRAITS[h.trait], k = kitOf(OP.club);
-    const img = portrait(this.g.renderer, this.look(h), 'on-' + h.id + h.num + k.main + k.second + OP.club.gk);
-    const el = this.ui.el.reveal;
-    clearTimeout(this.openT);
-    // пак із магазину: контейнер трясеться, крізь щілини б'є світло кольору рідкості, спалах — і лише тоді герой
-    if (kind && kind !== 'scout' && PACK_ART[kind] && !REDUCED.matches) {
-      el.innerHTML = `<div class="pk-open" style="--rc:${R.col}"><div class="pk-box">${VOX[PACK_ART[kind]]}</div><i class="pk-flash"></i><small>Відчиняємо контейнер</small></div>`;
-      el.hidden = false; audio.click();
-      this.openT = setTimeout(() => { if (!el.hidden) this.revealHero(h, null, place); }, 1250);
-      return;
-    }
-    if (h.rar === 'l' || h.rar === 'e') audio.horn(); else audio.win();
-    el.innerHTML = `<div class="reveal-in on-reveal r-${h.rar || 'c'}" style="--rc:${R.col}" data-act="close-reveal"><div class="rays"></div><i class="on-ovr big">${ovr(h)}</i><img src="${img}" alt=""/><small>${R.name}</small><h2>${esc(h.name)}</h2><p>№${h.num} · ${ROLE_UA[h.role] || h.role}${T ? ` · ★ ${T.name}` : ''}</p>${place ? this.placeHtml(h, place) : '<button class="btn go"><b>ДО СКЛАДУ</b></button>'}</div>`;
-    el.hidden = false;
-  }
 
-  /**
-   * Що робити з новачком із паку: в основу замість героя слота (той іде на лаву), лишити на лаві або одразу продати.
-   * Порівняння з тим, кого він замінив би, підказує вибір: слабшого вигідніше продати, ніж тримати.
-   */
-  placeHtml(h, place) {
-    const out = OP.heroes[place.slot], fit = out && isKeeper(out) === isKeeper(h), d = out ? ovr(h) - ovr(out) : 0;
-    const cmp = out ? `<p class="on-rv-cmp ${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? 'Сильніший' : d < 0 ? 'Слабший' : 'Такий самий'}, ніж ${esc(lastName(out.name))} (${ovr(out)}) · продаж ${fmt(sellPrice(h))}</p>` : '';
-    return `${cmp}<div class="on-rv-acts">${fit ? `<button class="btn go" data-act="on-rv-in:${esc(h.id)}:${place.slot}"><b>В ОСНОВУ</b><small>замість ${esc(lastName(out.name))}</small></button>` : ''}
-      <button class="btn alt" data-act="close-reveal"><b>НА ЛАВУ</b><small>${OP.bench.length}/${BENCH_MAX}</small></button>
-      <button class="btn alt" data-act="on-rv-sell:${esc(h.id)}"><b>ПРОДАТИ</b><small>+${fmt(sellPrice(h))} монет</small></button></div>`;
-  }
   /** Продати героя з лави j (на сервері — сервер, без нього — пристрій). after — що зробити після успіху. */
   sellAt(j, after) {
     const s = this.s, e = OP.bench[j]; if (!e) return;
@@ -429,71 +409,8 @@ export class OnlineScreen {
     const n = box.children.length; i = ((i % n) + n) % n; this.featI = i;
     box.scrollTo({ left: i * box.clientWidth, behavior: 'smooth' });
   }
-  // ------------------------------------------------------------------ магазин
-  /**
-   * Вкладка «Магазин»: скаут і паки героїв (PACKS у profile.js) з чесними шансами рідкості. Спершу пак, потім кого замінити
-   * (за замовчуванням найслабший), потім «Купити»; новий герой відкривається тією ж карткою, що й скаут.
-   */
-  shopHtml() {
-    const H = OP.heroes, kind = PACKS[this.pack] ? this.pack : (this.pack = 'scout'), P = PACKS[kind], bo = benchOn(), full = bo && OP.bench.length >= BENCH_MAX;
-    if (this.pslot == null || !H[this.pslot]) this.pslot = H.reduce((b, e, i) => (ovr(e) < ovr(H[b]) ? i : b), 0);
-    const pct = (v) => Math.round(v * 100) + '%';
-    const cards = Object.keys(PACKS).map((k, n) => {
-      const p = PACKS[k], o = ['l', 'e', 'r', 'c'].filter((r) => p.odds[r]);
-      const strip = o.map((r) => `<u style="flex:${p.odds[r]};background:${RARITY[r].col}"></u>`).join('');
-      const legend = o.map((r) => `<span style="--rc:${RARITY[r].col}">${RARITY[r].name} <b>${pct(p.odds[r])}</b></span>`).join('');
-      return `<button class="hub-pk pk-${k} on-a ${k === kind ? 'on' : ''}" style="--d:${n}" data-act="on-pack:${k}"><span class="hub-pk-a">${VOX[PACK_ART[k]]}</span><b class="hub-pk-t">${p.name}</b><span class="hub-pk-p"><b>${fmt(p.price)}</b>${I.coin}</span><i class="hub-pk-s">${strip}</i><span class="hub-pk-l">${legend}</span></button>`;
-    }).join('');
-    const slots = H.map((e, i) => `<button class="hub-ps ${i === this.pslot ? 'on' : ''}" style="--rc:${(RARITY[e.rar] || RARITY.c).col}" data-act="on-pslot:${i}"><i>${ovr(e)}</i><b>${esc(e.name.split(' ').slice(-1)[0])}</b><small>${e.role}</small></button>`).join('');
-    const out = H[this.pslot], can = OP.coins >= P.price && !full, role = (ROLE_UA[out.role] || out.role).toLowerCase();
-    const why = full ? 'Лава повна: продай когось із запасу нижче.' : OP.coins < P.price ? `Бракує ${fmt(P.price - OP.coins)} монет: перемога дає 120, квести дня — до 300.` : '';
-    const pick = bo
-      ? `<b class="hub-tile-h">Позиція новачка</b><span class="hub-tile-p">Новачок прийде на лаву (${OP.bench.length}/${BENCH_MAX}) як ${role}. Після відкриття: в основу замість ${esc(lastName(out.name))} (${ovr(out)}), лишити в запасі або продати.</span>`
-      : `<b class="hub-tile-h">Кого замінити</b><span class="hub-tile-p">Новий герой стане на місце №${out.num} (${role}), а ${esc(out.name)} (${ovr(out)}) піде з клубу.</span>`;
-    return `<div class="hub-shop">
-      <section class="hub-pks">${cards}</section>
-      <section class="hub-pick on-a" style="--d:3">${pick}
-        <div class="hub-pss">${slots}</div>
-        <button class="hub-buy ${can ? '' : 'dim'}" data-act="on-buy"><b>Купити «${P.name}»</b><span>${fmt(P.price)}${I.coin}</span></button>
-        ${why ? `<span class="hub-tile-p">${why}</span>` : ''}</section>
-      ${bo ? this.benchHtml() : ''}</div>`;
-  }
-  /** Лава в магазині: хто в запасі й скільки дадуть за продаж. Ціни прозорі: база рідкості й трохи за силу понад неї. */
-  benchHtml() {
-    const B = OP.bench;
-    const rows = B.map((e, j) => `<div class="hub-bl" style="--rc:${(RARITY[e.rar] || RARITY.c).col}"><i>${ovr(e)}</i><b>${esc(e.name)}</b><small>${ROLE_UA[e.role] || e.role} · ${(RARITY[e.rar] || RARITY.c).name.toLowerCase()}</small><button class="btn alt" data-act="on-sell:${j}"><b>ПРОДАТИ · ${fmt(sellPrice(e))}</b>${I.coin}</button></div>`).join('');
-    const base = ['c', 'r', 'e', 'l'].map((r) => `${RARITY[r].name.toLowerCase()} ${SELL[r]}`).join(', ');
-    return `<section class="hub-bench on-a" style="--d:4"><b class="hub-tile-h">Лава запасних <em>${B.length}/${BENCH_MAX}</em></b>
-      ${rows || '<span class="hub-tile-p">Порожньо. Новачки з паків сідають сюди, а в «Героях» їх можна поміняти з основою.</span>'}
-      <span class="hub-tile-p">Продаж: ${base} і ще 5 за кожне очко рейтингу понад базу рідкості. Це завжди менше за ціну пака.</span></section>`;
-  }
-  /** Купівля обраного пака на обрану позицію (магазин). */
-  buy() { this.purchase(this.pack || 'scout', this.pslot ?? 0); }
-  /**
-   * Скаут чи пак на позицію слота i. Із сервером гри героя дає він (cloud.buy), без нього — пристрій. Новачок сідає на лаву,
-   * і картка відкриття пропонує в основу, на лаву чи продати; старий сервер без лави міняє героя на слоті одразу.
-   */
-  purchase(kind, i) {
-    const s = this.s, P = PACKS[kind];
-    if (!P || !OP.heroes[i]) return;
-    const say = (t) => { audio.deny(); this.ui.toast(t); this.ui.renderPanel(); };
-    if (OP.coins < P.price) return say('Бракує ' + fmt(P.price - OP.coins) + ' монет');
-    if (benchOn() && OP.bench.length >= BENCH_MAX) return say('Лава повна: продай когось із запасу');
-    const show = (h, j) => { this.tac.seen = -1; this.bump = true; s.sync(true); this.revealHero(h, kind, j == null ? null : { bench: j, slot: i }); };
-    if (has('club')) {
-      if (this.buying) return;
-      this.buying = true;
-      s.cloud.buy(kind, i).then((r) => {
-        this.buying = false;
-        if (r && r.hero) return show(r.hero, r.replaced ? null : r.bench);
-        say(r === null ? 'Сервер гри недоступний, спробуй ще раз' : r.error === 'bench_full' ? 'Лава повна: продай когось із запасу' : r.error === 'no_coins' ? 'Бракує монет' : 'Сервер не прийняв покупку');
-      });
-      return;
-    }
-    const r = buyPack(kind, i);
-    if (r.hero) return show(r.hero, r.bench);
-    say(r.error === 'bench_full' ? 'Лава повна: продай когось із запасу' : 'Бракує монет');
-  }
+  // ------------------------------------------------------------------ магазин (shop.js)
+  shopHtml() { return this.shop.html(); }
 
   /** Трибуни хабу в кольорах клубу: після правки прапора чи нового клубу (із затримкою, бо банери перемальовуються). */
   restage() { clearTimeout(this.stageT); this.stageT = setTimeout(() => { if (this.g.splash && this.g.splash.hub) this.g.startStage(matchClub(OP.club)); }, 700); }
@@ -584,21 +501,13 @@ export class OnlineScreen {
     const s = this.s, [k, x, y] = a.split(':');
     const re = () => this.ui.renderPanel();
     const ed = () => { s.sync(); return re(); };             // свій клуб змінився — суперник теж має це бачити
+    if (k.startsWith('sh-')) return this.shop.act(k, x, y, el);
     switch (k) {
+      case 'on-iron': audio.click(); this.tab = 'shop'; this.shop.sub = 'iron'; this.tac.swapFrom = null; return re();   // гаманець доларів веде в їхній розділ магазину
       case 'on-tab': audio.click(); this.tab = x; this.tac.swapFrom = null; if (x === 'top') this.s.cloud.loadTop().then(() => this.s.cloud.refresh()); return re();
       case 'on-train': { const c = trainHero(+x, y); if (c === false) { audio.deny(); this.ui.toast(allHeroes()[+x] && allHeroes()[+x].stats[y] >= 99 ? 'Навичка на максимумі' : 'Бракує монет — грай онлайн-матчі'); } else { audio.buy(); this.popKey = y; this.bump = true; s.cloud.train(+x, y); } return ed(); }   // сервер гри підтверджує тренування й поправляє монети
-      case 'on-scout': return this.purchase('scout', +x);
+      case 'on-scout': return this.shop.open('scout', +x);
       case 'on-sell': { const e = OP.bench[+x]; if (!e || !armed(el, 'ТОЧНО? +' + fmt(sellPrice(e)))) return; return this.sellAt(+x); }
-      case 'on-rv-sell': {                                           // продати новачка просто з картки відкриття
-        const j = OP.bench.findIndex((e) => e.id === x); if (j < 0) return;
-        if (!armed(el, 'ТОЧНО? +' + fmt(sellPrice(OP.bench[j])))) return;
-        return this.sellAt(j, () => { this.ui.el.reveal.hidden = true; });
-      }
-      case 'on-rv-in': {                                             // новачок із лави в основу на слот y, той, кого замінили, — на лаву
-        const j = OP.bench.findIndex((e) => e.id === x); this.ui.el.reveal.hidden = true;
-        if (j < 0 || !swapAny(+y, 11 + j)) { audio.deny(); this.ui.toast(moveDeny(OP, +y, 11 + j) || 'Не вийшло поставити в основу'); return re(); }
-        audio.buy(); this.tac.sel = +y; this.tac.seen = -1; s.sync(); return re();
-      }
       case 'on-fe': audio.click(); this.fe = x; return re();
       case 'on-fstyle': audio.click(); this.feStyle = x; this.rollCands(); return this.patchFe();
       case 'on-cands': audio.click(); this.rollCands(); return this.patchFe();
@@ -629,17 +538,15 @@ export class OnlineScreen {
       case 'on-cancel': audio.back(); s.leave(); return re();
       case 'on-seek': audio.click(); audio.unlock(); return s.seek();
       case 'on-feat': audio.click(); return this.featGo(+x);
-      case 'on-pack': audio.click(); this.pack = x; return re();
-      case 'on-pslot': audio.click(); this.pslot = +x; return re();
-      case 'on-buy': return this.buy();
       case 'on-next': audio.click(); s.leave(); return s.seek();     // суперник у лобі не тисне «готовий»: попрощатися й шукати іншого
       case 'on-claim': {
         if (this.claiming) return;
         this.claiming = true;
+        const q0 = s.cloud.view()[x === 'week' ? 'week' : 'day'][+y], d = q0 && q0.d ? q0.d : 0;
         Promise.resolve(s.cloud.claim(x, +y)).then((c) => {
           this.claiming = false;
           if (!c) { audio.deny(); return re(); }
-          audio.coin(3); audio.buy(); this.bump = true; this.ui.toast('Квест: +' + fmt(c) + ' монет онлайн-клубу'); return re();
+          audio.coin(3); audio.buy(); this.bump = true; this.ui.toast('Квест: +' + fmt(c) + ' монет' + (d ? ' і +' + d + ' Iron Dollar' : '') + ' онлайн-клубу'); return re();
         });
         return;
       }
@@ -680,7 +587,7 @@ export class OnlineScreen {
       if (goals) lines.push({ label: 'Голи · ' + r.me + ' × 15', value: goals, coin: true });
       lines.push({ label: 'Рейтинг', text: (rew.dR >= 0 ? '+' : '') + rew.dR, sub: String(OP.rating) });
       lines.push({ label: 'Досвід клубу', text: '+' + rew.xp, sub: 'рів. ' + rew.lvl });
-      if (rew.clubUp) chips.push(['gold', I.up, `Клуб досяг ${rew.lvl} рівня: +100 монет`]);
+      if (rew.clubUp) chips.push(['gold', I.up, `Клуб досяг ${rew.lvl} рівня: +100 монет${rew.iron ? ` і +${rew.iron} Iron Dollar` : ''}`]);
       for (const q of r.quests || []) chips.push(['gold', I.check, `Квест виконано: ${q.t}. Нагорода +${q.c} чекає в хабі`]);
       for (const u of rew.ups.slice(0, 5)) chips.push(['blue', I.up, `${u.name.split(' ')[0]} ${u.lvl} рів.: ${STAT_NAMES[u.key]} +1`]);
     }

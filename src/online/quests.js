@@ -23,10 +23,11 @@ const DAY = {
     { id: 'giant', t: 'Обіграй клуб із вищим рейтингом', n: 1, c: 130, f: (m) => +(m.gf > m.ga && m.oppR > m.myR) },
   ],
 };
+// d — Iron Dollar (друга валюта): тижневий квест дає ще й долари
 const WEEK = [
-  { id: 'w-win8', t: 'Виграй 8 матчів', n: 8, c: 450, f: (m) => +(m.gf > m.ga) },
-  { id: 'w-goals20', t: 'Забий 20 голів', n: 20, c: 400, f: (m) => m.gf },
-  { id: 'w-play12', t: 'Зіграй 12 матчів', n: 12, c: 380, f: () => 1 },
+  { id: 'w-win8', t: 'Виграй 8 матчів', n: 8, c: 450, d: 3, f: (m) => +(m.gf > m.ga) },
+  { id: 'w-goals20', t: 'Забий 20 голів', n: 20, c: 400, d: 3, f: (m) => m.gf },
+  { id: 'w-play12', t: 'Зіграй 12 матчів', n: 12, c: 380, d: 2, f: () => 1 },
 ];
 const BY_ID = {};
 for (const q of [...DAY.easy, ...DAY.mid, ...DAY.hard, ...WEEK]) BY_ID[q.id] = q;
@@ -77,7 +78,7 @@ const rollWeek = (w) => weekIds(w).map(fresh);
 
 /** Виконане й незабране з минулого набору: монети клубу одразу, щоб нагорода не згоріла. */
 function bank(list, out) {
-  for (const e of list) { const q = BY_ID[e.id]; if (q && !e.got && e.p >= q.n) { e.got = true; OP.coins += q.c; out.push({ t: q.t, c: q.c }); } }
+  for (const e of list) { const q = BY_ID[e.id]; if (q && !e.got && e.p >= q.n) { e.got = true; OP.coins += q.c; if (q.d) OP.iron = (OP.iron | 0) + q.d; out.push({ t: q.t, c: q.c, d: q.d | 0 }); } }
 }
 
 /**
@@ -98,7 +99,7 @@ export function syncQuests(t = Date.now()) {
 /** Квести для екрана: опис, прогрес, стан. Невідомі (прибрані з гри) пропускаємо. */
 export function questList() {
   syncQuests();
-  const v = (kind) => (e, i) => { const q = BY_ID[e.id]; return q && { kind, i, id: e.id, t: q.t, n: q.n, c: q.c, p: Math.min(e.p, q.n), got: e.got, done: e.p >= q.n }; };
+  const v = (kind) => (e, i) => { const q = BY_ID[e.id]; return q && { kind, i, id: e.id, t: q.t, n: q.n, c: q.c, d: q.d | 0, p: Math.min(e.p, q.n), got: e.got, done: e.p >= q.n }; };
   return { day: OP.q.day.map(v('day')).filter(Boolean), week: OP.q.week.map(v('week')).filter(Boolean) };
 }
 /** Скільки нагород чекає кнопки «Забрати». */
@@ -108,12 +109,12 @@ export function questsReady() {
   for (const e of [...q.day, ...q.week]) { const d = BY_ID[e.id]; if (d && !e.got && e.p >= d.n) n++; }
   return n;
 }
-/** Забрати нагороду: монети або 0, якщо квест ще не виконано чи вже забрано. */
+/** Забрати нагороду: монети або 0, якщо квест ще не виконано чи вже забрано. Долари (d) додаються разом із монетами. */
 export function claimQuest(kind, i) {
   syncQuests();
   const e = (kind === 'week' ? OP.q.week : OP.q.day)[i], q = e && BY_ID[e.id];
   if (!q || e.got || e.p < q.n) return 0;
-  e.got = true; OP.coins += q.c; saveOP(); return q.c;
+  e.got = true; OP.coins += q.c; if (q.d) OP.iron = (OP.iron | 0) + q.d; saveOP(); return q.c;
 }
 
 /**

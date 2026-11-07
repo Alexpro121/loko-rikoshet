@@ -3,7 +3,7 @@
 // клуб і квести на пристрої (profile.js, quests.js). Коли частина є, головний сервер: гра показує результат одразу за
 // локальним підрахунком, а потім бере числа з відповіді сервера (adoptServer), тож розбіжність виправляється сама.
 import { OP, toServer, adoptServer, adoptHero, saveOP, allHeroes } from './profile.js';
-import { features, has, saveClub, meOnServer, trainOnServer, scoutOnServer, packOnServer, buyOnServer, sellOnServer, resetOnServer, matchStart, matchReport, matchState, serverQuests, claimOnServer, topList } from './server.js';
+import { features, has, saveClub, meOnServer, trainOnServer, scoutOnServer, packOnServer, buyOnServer, sellOnServer, marketOnServer, marketBuyOnServer, marketRefreshOnServer, ironOnServer, starsInvoice, resetOnServer, matchStart, matchReport, matchState, serverQuests, claimOnServer, topList } from './server.js';
 import { questList, questsReady, claimQuest, questsLeft } from './quests.js';
 
 const SAVE_MS = 1500;                    // серія правок прапора й назви: на сервер іде лише остання
@@ -26,10 +26,17 @@ export class Cloud {
       const c = r && !r.error ? r.club || null : null;
       if (c && adoptServer(c, true)) { this.synced = true; this.on.sync(true); }
       if (r && r.quests) this.setQuests(r.quests);
+      this.ironGot(r);
     }
     if (f.has('quests') && !this.q) await this.loadQuests();
     if (f.has('top') && this.on.screen && this.on.screen.tab === 'top') await this.loadTop();
     this.refresh();
+  }
+  /** Долари, які сервер зарахував без гравця (рейтинг тижня, оплата зірками): показати раз, сервер після цього їх знімає. */
+  ironGot(r) {
+    const L = r && Array.isArray(r.ironGot) ? r.ironGot : []; if (!L.length) return;
+    const n = L.reduce((a, g) => a + (+g.n || 0), 0), top = L.find((g) => g.why && g.why.top), st = L.some((g) => g.why && g.why.stars);
+    if (n > 0) this.ui.toast(`+${n} Iron Dollar${top ? ` за ${top.why.top}-те місце в рейтингу тижня` : st ? ' за зірки Telegram' : ''}`);
   }
   /** Вигляд чи тактика змінились: зберегти на сервері (лише числа беремо назад, щоб не затерти наступну правку). */
   dirty() {
@@ -66,7 +73,7 @@ export class Cloud {
       if (r.error || !r.hero || !r.club) { if (r.error !== 'bench_full' && r.error !== 'no_coins') await this.resync(); return { error: r.error || 'server' }; }
       adoptServer(r.club, false);
       const j = OP.bench.findIndex((e) => e.id === r.hero.id);
-      return j < 0 ? { error: 'server' } : { hero: OP.bench[j], bench: j };
+      return j < 0 ? { error: 'server' } : { hero: OP.bench[j], bench: j, wagon: r.wagon || null, pity: r.pity };
     }
     const r = kind === 'scout' ? await scoutOnServer(i) : await packOnServer(i, kind);
     if (!r) return null;
@@ -74,7 +81,7 @@ export class Cloud {
     if (r.error || !r.hero) { await this.resync(); return { error: r.error || 'server' }; }
     if (Number.isFinite(r.coins)) OP.coins = r.coins;
     adoptHero(i, r.hero); saveOP();
-    return { hero: OP.heroes[i], replaced: true };
+    return { hero: OP.heroes[i], replaced: true, wagon: r.wagon || null };
   }
   /** Продати героя з лави j на сервері: { gain } або { error }; null — сервер недоступний (тоді нічого не продаємо). */
   async sell(j) {
@@ -86,6 +93,40 @@ export class Cloud {
     adoptServer(r.club, false);
     return { gain: +r.gain || 0 };
   }
+  // ------------------------------------------------------------------ ринок (частина 'market')
+  /** Вітрина дня: { day, left_ms, offers, refresh_price }; null — сервер недоступний. */
+  marketLoad() { return marketOnServer(); }
+  /** Купити гравця зі слота вітрини: числа клубу беремо із сервера. { hero, bench } | { error } | null. */
+  async marketBuy(slot) {
+    await this.flush();
+    const r = await marketBuyOnServer(slot);
+    if (!r) return null;
+    if (r.error || !r.hero) { if (!['sold', 'bench_full', 'no_coins', 'bad_slot'].includes(r.error)) await this.resync(); return { error: r.error || 'server' }; }
+    if (r.club) adoptServer(r.club, false); else if (Number.isFinite(r.coins)) { OP.coins = r.coins; saveOP(); }
+    const j = OP.bench.findIndex((e) => e.id === r.hero.id);
+    return { hero: j < 0 ? r.hero : OP.bench[j], bench: j };
+  }
+  /** Нова вітрина за монети (iron — за Iron Dollar): відповідь — сама вітрина (як marketLoad) і монети. */
+  async marketRefresh(iron = false) {
+    await this.flush();
+    const r = await marketRefreshOnServer(iron);
+    if (!r || r.error) return r;
+    if (r.club) adoptServer(r.club, false);
+    else { if (Number.isFinite(r.coins)) OP.coins = r.coins; if (Number.isFinite(r.iron)) OP.iron = r.iron; saveOP(); }
+    return r;
+  }
+  // ------------------------------------------------------------------ Iron Dollar (частина 'iron') і Telegram Stars ('stars')
+  /** Покупка за доларами: числа клубу беремо із сервера. { club, hero? } | { error } | null. */
+  async iron(kind, body) {
+    await this.flush();
+    const r = await ironOnServer(kind, body);
+    if (!r) return null;
+    if (r.error || !r.club) { if (!['no_iron', 'max', 'bad_hero', 'bench_full'].includes(r.error)) await this.resync(); return { error: r.error || 'server' }; }
+    adoptServer(r.club, false);
+    return r;
+  }
+  /** Рахунок Stars на пакет доларів: { link } | { error } | null. */
+  stars(pack) { return starsInvoice(pack); }
   /** «Новий випадковий клуб» на сервері. null — сервера немає, тоді новий клуб робить пристрій. */
   async reset() {
     if (!has('club')) return null;
@@ -140,7 +181,7 @@ export class Cloud {
     const q = this.q, gone = Date.now() - this.qAt;
     const list = (p, kind) => (Array.isArray(p.list) ? p.list : []).map((e, i) => {
       const n = Math.max(1, +e.n || 1), v = Math.min(n, +e.p || 0);
-      return { kind, i, id: String(e.id), period: p.period, t: String(e.t || ''), n, c: +e.c || 0, p: v, got: !!e.got, done: v >= n };
+      return { kind, i, id: String(e.id), period: p.period, t: String(e.t || ''), n, c: +e.c || 0, d: +e.d || 0, p: v, got: !!e.got, done: v >= n };
     });
     return { day: list(q.day, 'day'), week: list(q.week, 'week'), left: { day: Math.max(0, (+q.day.left_ms || 0) - gone), week: Math.max(0, (+q.week.left_ms || 0) - gone) } };
   }
@@ -152,7 +193,9 @@ export class Cloud {
     if (!e) return 0;
     const r = await claimOnServer(e.period, e.id);
     if (!r || r.error) { await this.loadQuests(); return 0; }
-    if (Number.isFinite(r.total)) { OP.coins = r.total; saveOP(); }
+    if (Number.isFinite(r.total)) OP.coins = r.total;
+    if (Number.isFinite(r.iron_total)) OP.iron = r.iron_total;   // тижневий квест дає ще й Iron Dollar (d)
+    saveOP();
     await this.loadQuests();
     return +r.coins || 0;
   }

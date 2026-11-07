@@ -346,7 +346,7 @@ export class UI {
       case 'tab-squad': case 'tab-strikers': case 'tab-keepers': audio.click(); this.tab = a.slice(4); if (this.tac) this.tac.reset(); return this.renderPanel();
       case 'acad-collect': return this.collectGraduate();
       case 'acad-boost': return this.boostAcademy();
-      case 'close-reveal': audio.click(); this.el.reveal.hidden = true; return this.renderPanel();
+      case 'close-reveal': { audio.click(); this.el.reveal.hidden = true; const f = this.revealClose; this.revealClose = null; if (f) f(); return this.renderPanel(); }   // revealClose: відкриття вагона (online/shop.js) прибирає потяг
       case 'pause': audio.click(); return this.pause();
       case 'resume': audio.click(); this.el.pause.hidden = true; if (g.match) g.match.resume(); return;
       case 'quit': audio.back(); this.el.pause.hidden = true; return g.quitMatch();
@@ -374,7 +374,7 @@ export class UI {
       case 'reset': if (el.dataset.arm) { resetAll(); ensureSquad(); audio.back(); this.closeSettings(); this.toast('Прогрес скинуто'); g.island.setTier(0, false); g.island.setTrophies(0); } else { el.dataset.arm = 1; el.querySelector('b').textContent = 'СПРАВДІ СКИНУТИ?'; setTimeout(() => { delete el.dataset.arm; const b = el.querySelector('b'); if (b) b.textContent = 'СКИНУТИ ПРОГРЕС'; }, 3000); } return;
       default:
         if (a.startsWith('tk-')) { const t = this.panel === 'online' ? this.online && this.online.tac : this.tac; return t && t.act(a); }
-        if (a.startsWith('on-')) return this.online && this.online.act(a, el);
+        if (a.startsWith('on-') || a.startsWith('sh-')) return this.online && this.online.act(a, el);
         if (a.startsWith('cam-')) { if (CAM_PRESETS[a.slice(4)]) { S.settings.camMode = a.slice(4); commit(); g.computeMatchBase(); this.map.apply(); audio.click(); return this.renderSettings(); } }
         if (a.startsWith('set-tab:')) { this.setTab = a.slice(8); audio.click(); return this.renderSettings(); }
         if (a.startsWith('map-at:')) { const [x, y] = a.slice(7).split(',').map(Number); this.map.place(x, y); audio.click(); return this.renderSettings(); }

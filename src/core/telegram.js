@@ -107,6 +107,14 @@ function rotateHelp() {
 
 // ---------------------------------------------------------------- вібрація
 /** @returns {boolean} true, якщо вібрацію взяв на себе Telegram (navigator.vibrate на iPhone немає взагалі) */
+/**
+ * Оплата Telegram Stars: відкрити рахунок link (робить бот, createInvoiceLink). Promise зі статусом 'paid' | 'cancelled' |
+ * 'failed' | 'pending'; null — поза Telegram або старий клієнт без openInvoice.
+ */
+export function tgInvoice(link) {
+  if (!tg || !at('6.1') || typeof tg.openInvoice !== 'function') return Promise.resolve(null);
+  return new Promise((res) => { try { tg.openInvoice(link, (st) => res(st)); } catch (_) { res('failed'); } });
+}
 export function tgHaptic(p) {
   if (!tg || !at('6.1')) return false;
   quiet(() => {
