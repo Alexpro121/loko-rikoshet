@@ -124,6 +124,14 @@ export const resetOnServer = () => call('club', '/club/reset', {});
 /** Магазин і лава (частина 'shop'): пак кладе новачка на лаву — { coins, hero, bench, club }; продаж лише з лави, за id — { coins, gain, club }. */
 export const buyOnServer = (hero, pack) => call('shop', '/club/buy', { hero, pack });
 export const sellOnServer = (id) => call('shop', '/club/sell', { id });
+/** Ринок готових гравців (частина 'market'): вітрина дня, купівля за слотом, оновлення вітрини за монети. */
+export const marketOnServer = () => call('market', '/market');
+export const marketBuyOnServer = (slot) => call('market', '/market/buy', { slot });
+export const marketRefreshOnServer = (iron = false) => call('market', '/market/refresh', iron ? { iron: true } : {});
+/** Iron Dollar (частина 'iron'): kind — 'slot' (місце на лаві), 'bag' (монети), 'trait' (нова риса, body { hero: id }). Відповідь { club, hero? }. */
+export const ironOnServer = (kind, body = {}) => call('iron', '/iron/' + kind, body);
+/** Telegram Stars (частина 'stars'): рахунок на пакет доларів, { link } для Telegram.WebApp.openInvoice. */
+export const starsInvoice = (pack) => call('stars', '/stars/invoice', { pack });
 /**
  * Матч: господар стартує й отримує { matchId, ticket }; квиток іде гостю напряму по P2P ('mt'), і гість стартує з ним.
  * Код кімнати знає кожен, кому його надіслали, тож за кодом сервер не парує: інакше чужий міг би стати «гостем» на сервері.
