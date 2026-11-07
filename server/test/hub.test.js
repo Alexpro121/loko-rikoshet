@@ -28,11 +28,11 @@ if (!rules.PACKS && process.env.LOKO_PACKS) {
 
 const initData = (id, name) => signInitData({ auth_date: String(NOW), query_id: 'q', user: JSON.stringify({ id, first_name: name, username: 'u' + id }) }, BOT);
 
-async function start() {
+async function start(bot = null) {
   const db = openDb(':memory:');
   const clock = { ms: NOW * 1000 };
   const config = { botToken: BOT, origins: [ORIGIN], turnSecret: '', turnUrls: [], behindProxy: false };
-  const app = createApp({ db, config, newClub: rules.newClub, rules, now: () => clock.ms, queueWaitMs: 300 });
+  const app = createApp({ db, config, newClub: rules.newClub, rules, bot, now: () => clock.ms, queueWaitMs: 300 });
   const srv = createServer(app);
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${srv.address().port}`;
@@ -64,7 +64,7 @@ test('health перелічує частини хабу', async () => {
   try {
     const h = (await s.call('GET', '/health')).body;
     assert.equal(h.api, 2);
-    assert.deepEqual(h.features, ['club', 'match', ...(rules.QUESTS ? ['quests'] : []), 'queue', 'top', ...(rules.SHOP ? ['shop'] : [])]);
+    assert.deepEqual(h.features, ['club', 'match', ...(rules.QUESTS ? ['quests'] : []), 'queue', 'top', ...(rules.SHOP ? ['shop'] : []), ...(rules.MARKET ? ['market'] : []), ...(rules.IRONOK ? ['iron'] : [])]);
   } finally { await s.close(); }
 });
 
@@ -432,7 +432,7 @@ test('квести: прогрес за підтвердженим матчем,
     // наступного тижня незабране зараховується саме
     s.tick(8 * 86400);
     const me = (await s.call('GET', '/me', null, s.th)).body;
-    assert.deepEqual(me.quests.banked, leave.map((e) => ({ t: e.t, c: e.c })));
+    assert.deepEqual(me.quests.banked, leave.map((e) => ({ t: e.t, c: e.c, d: e.d || 0 })));
     assert.equal(me.club.coins, coins + leave.reduce((a, e) => a + e.c, 0));
     assert.ok(me.quests.day.list.every((e) => e.p === 0 && !e.got));
     assert.deepEqual((await s.call('GET', '/quests', null, s.th)).body.banked, []);
@@ -490,7 +490,7 @@ test('магазин і лава: пак кладе новачка на лаву
     assert.equal(sc.hero.role, 'GK');
     await s.call('POST', '/club/buy', { hero: 5, pack: 'rare' }, t);
     assert.equal((await s.call('POST', '/club/buy', { hero: 5, pack: 'rare' }, t)).body.error, 'bench_full');
-    assert.equal((await s.call('POST', '/club/buy', { hero: 5, pack: 'gold' }, t)).body.error, 'bad_pack');
+    assert.equal((await s.call('POST', '/club/buy', { hero: 5, pack: 'platinum' }, t)).body.error, 'bad_pack');
     // склад разом із лавою: новачок у основу, той, кого замінили, на лаву
     let me = (await s.call('GET', '/me', null, t)).body.club;
     const H = me.heroes.slice(), B = me.bench.slice();
@@ -546,4 +546,310 @@ test('матч не губить лаву: нагороди отримує ос�
     assert.equal(c.bench[0].apps, 0); assert.equal(c.heroes[2].apps, 1);
     assert.equal(c.games, 21);
   } finally { await s.close(); }
+});
+
+test('ринок: вітрина дня стала, купівля на лаву, оновлення дорожчає, у кожного своя вітрина', { skip: !rules.MARKET && 'немає ринку' }, async () => {
+  const s = await start();
+  try {
+    await two(s);
+    s.db.prepare('UPDATE clubs SET coins = 100000 WHERE player_id IN (10, 20)').run();
+    const v = (await s.call('GET', '/market', null, s.th)).body;
+    assert.equal(v.offers.length, 6); assert.equal(v.refresh_price, 60);
+    assert.ok(v.left_ms > 0 && v.left_ms <= 86400e3); assert.match(v.day, /^\d{4}-\d{2}-\d{2}$/);
+    for (const o of v.offers) { assert.equal(o.price, rules.marketPrice(o.hero)); assert.ok(o.price > rules.sellPrice(o.hero)); assert.equal(o.sold, false); }
+    // двоє на позицію найслабшого героя основи, решта з інших ліній, воротар серед них
+    const c = s.ch, w = c.heroes.reduce((b, e, i) => (rules.ovr(e) < rules.ovr(c.heroes[b]) ? i : b), 0);
+    assert.equal(v.offers[0].hero.role, c.heroes[w].role); assert.equal(v.offers[1].hero.role, c.heroes[w].role);
+    assert.equal(new Set(v.offers.slice(1).map((o) => o.hero.line)).size, 5);
+    // стала протягом дня, а в іншого гравця — своя
+    s.tick(3600);
+    assert.deepEqual((await s.call('GET', '/market', null, s.th)).body.offers.map((o) => o.hero.id), v.offers.map((o) => o.hero.id));
+    const vg = (await s.call('GET', '/market', null, s.tg)).body;
+    assert.notDeepEqual(vg.offers.map((o) => o.hero.name), v.offers.map((o) => o.hero.name));
+    // купівля: на лаву, з журналом; удруге — sold
+    const b = (await s.call('POST', '/market/buy', { slot: 2 }, s.th)).body;
+    assert.equal(b.coins, 100000 - v.offers[2].price); assert.equal(b.club.bench[b.bench].id, b.hero.id);
+    assert.ok(b.hero.num >= 12); assert.ok(!('mk' in b.club));
+    assert.equal((await s.call('POST', '/market/buy', { slot: 2 }, s.th)).body.error, 'sold');
+    assert.equal((await s.call('POST', '/market/buy', { slot: 9 }, s.th)).body.error, 'bad_slot');
+    assert.equal((await s.call('GET', '/market', null, s.th)).body.offers[2].sold, true);
+    // оновлення: 60, 120, 240…, нова вітрина, продане знову доступне
+    const r1 = (await s.call('POST', '/market/refresh', null, s.th)).body;
+    assert.equal(r1.price, 60); assert.equal(r1.refresh_price, 120); assert.equal(r1.coins, b.coins - 60);
+    assert.notDeepEqual(r1.offers.map((o) => o.hero.id), v.offers.map((o) => o.hero.id)); assert.ok(r1.offers.every((o) => !o.sold));
+    assert.equal((await s.call('POST', '/market/refresh', null, s.th)).body.price, 120);
+    // лава повна
+    for (let i = 0; i < 4; i++) assert.ok((await s.call('POST', '/market/buy', { slot: i }, s.th)).body.hero);
+    assert.equal((await s.call('POST', '/market/buy', { slot: 5 }, s.th)).body.error, 'bench_full');
+    // скидання клубу не повертає куплене на вітрину
+    await s.call('POST', '/club/reset', {}, s.th);
+    s.db.prepare('UPDATE clubs SET coins = 20000 WHERE player_id = 10').run();
+    assert.equal((await s.call('POST', '/market/buy', { slot: 0 }, s.th)).body.error, 'sold');
+    // новий день за Києвом: нова вітрина, оновлення знову по 60
+    s.tick(86400);
+    const nd = (await s.call('GET', '/market', null, s.th)).body;
+    assert.notEqual(nd.day, v.day); assert.equal(nd.refresh_price, 60); assert.ok(nd.offers.every((o) => !o.sold));
+    const reasons = ledger(s.db, 10).map((r) => r[1]);
+    assert.deepEqual(reasons.filter((r) => r.startsWith('market')), ['market', 'market_refresh', 'market_refresh', 'market', 'market', 'market', 'market']);
+    // бідний клуб
+    s.db.prepare('UPDATE clubs SET coins = 10 WHERE player_id = 20').run();
+    assert.equal((await s.call('POST', '/market/buy', { slot: 0 }, s.tg)).body.error, 'no_coins');
+    assert.equal((await s.call('POST', '/market/refresh', null, s.tg)).body.error, 'no_coins');
+  } finally { await s.close(); }
+});
+
+test('гарант рідкісного пака й вагон потяга у відповіді пака', { skip: !rules.SHOP && 'немає лави' }, async () => {
+  const s = await start();
+  try {
+    await two(s);
+    s.db.prepare('UPDATE clubs SET coins = 100000 WHERE player_id = 10').run();
+    const sell = async () => { const c = (await s.call('GET', '/me', null, s.th)).body.club; for (const e of c.bench) await s.call('POST', '/club/sell', { id: e.id }, s.th); };
+    let top = 0;
+    for (let i = 0; i < 60; i++) {
+      if (i % 5 === 0) { s.tick(61); await sell(); }   // нова хвилина: ліміт 120 запитів на хвилину з адреси
+      const before = (await s.call('GET', '/me', null, s.th)).body.club.pity;
+      const r = (await s.call('POST', '/club/buy', { hero: 3, pack: 'rare' }, s.th)).body;
+      assert.ok(r.wagon, JSON.stringify(r).slice(0, 200)); assert.ok(r.wagon.no >= 1 && r.wagon.no <= 20); assert.equal(r.wagon.rar, r.hero.rar);
+      const isTop = r.hero.rar === 'e' || r.hero.rar === 'l';
+      if (before >= 4) assert.ok(isTop, 'п’ятий без епіка — гарантовано епік+');
+      assert.equal(r.pity, isTop ? 5 : 5 - Math.min(4, before + 1));
+      if (isTop) top++;
+    }
+    assert.ok(top >= 12, 'у 60 паках щонайменше 12 епіків+ (гарант)');
+    s.tick(61); await sell();
+    const sc = (await s.call('POST', '/club/buy', { hero: 2, pack: 'scout' }, s.th)).body;
+    assert.ok(sc.wagon); assert.equal(sc.pity, null);
+    const auto = (await s.call('POST', '/club/buy', { pack: 'scout' }, s.th)).body;   // без позиції: на позицію найслабшого
+    const me = (await s.call('GET', '/me', null, s.th)).body.club, w = me.heroes.reduce((b, e, i) => (rules.ovr(e) < rules.ovr(me.heroes[b]) ? i : b), 0);
+    assert.equal(auto.hero.role, me.heroes[w].role);
+  } finally { await s.close(); }
+});
+
+test('Iron Dollar: місця лави, мішок монет, риса, золотий вагон, оновлення вітрини, рівні й перенесення', { skip: !rules.IRONOK && 'немає Iron Dollar' }, async () => {
+  const s = await start();
+  try {
+    await two(s);
+    const setIron = (id, n) => { const r = s.db.prepare('SELECT data FROM clubs WHERE player_id = ?').get(id); const d = JSON.parse(r.data); d.iron = n; s.db.prepare('UPDATE clubs SET data = ? WHERE player_id = ?').run(JSON.stringify(d), id); };
+    const ironLog = (id) => s.db.prepare('SELECT delta, reason FROM iron_ledger WHERE player_id = ? ORDER BY id').all(id).map((r) => [r.delta, r.reason]);
+    // перенесення: долари й місця не більше, ніж дають рівні й тижневі квести
+    const t = await s.login(1, 'Аня');
+    const imp = (await s.call('POST', '/club/save', device({ lvl: 6, games: 20, rec: { w: 10, d: 5, l: 5 }, iron: 999, slots: 5 }), t)).body.club;
+    const budget = rules.IRON.lvl * 5 + 3 * Math.floor(20 / 8);   // 16
+    assert.equal(imp.slots, 1); assert.equal(imp.iron, budget - rules.IRON.slot[0]);
+    assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM flags WHERE player_id = 1 AND kind = 'import'").get().n, 1);
+    // місця лави: ціна росте, межа SLOTS_MAX
+    assert.equal((await s.call('POST', '/iron/slot', null, s.th)).body.error, 'no_iron');
+    setIron(10, 200);
+    const prices = [];
+    for (let i = 0; i < 5; i++) prices.push((await s.call('POST', '/iron/slot', null, s.th)).body.price);
+    assert.deepEqual(prices, rules.IRON.slot);
+    assert.equal((await s.call('POST', '/iron/slot', null, s.th)).body.error, 'max');
+    let c = (await s.call('GET', '/me', null, s.th)).body.club;
+    assert.equal(c.slots, 5); assert.equal(c.iron, 200 - 100);
+    // лава на 10: купівля паків до 10, далі bench_full
+    s.db.prepare('UPDATE clubs SET coins = 100000 WHERE player_id = 10').run();
+    for (let i = 0; i < 10; i++) { s.tick(i % 5 ? 0 : 61); assert.ok((await s.call('POST', '/club/buy', { pack: 'scout' }, s.th)).body.hero); }
+    assert.equal((await s.call('POST', '/club/buy', { pack: 'scout' }, s.th)).body.error, 'bench_full');
+    c = (await s.call('GET', '/me', null, s.th)).body.club;
+    for (const e of c.bench.slice(0, 3)) await s.call('POST', '/club/sell', { id: e.id }, s.th);
+    // золотий вагон за долари: лише епік чи легенда, вагон у відповіді, монети не чіпає
+    const coins0 = (await s.call('GET', '/me', null, s.th)).body.club.coins;
+    const g = (await s.call('POST', '/club/buy', { pack: 'gold' }, s.th)).body;
+    assert.ok(['e', 'l'].includes(g.hero.rar)); assert.ok(g.wagon.no >= 1 && g.wagon.no <= 20);
+    assert.equal(g.coins, coins0); assert.equal(g.club.iron, 100 - rules.IRON.gold);
+    assert.equal((await s.call('POST', '/club/pack', { hero: 3, pack: 'gold' }, s.th)).body.error, 'bad_pack');   // старий шлях — лише за монети
+    // мішок монет і нова риса героя (за id)
+    s.tick(61);
+    const bag = (await s.call('POST', '/iron/bag', null, s.th)).body;
+    assert.equal(bag.coins, rules.IRON.bagCoins); assert.equal(bag.club.coins, coins0 + rules.IRON.bagCoins);
+    const h = bag.club.heroes[4], tr = (await s.call('POST', '/iron/trait', { hero: h.id }, s.th)).body;
+    assert.notEqual(tr.hero.trait, h.trait); assert.equal(tr.hero.id, h.id);
+    assert.equal((await s.call('POST', '/iron/trait', { hero: 'нема' }, s.th)).body.error, 'bad_hero');
+    // оновлення вітрини за долари: лічильник монетних оновлень не росте
+    const v0 = (await s.call('GET', '/market', null, s.th)).body;
+    const ri = (await s.call('POST', '/market/refresh', { iron: true }, s.th)).body;
+    assert.equal(ri.iron_price, rules.IRON.mref); assert.equal(ri.refresh_price, v0.refresh_price);
+    assert.notDeepEqual(ri.offers.map((o) => o.hero.id), v0.offers.map((o) => o.hero.id));
+    // скидання клубу: долари й місця лишаються
+    const before = (await s.call('GET', '/me', null, s.th)).body.club;
+    const rs = (await s.call('POST', '/club/reset', {}, s.th)).body.club;
+    assert.equal(rs.iron, before.iron); assert.equal(rs.slots, 5);
+    // журнал доларів сходиться з балансом
+    const log = ironLog(10);
+    assert.deepEqual(log.map((r) => r[1]), ['slot', 'slot', 'slot', 'slot', 'slot', 'gold', 'bag', 'trait', 'market_refresh']);
+    assert.equal(200 + log.reduce((a, r) => a + r[0], 0), rs.iron);
+    // рівень клубу дає IRON.lvl доларів (матч)
+    const d = JSON.parse(s.db.prepare('SELECT data FROM clubs WHERE player_id = 20').get().data);
+    d.xp = rules.clubXpNeed(1) - 1; s.db.prepare('UPDATE clubs SET data = ? WHERE player_id = 20').run(JSON.stringify(d));
+    s.tick(61);
+    const id = await pair(s);
+    await s.call('POST', '/match/result', { matchId: id, me: 1, opp: 0 }, s.th);
+    const res = (await s.call('POST', '/match/result', { matchId: id, me: 0, opp: 1 }, s.tg)).body;
+    assert.ok(res.rew.iron >= rules.IRON.lvl); assert.equal(res.club.iron, res.rew.iron);
+    assert.deepEqual(ironLog(20), [[res.rew.iron, 'lvl']]);
+  } finally { await s.close(); }
+});
+
+test('Iron Dollar: тижнева нагорода за рейтинг раз на тиждень і показ у /me', { skip: !rules.IRONOK && 'немає Iron Dollar' }, async () => {
+  const s = await start();
+  try {
+    await two(s);
+    s.app.sweep();                                                   // перший запуск лише запам'ятовує тиждень
+    assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM iron_ledger').get().n, 0);
+    s.tick(8 * 86400); s.app.sweep(); s.app.sweep();                 // новий тиждень: роздано рівно раз
+    const log = s.db.prepare('SELECT player_id, delta FROM iron_ledger ORDER BY player_id').all();
+    assert.deepEqual(log.map((r) => [r.player_id, r.delta]), [[10, rules.ironForPlace(1)], [20, rules.ironForPlace(2)]]);
+    const me = (await s.call('GET', '/me', null, s.th)).body;
+    assert.deepEqual(me.ironGot, [{ why: { top: 1 }, n: rules.ironForPlace(1) }]);
+    assert.equal(me.club.iron, rules.ironForPlace(1)); assert.ok(!('ironGot' in me.club));
+    assert.deepEqual((await s.call('GET', '/me', null, s.th)).body.ironGot, []);
+  } finally { await s.close(); }
+});
+
+test('Telegram Stars: рахунок, перевірка перед оплатою, зарахування рівно раз за charge id', { skip: !rules.IRONOK && 'немає Iron Dollar' }, async () => {
+  const bot = starsBot();
+  const s = await start(bot);
+  try {
+    await two(s);
+    assert.ok((await s.call('GET', '/health')).body.features.includes('stars'));
+    const P = rules.STARS[0];
+    const inv = (await s.call('POST', '/stars/invoice', { pack: P.id }, s.th)).body;
+    assert.match(inv.link, /^https:\/\/t\.me\//);
+    const o = bot.made[0];
+    assert.equal(o.stars, P.stars); assert.match(o.payload, new RegExp(`^iron:10:${P.id}:`));
+    assert.equal((await s.call('POST', '/stars/invoice', { pack: 'free' }, s.th)).body.error, 'bad_pack');
+    // перед оплатою: сума, валюта й платник мають збігатися
+    const pq = { id: 'q', from: { id: 10 }, currency: 'XTR', total_amount: P.stars, invoice_payload: o.payload };
+    assert.equal(bot.pay.check(pq), null);
+    assert.ok(bot.pay.check({ ...pq, total_amount: 1 }));
+    assert.ok(bot.pay.check({ ...pq, from: { id: 20 } }));
+    assert.ok(bot.pay.check({ ...pq, currency: 'USD' }));
+    // оплата: зараховано раз, повтор того самого charge id нічого не дає
+    const msg = { chat: { id: 10 }, successful_payment: { currency: 'XTR', total_amount: P.stars, invoice_payload: o.payload, telegram_payment_charge_id: 'ch-1' } };
+    assert.deepEqual(await bot.pay.credit(msg), { status: 'paid', iron: P.iron });
+    assert.deepEqual(await bot.pay.credit(msg), { status: 'dup' });
+    const me = (await s.call('GET', '/me', null, s.th)).body;
+    assert.equal(me.club.iron, P.iron); assert.deepEqual(me.ironGot, [{ why: { stars: P.stars }, n: P.iron }]);
+    assert.deepEqual(s.db.prepare('SELECT delta, reason FROM iron_ledger WHERE player_id = 10').all().map((r) => [r.delta, r.reason]), [[P.iron, 'stars:ch-1']]);
+    assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM stars_payments').get().n, 1);
+    assert.deepEqual(bot.refunds, []);
+  } finally { await s.close(); }
+});
+
+/** Бот-заглушка для зірок: рахунки, повернення (refund кидає, якщо задано refundFails). */
+function starsBot() {
+  return {
+    secret: 'x', made: [], refunds: [], refundFails: false,
+    async invoice(o) { this.made.push(o); return 'https://t.me/$inv' + this.made.length; },
+    async refund(user, charge) { if (this.refundFails) throw new Error('Telegram: Bad Request: REFUND_FAILED'); this.refunds.push([user, charge]); return true; },
+    setPayments(p) { this.pay = p; },
+  };
+}
+const paidMsg = (from, payload, stars, charge) => ({ chat: { id: from }, from: { id: from }, successful_payment: { currency: 'XTR', total_amount: stars, invoice_payload: payload, telegram_payment_charge_id: charge } });
+const payRow = (db, charge) => db.prepare('SELECT player_id, payer, iron, status, note FROM stars_payments WHERE charge_id = ?').get(charge);
+
+test('Telegram Stars: виданий рахунок діє й після зміни чи зникнення пакета', { skip: !rules.IRONOK && 'немає Iron Dollar' }, async () => {
+  const bot = starsBot();
+  const s = await start(bot);
+  const P = rules.STARS[0], was = { ...P };
+  try {
+    await two(s);
+    await s.call('POST', '/stars/invoice', { pack: P.id }, s.th);
+    const o = bot.made[0];
+    // власник змінив ціну й кількість: старий рахунок платиться за старими умовами
+    Object.assign(P, { stars: was.stars + 20, iron: was.iron + 40 });
+    const pq = { id: 'q', from: { id: 10 }, currency: 'XTR', total_amount: was.stars, invoice_payload: o.payload };
+    assert.equal(bot.pay.check(pq), null);
+    assert.deepEqual(await bot.pay.credit(paidMsg(10, o.payload, was.stars, 'old-1')), { status: 'paid', iron: was.iron });
+    // а тепер пакет прибрали зовсім: рахунок, виданий до того, теж діє
+    P.id = 'gone';
+    await s.call('POST', '/stars/invoice', { pack: 'gone' }, s.th);
+    const o2 = bot.made[1];
+    rules.STARS.splice(0, 1);
+    try {
+      assert.equal(bot.pay.check({ ...pq, total_amount: was.stars + 20, invoice_payload: o2.payload }), null);
+      assert.deepEqual(await bot.pay.credit(paidMsg(10, o2.payload, was.stars + 20, 'old-2')), { status: 'paid', iron: was.iron + 40 });
+    } finally { rules.STARS.unshift(P); }
+    const me = (await s.call('GET', '/me', null, s.th)).body;
+    assert.equal(me.club.iron, was.iron + was.iron + 40);
+    assert.deepEqual(bot.refunds, []);
+  } finally { Object.assign(P, was); await s.close(); }
+});
+
+test('Telegram Stars: оплату, яку не зарахувати, бот повертає, а якщо не вдалось — owed і повтор у sweep', { skip: !rules.IRONOK && 'немає Iron Dollar' }, async () => {
+  const bot = starsBot();
+  const s = await start(bot);
+  const P = rules.STARS[0];
+  try {
+    await two(s);
+    const iron0 = (await s.call('GET', '/me', null, s.th)).body.club.iron | 0;
+    // невідомий рахунок (не видавали, пакета немає)
+    assert.deepEqual(await bot.pay.credit(paidMsg(10, 'iron:10:zzz:abcd', 77, 'r-1')), { status: 'refunded', why: 'terms' });
+    // сума не збігається з умовами рахунку
+    await s.call('POST', '/stars/invoice', { pack: P.id }, s.th);
+    assert.equal((await bot.pay.credit(paidMsg(10, bot.made[0].payload, P.stars + 1, 'r-2'))).status, 'refunded');
+    // клубу немає (і гравця в базі теж): записується без FK і повертається платникові
+    assert.deepEqual(await bot.pay.credit(paidMsg(77, `iron:77:${P.id}:abcd`, P.stars, 'r-3')), { status: 'refunded', why: 'no_club' });
+    assert.deepEqual(bot.refunds, [[10, 'r-1'], [10, 'r-2'], [77, 'r-3']]);
+    for (const c of ['r-1', 'r-2', 'r-3']) { assert.equal(payRow(s.db, c).status, 'refunded'); assert.equal(payRow(s.db, c).iron, 0); }
+    assert.equal(payRow(s.db, 'r-3').player_id, 77);
+    assert.equal((await s.call('GET', '/me', null, s.th)).body.club.iron | 0, iron0);
+    assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM iron_ledger WHERE reason LIKE 'stars:%'").get().n, 0);
+    // той самий charge id удруге: нічого
+    assert.deepEqual(await bot.pay.credit(paidMsg(10, 'iron:10:zzz:abcd', 77, 'r-1')), { status: 'dup' });
+    // повернення не пройшло: owed з причиною для власника
+    bot.refundFails = true;
+    assert.deepEqual(await bot.pay.credit(paidMsg(10, 'iron:10:zzz:abcd', 77, 'r-4')), { status: 'owed', why: 'terms' });
+    assert.equal(payRow(s.db, 'r-4').status, 'owed'); assert.match(payRow(s.db, 'r-4').note, /^terms: .*REFUND_FAILED/);
+    // процес упав між записом і поверненням: sweep повертає застряглий refund, старший за хвилину
+    bot.refundFails = false;
+    s.db.prepare("INSERT INTO stars_payments (charge_id, player_id, payer, pack, stars, iron, status, note, at) VALUES ('r-5', 10, 10, 's25', 50, 0, 'refund', 'terms', ?)").run(NOW);
+    s.tick(120); s.app.sweep();
+    for (let i = 0; i < 5 && payRow(s.db, 'r-5').status === 'refund'; i++) await new Promise((r) => setImmediate(r));
+    assert.equal(payRow(s.db, 'r-5').status, 'refunded');
+    assert.deepEqual(bot.refunds.at(-1), [10, 'r-5']);
+    assert.equal(payRow(s.db, 'r-4').status, 'owed');           // owed не повторюється сам: його повертає власник
+  } finally { await s.close(); }
+});
+
+test('зачіски: новачок із пака, скаута й ринку бере зачіску, якої в клубі ще немає; вітрина лишається сталою', { skip: !rules.MARKET && 'немає ринку' }, async () => {
+  const s = await start();
+  try {
+    await two(s);
+    s.db.prepare('UPDATE clubs SET coins = 100000 WHERE player_id = 10').run();
+    const hairs = async () => { const c = (await s.call('GET', '/me', null, s.th)).body.club; return [...c.heroes, ...(c.bench || [])].map((e) => e.hair); };
+    const uniq = (a) => assert.equal(new Set(a).size, a.length, 'повтор зачіски: ' + a.join(','));
+    uniq(await hairs());
+    const v = (await s.call('GET', '/market', null, s.th)).body;
+    const club0 = new Set(await hairs());
+    uniq(v.offers.map((o) => o.hero.hair));
+    for (const o of v.offers) assert.ok(!club0.has(o.hero.hair), 'вітрина повторює зачіску клубу');
+    for (const pack of ['rare', 'epic', 'scout']) assert.ok(!(await s.call('POST', '/club/buy', { hero: 3, pack }, s.th)).body.error);
+    for (let i = 0; i < 2; i++) assert.ok(!(await s.call('POST', '/club/scout', { hero: 1 + i }, s.th)).body.error);
+    uniq(await hairs());
+    // клуб змінився після складання вітрини: ті самі герої (id, рідкість, ім'я), зачіска підлаштована й стала між відкриттями
+    const v2 = (await s.call('GET', '/market', null, s.th)).body, v3 = (await s.call('GET', '/market', null, s.th)).body;
+    assert.deepEqual(v2.offers.map((o) => [o.hero.id, o.hero.rar, o.hero.name]), v.offers.map((o) => [o.hero.id, o.hero.rar, o.hero.name]));
+    assert.deepEqual(v3.offers.map((o) => o.hero.hair), v2.offers.map((o) => o.hero.hair));
+    const club1 = new Set(await hairs());
+    for (const o of v2.offers) assert.ok(!club1.has(o.hero.hair));
+    const b = (await s.call('POST', '/market/buy', { slot: 0 }, s.th)).body;
+    assert.equal(b.hero.hair, v2.offers[0].hero.hair);
+    uniq(await hairs());
+  } finally { await s.close(); }
+});
+
+test('баланс: скаут не вигідніший за епічний пак, ринок дорожчий за найдешевший шлях до тієї самої рідкості з паків', () => {
+  const coinPacks = Object.values(rules.PACKS).filter((p) => p.price);
+  const per = (p, rs) => p.price / rs.reduce((a, r) => a + (p.odds[r] || 0), 0);
+  const { scout, epic } = rules.PACKS;
+  assert.ok(per(scout, ['e', 'l']) > per(epic, ['e', 'l']), 'епік+ скаутом дорожчий');
+  assert.ok(per(scout, ['l']) > per(epic, ['l']), 'легенда скаутом дорожча');
+  for (const r of ['c', 'r', 'e', 'l']) {
+    const cheapest = Math.min(...coinPacks.filter((p) => p.odds[r]).map((p) => per(p, [r])));
+    assert.ok(rules.MARKET_BASE[r] > Math.min(cheapest, r === 'e' ? per(epic, ['e', 'l']) : Infinity), `ринок ${r} дорожчий за пак`);
+  }
+  // золотий вагон за долари не гірший за «мішок → епічні паки» на легендах
+  const bagCoins = (rules.IRON.gold / rules.IRON.bag) * rules.IRON.bagCoins;
+  assert.ok(rules.PACKS.gold.odds.l >= (bagCoins / epic.price) * epic.odds.l - 1e-9);
 });

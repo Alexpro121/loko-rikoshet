@@ -372,12 +372,12 @@ Walkout: декорації виходу команд: прапори, кили�
 - **Net** :76
   constructor:77, on:82, emit:83, kept:86, watch:92, host:100, join:125, connectTo:141, attach:154, setupStream:171, onMsg:182, startPing:189, send:201, sendFrame:203, drop:209, offline:212, lost:214, rejoin:222, close:229
 
-## src/online/profile.js (428 рядків)
+## src/online/profile.js (634 рядків)
 
 Онлайн-клуб гравця: окремий від кар'єри «Локомотива» — своя назва, прапор, форма, 11 унікальних героїв, рівень,
 
-- Експорти: esc:15, TRAITS:23, RARITY:36, ONLINE_FORMS:45, slotsOf:46, ONLINE_AIM:49, ONLINE_GK:50, newHero:55, newClub:70, BENCH_MAX:124, isKeeper:126, OP:179, saveOP:180, markLive:182, clearLive:183, settleLive:184, toServer:188, adoptServer:202, adoptHero:218, resetOP:229, kitOf:235, awayKit:242, gkKitOf:248, shortOf:249, heroOvr:253, teamRating:254, trainPrice:255, SCOUT_PRICE:256, clubXpNeed:257, allHeroes:260, trainHero:261, setForm:268, swapHeroes:273, PACKS:282, packRarity:288, SELL:297, sellPrice:298, lineupOk:303, packInto:314, sellFrom:325, moveHeroes:334, moveDeny:347, buyPack:355, sellHero:356, swapAny:357, scoutHero:359, toWire:363, plain:375, fromWire:379, matchClub:401, applyResult:408
-- Внутрішні функції: repair:84, fixHero:114, fixBench:132, migrate:154, load:161, serverHero:195, freeNum:308, toWireHero:370
+- Експорти: esc:17, TRAITS:25, RARITY:38, ONLINE_FORMS:47, slotsOf:48, ONLINE_AIM:51, ONLINE_GK:52, newHero:60, newClub:76, BENCH_MAX:142, BENCH_BASE:144, benchCap:145, isKeeper:147, PITY_N:149, MARKET_SIZE:150, OP:203, saveOP:204, markLive:206, clearLive:207, settleLive:208, toServer:212, adoptServer:226, adoptHero:244, resetOP:255, kitOf:261, awayKit:268, gkKitOf:274, shortOf:275, heroOvr:279, teamRating:280, trainPrice:281, SCOUT_PRICE:282, clubXpNeed:283, allHeroes:286, trainHero:287, setForm:294, swapHeroes:299, PACKS:308, packRarity:317, SELL:326, sellPrice:327, lineupOk:332, pityLeft:352, WAGONS:354, wagonOf:355, packInto:360, sellFrom:378, moveHeroes:387, moveDeny:400, MARKET_ODDS:415, MARKET_BASE:421, marketPrice:422, refreshPrice:427, seeded:429, marketView:472, marketBuy:477, marketRefresh:492, marketRefreshIron:500, IRON:517, IRON_TOP:519, ironForPlace:520, STARS:522, buySlot:524, ironBag:533, traitReroll:542, buySlotHere:552, ironBagHere:553, traitHere:554, marketRenewIron:555, buyPack:557, marketHere:558, marketTake:559, marketRenew:560, sellHero:561, swapAny:562, scoutHero:564, toWire:568, plain:580, fromWire:584, matchClub:606, applyResult:613
+- Внутрішні функції: repair:92, fixHero:132, fixBench:156, migrate:178, load:185, serverHero:219, freeNum:339, weakestSlot:438, genMarket:439, marketOf:453, fitHairs:463, toWireHero:575
 
 ## src/online/quests.js (144 рядків)
 

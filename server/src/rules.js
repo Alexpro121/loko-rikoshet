@@ -33,7 +33,8 @@ export const SCOUT_PRICE = profile.SCOUT_PRICE;
 export const RARITY = profile.RARITY;
 export const clubXpNeed = (l) => profile.clubXpNeed(l);
 export const xpNeed = (l) => squad.xpNeed(l);
-export const newHero = (slot, used, rar) => profile.newHero(slot, used, rar);   // rar не задано — рідкість за шансом скаута
+// rar не задано — рідкість за шансом скаута; hairs — зачіски, вже зайняті в клубі (новачок бере вільну)
+export const newHero = (slot, used, rar, hairs) => profile.newHero(slot, used, rar, Math.random, hairs || new Set());
 // Паки магазину (PACKS, packRarity): поки їх немає в profile.js гілки сервера, маршрут /club/pack не існує (клієнт бачить 404)
 export const PACKS = profile.PACKS && typeof profile.packRarity === 'function' ? profile.PACKS : null;
 export const packRarity = (kind) => profile.packRarity(kind);
@@ -46,12 +47,31 @@ export const lineupOk = (heroes, bench) => profile.lineupOk(heroes, bench);
 /** Пак на лаву: st — клуб із бази ({ club, heroes, bench, coins }), міняється на місці. { hero, bench, price } або { error }. */
 export const packInto = (st, kind, i) => profile.packInto(st, kind, i);
 export const sellFrom = (st, j) => profile.sellFrom(st, j);
+/** Гарант рідкісного пака й вагон потяга відкриття (ті самі, що в packInto). */
+export const pityLeft = (st, kind) => profile.pityLeft(st, kind);
+export const wagonOf = (h) => profile.wagonOf(h);
+// Ринок готових героїв: вітрина дня, ціни й оновлення з гри; без них частини 'market' немає
+export const MARKET = ['marketView', 'marketBuy', 'marketRefresh', 'marketPrice'].every((k) => typeof profile[k] === 'function');
+export const marketView = (st, key, t) => profile.marketView(st, key, t);
+export const marketBuy = (st, key, slot, t) => profile.marketBuy(st, key, slot, t);
+export const marketRefresh = (st, key, t) => profile.marketRefresh(st, key, t);
+export const marketPrice = (e) => profile.marketPrice(e);
+export const MARKET_BASE = profile.MARKET_BASE;
+// Iron Dollar: місткість лави, товари за доларами, тижнева нагорода за рейтинг, пакети Telegram Stars; без них частин 'iron' і 'stars' немає
+export const IRONOK = ['buySlot', 'ironBag', 'traitReroll', 'marketRefreshIron', 'benchCap', 'ironForPlace'].every((k) => typeof profile[k] === 'function') && !!profile.IRON;
+export const IRON = profile.IRON, IRON_TOP = profile.IRON_TOP, STARS = profile.STARS, SLOTS_MAX = profile.SLOTS_MAX;
+export const benchCap = (st) => (profile.benchCap ? profile.benchCap(st) : profile.BENCH_MAX);
+export const buySlot = (st) => profile.buySlot(st);
+export const ironBag = (st) => profile.ironBag(st);
+export const traitReroll = (st, i) => profile.traitReroll(st, i);
+export const marketRefreshIron = (st, key, t) => profile.marketRefreshIron(st, key, t);
+export const ironForPlace = (place) => profile.ironForPlace(place);
 export const slotsOf = (form) => profile.slotsOf(form);
 export const plain = (v) => profile.plain(v);
 
 // applyResult гри рахує на OP (клуб пристрою). Сервер підставляє в OP клуб із бази, кличе ту саму функцію й забирає
 // підсумок: одна формула нагород і Ело на гру й сервер. Усе синхронно, тож два матчі не переплетуться.
-const STATE_KEYS = ['club', 'heroes', 'lvl', 'xp', 'coins', 'rating', 'rec', 'goals', 'games'];
+const STATE_KEYS = ['club', 'heroes', 'lvl', 'xp', 'coins', 'rating', 'rec', 'goals', 'games', 'iron'];
 /**
  * Нагороди за матч для клубу state ({ club, heroes, lvl, xp, coins, rating, rec, goals, games }).
  * Повертає новий стан і rew = { dR, coins, xp, clubUp, lvl, ups } як у грі; state не змінюється.

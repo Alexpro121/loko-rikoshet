@@ -24,6 +24,9 @@ export function loadConfig(env = process.env) {
     botApiUrl: env.BOT_API_URL || 'https://api.telegram.org',
     widgets: env.BOT_WIDGETS !== '0',
     coverFile: env.COVER_FILE || COVER,
+    // оплата Iron Dollar зірками: STARS=0 вимикає частину 'stars'; SUPPORT_CONTACT — кому писати з /paysupport (@нік чи посилання)
+    stars: env.STARS !== '0',
+    supportContact: env.SUPPORT_CONTACT || '',
   };
   if (!cfg.botToken) throw new Error('BOT_TOKEN не задано: без нього не перевірити вхід гравців');
   if (!cfg.origins.length) throw new Error('ALLOWED_ORIGINS не задано: адреса, з якої відкривається гра');
