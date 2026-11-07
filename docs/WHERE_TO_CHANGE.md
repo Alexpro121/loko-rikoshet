@@ -87,7 +87,7 @@
 | Воротар не встиг зреагувати на удар | `lateReflex`, `lateReflexAt` (виклик в `onGoal`), спільний старт стрибка `launchDive` у `src/match/match.js` |
 | Затримка реакції воротаря, зокрема після рикошету | `reactT` у `Match.start`, ворота реакції в `updateKeepers` (`seenT`, `deflT`) |
 | Стрибок воротаря вгору за часом прильоту | `gkJump(T)`, виклики в `src/match/match.js` і `src/match/penalty.js` |
-| Обличчя, зачіски, номери | конструктор `Player`, `setLook`, `playerAtlas` у `src/graphics/textures.js` |
+| Обличчя, зачіски, номери | конструктор `Player`, `setLook`, `playerAtlas` у `src/graphics/textures.js`; форма цифр `DIGITS` там само, колір номера `numInk` і місце на грудях і спині `bodyGeo` у `src/graphics/player.js` |
 | Нова зачіска | гілка в `hairBlock` (`src/graphics/player.js`, сітка голови 1×1×1, обличчя на z 0.525); назва в `allHairs` і `hairNames`, для випадкових гравців ще в `hairs` (`ACADEMY` у `src/config.js`); фірмові зачіски закордонного клубу: `CLUB_HAIRS`, добір `HAIR_GENERIC`, роздача без повторів `hairDeck` і `freshHair` у `src/config.js`; власний склад без повторів: `uniqueHairs` у `src/state/squad.js` |
 | Вибір вигляду в редакторі | `allHairs`, `hairNames`, `allSkins` в `ACADEMY`; `renderCustom` в `src/ui/ui.js` |
 

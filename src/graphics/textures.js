@@ -23,7 +23,7 @@ function tex(c, { repeat = false, mip = true, aniso = 16 } = {}) {
 // ---------------------------------------------------------------- атлас гравців: обличчя + номери
 const CELL = 64, COLS = 8, ROWS = 32, AW = COLS * CELL, AH = ROWS * CELL;
 const FACES = ['neutral', 'happy', 'shock', 'angry'];
-const NUMS = 100;            // номери 0..99 у двох варіантах (темний/світлий напис)
+const NUMS = 100;            // номери 0..99: білі блочні цифри з темним обведенням на прозорому тлі, колір дає вершинний колір форми
 
 /** Комірка атласу -> [u0, v0, u1, v1] з відступом пів-текселя. */
 export function cellRect(cx, cy) {
@@ -36,10 +36,19 @@ export const faceCell = (expr, beard = 0) => {
   const idx = (beard - 1) * 4 + k;
   return cellRect(idx % COLS, 27 + ((idx / COLS) | 0));
 };
-export function numberCell(num, light) {
-  const i = (Math.max(0, Math.min(NUMS - 1, num))) + (light ? NUMS : 0);
+export function numberCell(num) {
+  const i = Math.max(0, Math.min(NUMS - 1, num | 0));
   return cellRect(i % COLS, 1 + ((i / COLS) | 0));
 }
+
+/** Блочні цифри номера на формі: 4 стовпці × 7 рядків, рівні прямокутні штрихи, як і вся модель гравця. */
+const DIGITS = [
+  ['####', '#..#', '#..#', '#..#', '#..#', '#..#', '####'], ['.##.', '###.', '.##.', '.##.', '.##.', '.##.', '####'],
+  ['####', '...#', '...#', '####', '#...', '#...', '####'], ['####', '...#', '...#', '.###', '...#', '...#', '####'],
+  ['#..#', '#..#', '#..#', '####', '...#', '...#', '...#'], ['####', '#...', '#...', '####', '...#', '...#', '####'],
+  ['####', '#...', '#...', '####', '#..#', '#..#', '####'], ['####', '...#', '...#', '...#', '...#', '...#', '...#'],
+  ['####', '#..#', '#..#', '####', '#..#', '#..#', '####'], ['####', '#..#', '#..#', '####', '...#', '...#', '####'],
+];
 
 const SPONSOR_CELL = [0, 29], CREST_CELL = [1, 29];
 export const sponsorCell = () => cellRect(...SPONSOR_CELL);
@@ -111,15 +120,24 @@ export function playerAtlas() {
     drawFace((1 + k) * CELL, 0, expr, 0);
     for (let bd = 1; bd <= 3; bd++) { const idx = (bd - 1) * 4 + k; drawFace((idx % COLS) * CELL, (27 + ((idx / COLS) | 0)) * CELL, expr, bd); }
   });
-  // номери: темні на світлій плашці й світлі на темній
+  // номери: блочні цифри (сітка 4×7) без плашки. Тло прозоре (друк відкидає його alphaTest), цифра біла, тож колір їй дає
+  // вершинний колір боксу (numInk у bodyGeo), а обведення темне за будь-якого кольору. Висота однакова для одно- й двоцифрових.
+  for (let n = 0; n < NUMS; n++) {
+    const x0 = (n % COLS) * CELL, y0 = (1 + ((n / COLS) | 0)) * CELL, ds = String(n);
+    g.clearRect(x0, y0, CELL, CELL);
+    const uw = CELL * 6 / 64, uh = CELL * 8 / 64, gap = CELL * 4 / 64, ol = CELL * 2 / 64;   // цілі пікселі: дробові межі лишали шви між штрихами
+    const dw = 4 * uw, tw = ds.length * dw + (ds.length - 1) * gap, top = y0 + (CELL - 7 * uh) / 2;
+    for (const pass of [0, 1]) {
+      g.fillStyle = pass ? '#ffffff' : '#1a1d22';
+      const e = pass ? 0 : ol;
+      for (let k = 0; k < ds.length; k++) {
+        const rows = DIGITS[ds.charCodeAt(k) - 48], lx = x0 + (CELL - tw) / 2 + k * (dw + gap);
+        for (let r = 0; r < 7; r++) for (let c = 0; c < 4; c++) if (rows[r][c] === '#') g.fillRect(lx + c * uw - e, top + r * uh - e, uw + 2 * e, uh + 2 * e);
+      }
+    }
+  }
   g.imageSmoothingEnabled = true;
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (let v = 0; v < 2; v++) for (let n = 0; n < NUMS; n++) {
-    const i = n + v * NUMS, x = (i % COLS) * CELL, y = (1 + ((i / COLS) | 0)) * CELL;
-    g.fillStyle = v ? '#23282d' : '#f1efe8'; g.fillRect(x, y, CELL, CELL);
-    g.fillStyle = v ? '#f1efe8' : '#13321f'; g.font = `800 ${(n > 9 ? 21 : 25) * CELL / 32}px Rubik, "Arial Black", sans-serif`;
-    g.fillText(String(n), x + CELL / 2, y + CELL / 2 + CELL / 32);
-  }
   // спонсор «УЗ» зі смугами на червоному тлі домашньої форми й емблема клубу (декалі на грудях)
   {
     const x = SPONSOR_CELL[0] * CELL, y = SPONSOR_CELL[1] * CELL;

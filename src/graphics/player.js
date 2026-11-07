@@ -170,10 +170,10 @@ function atlasMat() {
 let _print = null;
 /**
  * Друк на формі (номер, спонсор, смуги, комір) — окремий шар із полігональним зсувом глибини: завжди лежить поверх тканини
- * і не мерехтить на відстані, навіть коли товщина друку — частки міліметра.
+ * і не мерехтить на відстані, навіть коли товщина друку — частки міліметра. alphaTest відкидає прозоре тло номера: цифри лежать просто на тканині.
  */
 function printMat() {
-  if (!_print) _print = new THREE.MeshLambertMaterial({ map: playerAtlas(), vertexColors: true, flatShading: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+  if (!_print) _print = new THREE.MeshLambertMaterial({ map: playerAtlas(), vertexColors: true, flatShading: true, alphaTest: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   return _print;
 }
 
@@ -539,7 +539,7 @@ function headGeo(look) {
  * комір, смуги й друк — плоский шар на поверхні. Початок = таз.
  */
 function bodyGeo(look) {
-  const { kit } = look, lightInk = kit.ink === 'light', M = kit.main, C = kit.collar || kit.second, S2 = kit.second;
+  const { kit } = look, M = kit.main, C = kit.collar || kit.second, S2 = kit.second;
   const L = vox(), b = vox(), P = vox();
   if (look.gk) {                                                 // воротар: смуга на животі й плечі другого кольору — сегменти блоків
     L.box(0, 0.19, 0, 0.52, 0.24, 0.33, M); L.box(0, 0.33, 0, 0.52, 0.04, 0.33, S2); L.box(0, 0.43, 0, 0.52, 0.16, 0.33, M);
@@ -556,15 +556,24 @@ function bodyGeo(look) {
   else P.box(0, 0.785, F, 0.18, 0.02, 0.002, C);
   if (!look.gk) for (const sx of [-1, 1]) P.box(sx * 0.22, 0.8015, 0.005, 0.05, 0.002, 0.343, S2);   // смуги на плечах
   if (kit.stripe) for (const sx of [-0.17, 0.17]) { P.box(sx, 0.65, F, 0.05, 0.3, 0.002, kit.stripe); P.box(sx, 0.65, BK, 0.05, 0.3, 0.002, kit.stripe); }
-  const num = numberCell(look.num, lightInk);
+  const num = numberCell(look.num), ink = numInk(kit);
   if (kit.sponsor) {
     P.box(-0.03, 0.6, F, 0.2, 0.15, 0.002, '#ffffff', 0, 0, 0, [null, null, null, null, sponsorCell(), null]);
     P.box(0.19, 0.66, F, 0.07, 0.07, 0.002, '#ffffff', 0, 0, 0, [null, null, null, null, crestCell(), null]);
+    P.box(-0.19, 0.665, F, 0.09, 0.09, 0.002, ink, 0, 0, 0, [null, null, null, null, num, null]);   // малий номер навпроти емблеми
   } else {
-    P.box(0, 0.62, F, 0.15, 0.15, 0.002, '#ffffff', 0, 0, 0, [null, null, null, null, num, null]);
+    P.box(0, 0.63, F, 0.17, 0.17, 0.002, ink, 0, 0, 0, [null, null, null, null, num, null]);
   }
-  P.box(0, 0.64, BK, 0.24, 0.24, 0.002, '#ffffff', 0, 0, 0, [null, null, null, null, null, num]);   // номер на спині
+  P.box(0, 0.655, BK, 0.28, 0.28, 0.002, ink, 0, 0, 0, [null, null, null, null, null, num]);   // номер на спині (смуги форми стоять за ±0.145)
   return { lower: L.build(), upper: b.build(), prints: P.build() };
+}
+
+const lumOf = (h) => { const c = new THREE.Color(h); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
+/** Колір цифр без плашки: другий колір форми, якщо він помітно контрастує з основним; інакше кремовий чи темний за яскравістю тканини. */
+function numInk(kit) {
+  const m = lumOf(kit.main);
+  if (kit.second && Math.abs(lumOf(kit.second) - m) > 0.22) return kit.second;
+  return m > 0.35 ? '#1a1f26' : '#f4f1e8';
 }
 
 /**

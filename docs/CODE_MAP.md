@@ -131,16 +131,16 @@ buildPitch: газон, розмітка, борти, ворота й сітки
 - Експорти: OUTLINE:14, buildPitch:36
 - Внутрішні функції: lineSeg:16, insetPolygon:21
 
-## src/graphics/player.js (3016 рядків)
+## src/graphics/player.js (3025 рядків)
 
 Player: воксельна модель гравця, усі анімації (Player.animate), IK рук і ніг, пози воротаря.
 
 - Експорти: angDiff:21, GK_STRIKE:60, diveKin:146
-- Внутрішні функції: capQ:50, spring:90, oscS:106, accent:120, jumpPhase:121, atlasMat:165, printMat:175, rigidMats:189, hairBlock:324, headGeo:519, bodyGeo:541
+- Внутрішні функції: capQ:50, spring:90, oscS:106, accent:120, jumpPhase:121, atlasMat:165, printMat:175, rigidMats:189, hairBlock:324, headGeo:519, bodyGeo:541, numInk:573
 - **RigidSkeleton** :203
   update:204
-- **Player** :575
-  constructor:577, setLook:653, useSkin:677, skinGeo:691, setExpr:716, setMode:731, kick:736, volley:745, backLeg:750, dropPose:763, cheer:765, react:777, sad:784, reach:798, engage:800, solveReach:806, poleIK:840, bodyGuard:863, impulse:918, jolt:922, gesture:928, tapBall:937, feint:945, ballHint:947, faceNow:949, control:954, receive:960, chest:966, header:968, block:969, hit:970, emote:975, beaten:980, tackle:988, stumble:995, downed:1000, stagger:1005, knock:1014, dropRag:1028, slideTackle:1035, kneel:1036, rest:1038, bakeSlide:1040, hug:1042, gkDive:1044, gkSmother:1052, diveReset:1054, setAim:1055, startPDive:1062, planDive:1076, startPKick:1111, jumpC:1113, gkJump:1115, saveSide:1117, gkPunch:1125, gkTip:1127, gkFoot:1129, shinAim:1131, gkShin:1136, gkStar:1142, parry:1147, ballAt:1157, perceive:1171, catchBall:1189, catchMk:1196, gkKnee:1202, gkFall:1204, throwBall:1205, setThreat:1206, fendAt:1208, hipTurn:1217, jostle:1244, rise:1247, animate:1277, groundGuard:2421, diveTakeoff:2443, armGuard:2471, hitbox:2547, handsIK:2580, kickIK:2818, shinIK:2856, shinLat:2884, tackleIK:2890, reachFoot:2902, plantFeet:2930, solveArms:2992
+- **Player** :584
+  constructor:586, setLook:662, useSkin:686, skinGeo:700, setExpr:725, setMode:740, kick:745, volley:754, backLeg:759, dropPose:772, cheer:774, react:786, sad:793, reach:807, engage:809, solveReach:815, poleIK:849, bodyGuard:872, impulse:927, jolt:931, gesture:937, tapBall:946, feint:954, ballHint:956, faceNow:958, control:963, receive:969, chest:975, header:977, block:978, hit:979, emote:984, beaten:989, tackle:997, stumble:1004, downed:1009, stagger:1014, knock:1023, dropRag:1037, slideTackle:1044, kneel:1045, rest:1047, bakeSlide:1049, hug:1051, gkDive:1053, gkSmother:1061, diveReset:1063, setAim:1064, startPDive:1071, planDive:1085, startPKick:1120, jumpC:1122, gkJump:1124, saveSide:1126, gkPunch:1134, gkTip:1136, gkFoot:1138, shinAim:1140, gkShin:1145, gkStar:1151, parry:1156, ballAt:1166, perceive:1180, catchBall:1198, catchMk:1205, gkKnee:1211, gkFall:1213, throwBall:1214, setThreat:1215, fendAt:1217, hipTurn:1226, jostle:1253, rise:1256, animate:1286, groundGuard:2430, diveTakeoff:2452, armGuard:2480, hitbox:2556, handsIK:2589, kickIK:2827, shinIK:2865, shinLat:2893, tackleIK:2899, reachFoot:2911, plantFeet:2939, solveArms:3001
 
 ## src/graphics/ragdoll.js (427 рядків)
 
@@ -166,11 +166,11 @@ buildSurround: усе поза трибунами матчу: земля, ото
 - Експорти: buildSurround:51
 - Внутрішні функції: canvasTex:12, facadeTexture:20, windowsTexture:40
 
-## src/graphics/textures.js (212 рядків)
+## src/graphics/textures.js (230 рядків)
 
 Текстури, намальовані на canvas: атлас гравця (обличчя, номери), газон, сітка, тінь, вивіски. Борти — у boards.js.
 
-- Експорти: ANISO:6, cellRect:29, faceCell:33, numberCell:39, sponsorCell:45, crestCell:46, playerAtlas:49, grassTexture:148, netTexture:177, netPlane:186, shadowTexture:194, signTexture:205
+- Експорти: ANISO:6, cellRect:29, faceCell:33, numberCell:39, sponsorCell:54, crestCell:55, playerAtlas:58, grassTexture:166, netTexture:195, netPlane:204, shadowTexture:212, signTexture:223
 - Внутрішні функції: canvas:8, tex:14
 
 ## src/graphics/train.js (35 рядків)
