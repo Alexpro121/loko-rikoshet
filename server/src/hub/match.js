@@ -147,6 +147,7 @@ export function matchRoutes(ctx, club) {
       club.store(ids[role], next);
       ledger(ids[role], r.rew.coins, reason);
       ledger(ids[role], next.coins - s.coins - r.rew.coins, 'lvl');           // бонус за новий рівень клубу
+      if (r.rew.iron) ctx.ironLedger(ids[role], r.rew.iron, 'lvl');           // Iron Dollar за новий рівень
       json.rew[role] = r.rew;
       // квести лише за дограний матч (без технічного результату)
       json.quests[role] = d.kind === 'score' && ctx.questsAfter ? ctx.questsAfter(ids[role], { me, opp, scorers: view }, s.heroes, before[role], oppR) : [];

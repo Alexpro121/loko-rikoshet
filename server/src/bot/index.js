@@ -8,7 +8,7 @@ import * as T from './texts.js';
 const W = (f) => readFileSync(new URL(`./widgets/${f}`, import.meta.url), 'utf8');
 export const WIDGETS = { club: W('club.html'), duel: W('duel.html'), top: W('top.html') };
 
-const UPDATES = ['message', 'callback_query', 'inline_query', 'widget_query', 'shared_widget_query'];
+const UPDATES = ['message', 'callback_query', 'inline_query', 'pre_checkout_query', 'widget_query', 'shared_widget_query'];
 const WIDGETS_RETRY_MS = 3600e3;           // Bot API без віджетів: пробуємо знову за годину
 const USER_GAP_MS = 700;                   // не частіше дії на користувача: захист від флуду кнопками
 const ROOM = /\b([A-HJ-NP-Z2-9]{5})\b/;    // алфавіт кодів кімнат гри (без 0/O, 1/I)
@@ -30,11 +30,17 @@ export function createBot({ db, config, rules, api = createApi(config.botToken, 
     top: db.prepare(`SELECT p.name, c.data, c.rating FROM clubs c JOIN players p ON p.id = c.player_id WHERE p.banned = 0
       ORDER BY c.rating DESC, c.lvl DESC, c.updated_at ASC LIMIT 10`),
     count: db.prepare('SELECT COUNT(*) AS n FROM clubs c JOIN players p ON p.id = c.player_id WHERE p.banned = 0'),
+    pays: db.prepare('SELECT charge_id, stars, iron, status, at FROM stars_payments WHERE player_id = ? OR payer = ? ORDER BY at DESC LIMIT 5'),
+    player: db.prepare('SELECT 1 AS ok FROM players WHERE id = ?'),
+    note: db.prepare("INSERT INTO flags (player_id, kind, at, json) VALUES (?, 'paysupport', ?, ?)"),
   };
   const kv = { get: (k) => q.kvGet.get(k)?.v ?? null, set: (k, v) => q.kvSet.run(k, String(v)) };
   let me = null;                             // getMe: username для посилань
   let widgetsOffUntil = config.widgets ? 0 : Infinity;
   const lastAct = new Map();
+  let payments = null;                       // Iron Dollar за Telegram Stars: перевірку й зарахування дає сервер (hub/iron.js)
+  const asking = new Map();                  // хто щойно відкрив /paysupport: його наступне повідомлення — звернення (у flags)
+  const ASK_MS = 15 * 60e3;
 
   const link = (start = '') => `https://t.me/${me.username}?startapp${start ? '=' + start : ''}`;
   const widgetsOn = () => now() >= widgetsOffUntil;
@@ -210,6 +216,8 @@ export function createBot({ db, config, rules, api = createApi(config.botToken, 
     if (cmd === '/club' || cmd === '/profile') return sendClub(chat, from);
     if (cmd === '/top') return sendTop(chat, from);
     if (cmd === '/help') return say(chat, T.HELP, backTo(chat));
+    if (cmd === '/paysupport') return paySupport(chat, from);
+    if (chat.type === 'private' && !cmd.startsWith('/') && asking.has(from.id) && now() - asking.get(from.id) < ASK_MS) return supportNote(chat, from, m.text);
     if (cmd === '/challenge') return say(chat, T.CHALLENGE_HOW, { inline_keyboard: [[{ text: '⚔️ Вибрати чат', switch_inline_query_chosen_chat: { query: '', allow_user_chats: true, allow_group_chats: true } }]] });
     if (chat.type === 'private' && !cmd.startsWith('/')) return say(chat, 'Обери, що робимо 👇', menu(chat));
     return null;
@@ -225,8 +233,55 @@ export function createBot({ db, config, rules, api = createApi(config.botToken, 
     if (cq.data === 'menu') return say(chat, 'Обери, що робимо 👇', menu(chat));
   }
 
+  /** Перед оплатою зірками: Telegram чекає відповіді до 10 с, тож лише перевірка, без мережі. */
+  async function onPreCheckout(pq) {
+    const err = payments ? payments.check(pq) : 'Оплата зараз недоступна';
+    await api('answerPreCheckoutQuery', err ? { pre_checkout_query_id: pq.id, ok: false, error_message: err } : { pre_checkout_query_id: pq.id, ok: true });
+  }
+  /**
+   * Оплату зірками проведено: сервер або зараховує долари (рівно раз за charge id), або повертає зірки, і гравець
+   * дізнається, що сталося. owed — повернення не пройшло: номер оплати гравцеві, рядок у stars_payments власникові.
+   */
+  async function onPaid(msg) {
+    const charge = msg.successful_payment && msg.successful_payment.telegram_payment_charge_id;
+    if (!payments) {
+      log.error('Бот: оплата без обробника', charge);
+      return say(msg.chat, T.payOwed(T.esc(charge || '—'))).catch(() => {});
+    }
+    const r = await payments.credit(msg);
+    if (r.status === 'paid') return say(msg.chat, T.PAID).catch(() => {});
+    if (r.status === 'refunded') return say(msg.chat, T.REFUNDED).catch(() => {});
+    if (r.status === 'owed' || r.status === 'none') {
+      log.error(`Бот: оплату ${charge} не зараховано й не повернено (${r.why || r.status})`);
+      return say(msg.chat, T.payOwed(T.esc(charge || '—'))).catch(() => {});
+    }
+  }
+  /**
+   * /paysupport (Telegram вимагає її в ботах, що продають за зірки): останні оплати гравця з номерами й куди писати.
+   * Без SUPPORT_CONTACT звернення приймає сам бот: наступне повідомлення йде в таблицю flags (kind 'paysupport') для власника.
+   */
+  async function paySupport(chat, from) {
+    const pays = q.pays.all(from.id, from.id).map((p) => ({ when: new Date(p.at * 1000).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }), stars: p.stars, iron: p.iron, status: p.status, charge: T.esc(p.charge_id) }));
+    if (!config.supportContact) asking.set(from.id, now());
+    if (asking.size > 5000) asking.clear();
+    return say(chat, T.paySupport(pays, config.supportContact ? T.esc(config.supportContact) : ''));
+  }
+  async function supportNote(chat, from, text) {
+    asking.delete(from.id);
+    if (q.player.get(from.id)) q.note.run(from.id, Math.floor(now() / 1000), JSON.stringify({ text: String(text).slice(0, 1000), username: from.username || '' }));
+    log.warn(`Звернення щодо оплати від ${from.id}: ${String(text).slice(0, 200)}`);
+    return say(chat, T.SUPPORT_OK);
+  }
+  /** Посилання на рахунок у зірках (XTR): provider_token не потрібен. */
+  async function invoice({ title, description, payload, stars }) {
+    return api('createInvoiceLink', { title, description, payload, currency: 'XTR', prices: [{ label: title, amount: stars }] });
+  }
+
   /** Одне оновлення від Telegram. Помилки не виходять назовні: вебхук завжди відповідає 200. */
   async function handle(u) {
+    // платежі — без захисту від частих дій: їх не можна пропустити
+    if (u.pre_checkout_query) { try { await onPreCheckout(u.pre_checkout_query); } catch (e) { log.error('Бот: pre_checkout', e.message); } return; }
+    if (u.message && u.message.successful_payment) { try { await onPaid(u.message); } catch (e) { log.error('Бот: оплата', e.message); } return; }
     const who = (u.message || u.callback_query || u.inline_query || {}).from;
     if (who && !u.inline_query) {
       const t = now(), last = lastAct.get(who.id) || 0;
@@ -262,7 +317,7 @@ export function createBot({ db, config, rules, api = createApi(config.botToken, 
       const hook = { url: config.publicUrl.replace(/\/+$/, '') + '/tg', secret_token: hookSecret(config.botToken), max_connections: 10 };
       try { await api('setWebhook', { ...hook, allowed_updates: UPDATES }); } catch (e) {
         log.warn('Вебхук з оновленнями віджетів не прийнято, без них:', e.message);
-        await api('setWebhook', { ...hook, allowed_updates: UPDATES.slice(0, 3) });
+        await api('setWebhook', { ...hook, allowed_updates: UPDATES.slice(0, 4) });
       }
     }
     log.log(`Бот @${me.username}: ${config.publicUrl ? 'вебхук' : 'опитування'}, віджети ${widgetsOn() ? 'увімкнені' : 'вимкнені'}`);
@@ -284,5 +339,8 @@ export function createBot({ db, config, rules, api = createApi(config.botToken, 
     return () => { stop = true; };
   }
 
-  return { handle, setup, poll, prepareRoom, card, topData, secret: hookSecret(config.botToken) };
+  /** Повернути зірки (Telegram Stars) за номером оплати: лише платникові. */
+  const refund = async (user_id, charge) => api('refundStarPayment', { user_id, telegram_payment_charge_id: charge });
+
+  return { handle, setup, poll, prepareRoom, card, topData, invoice, refund, setPayments: (p) => { payments = p; }, secret: hookSecret(config.botToken) };
 }

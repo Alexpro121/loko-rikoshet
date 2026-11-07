@@ -39,7 +39,7 @@ export function clubRoutes(ctx) {
   /** Відповідь клієнтові: формат, який приймає adoptServer у грі. */
   const out = (s) => {
     if (!s) return null;
-    const { imported, ...rest } = s;
+    const { imported, mk, mark, ironGot, ...rest } = s;                         // вітрину ринку віддає GET /market, а не кожна відповідь клубу
     return rest;
   };
 
@@ -85,12 +85,23 @@ export function clubRoutes(ctx) {
     };
     const heroes = w.heroes.map((e, i) => hero(e, isObj(hs[i]) ? hs[i] : {}));
     // лава (якщо гра її веде): ті самі межі, що й в основи
-    const bs = rules.SHOP && Array.isArray(body.bench) ? body.bench.filter(isObj).slice(0, rules.BENCH_MAX) : [];
+    // Iron Dollar з пристрою: не більше, ніж дають рівні клубу (IRON.lvl за рівень) і тижневі квести (≤ 3 за кожні 8 матчів);
+    // спершу з цього бюджету йдуть куплені місця лави, решта — долари
+    let slots = 0, iron = 0;
+    if (rules.IRONOK) {
+      let budget = rules.IRON.lvl * (int(b.lvl, 1, MAX_LVL, 1) - 1) + 3 * Math.floor(games / 8);
+      const want = int(b.slots, 0, rules.SLOTS_MAX, 0);
+      while (slots < want && budget >= rules.IRON.slot[slots]) budget -= rules.IRON.slot[slots++];
+      iron = Math.min(int(b.iron, 0, MAX_COUNT, 0), budget);
+      if (slots < want) cut.slots = [want, slots];
+      if (int(b.iron, 0, MAX_COUNT, 0) > iron) cut.iron = [int(b.iron, 0, MAX_COUNT, 0), iron];
+    }
+    const bs = rules.SHOP && Array.isArray(body.bench) ? body.bench.filter(isObj).slice(0, rules.benchCap({ slots })) : [];
     const bench = bs.map((h) => hero(cleanBench(h), h));
     if (stats) cut.stats = [stats, 'навичок обрізано до бази рідкості + ' + STAT_SPREAD + ' + матчі'];
     const lvl = lim('lvl', int(b.lvl, 1, MAX_LVL, 1), 1 + Math.ceil(games / 2));
     const s = {
-      v: 1, nm: 1, club: w.club, heroes, bench,
+      v: 1, nm: 1, club: w.club, heroes, bench, pity: 0, iron, slots,
       lvl, xp: int(b.xp, 0, rules.clubXpNeed(lvl) - 1, 0),
       coins: lim('coins', int(b.coins, 0, MAX_COUNT, START_COINS), Math.min(IMPORT_COINS, START_COINS + COINS_PER_GAME * games)),
       rating: lim('rating', int(b.rating, 0, MAX_COUNT, START_RATING), Math.min(IMPORT_RATING, START_RATING + RATING_PER_GAME * games)),
@@ -113,7 +124,7 @@ export function clubRoutes(ctx) {
       // склад разом із лавою: ті самі герої (за id), воротар на 0 і лише там (lineupOk гри)
       const bench = body.bench.slice(0, rules.BENCH_MAX + 1).map(pick);
       const got = [...order, ...bench];
-      if (got.every(Boolean) && new Set(got).size === list.length && got.length === list.length && rules.lineupOk(order, bench)) { heroes = order; s.bench = bench; }
+      if (got.every(Boolean) && new Set(got).size === list.length && got.length === list.length && rules.lineupOk(order, bench, rules.benchCap(s))) { heroes = order; s.bench = bench; }
     } else {
       const same = order.length === 11 && order.every(Boolean) && new Set(order).size === 11 && order[0] === s.heroes[0];
       if (same) heroes = order;
@@ -154,12 +165,13 @@ export function clubRoutes(ctx) {
       const s = need(playerId);
       if (s.coins < price) throw new HttpError(409, 'no_coins');
       const used = new Set(s.heroes.flatMap((e, j) => (j === i ? [] : [surname(e.name), 'f:' + e.name.split(' ')[0]])));
-      const h = rules.newHero(rules.slotsOf(s.club.form)[i], used, rar);
+      const hairs = new Set([...s.heroes.filter((e, j) => j !== i), ...(s.bench || [])].map((e) => e.hair));
+      const h = rules.newHero(rules.slotsOf(s.club.form)[i], used, rar, hairs);
       h.num = s.heroes[i].num;
       s.heroes[i] = h; s.coins -= price;
       store(playerId, s);
       ledger(playerId, -price, reason);
-      return { coins: s.coins, hero: h };
+      return { coins: s.coins, hero: h, wagon: rules.wagonOf(h) };
     });
   }
 
@@ -189,7 +201,7 @@ export function clubRoutes(ctx) {
     'POST /club/train': async (req) => {
       const p = auth(req);
       const body = await readJson(req);
-      const i = heroIdx(body.hero, 10 + (rules.BENCH_MAX || 0)), k = String(body.stat || '');
+      const i = heroIdx(body.hero, 10 + (rules.BENCH_MAX || 0)), k = String(body.stat || '');   // BENCH_MAX — межа будь-якої лави
       return tx(db, () => {
         const s = need(p.id), L = all(s);
         // id героя (якщо є) важливіший за номер: склад міг змінитись на пристрої, а збереження ще не дійшло
@@ -219,7 +231,8 @@ export function clubRoutes(ctx) {
       return tx(db, () => {
         const have = load(p.id);
         const c = ctx.newClub();
-        const s = { ...c, imported: true };
+        // вітрина дня, Iron Dollar і куплені місця лави лишаються: це не клуб, а гаманець гравця
+        const s = { ...c, imported: true, ...(have && have.mk ? { mk: have.mk } : {}), ...(have ? { iron: have.iron | 0, slots: have.slots | 0 } : {}) };   // вітрина дня лишається: скидання не дає купити її вдруге
         if (have) store(p.id, s);
         else { const { coins, rating, lvl, ...data } = c; q.add.run(p.id, JSON.stringify(data), coins, rating, lvl, sec(), sec()); }
         q.imported.run(sec(), p.id);
@@ -235,7 +248,7 @@ export function clubRoutes(ctx) {
       const p = auth(req);
       const body = await readJson(req);
       const i = heroIdx(body.hero), kind = String(body.pack || '');
-      const P = kind !== 'scout' && Object.prototype.hasOwnProperty.call(rules.PACKS, kind) ? rules.PACKS[kind] : null;
+      const P = kind !== 'scout' && Object.prototype.hasOwnProperty.call(rules.PACKS, kind) && rules.PACKS[kind].price ? rules.PACKS[kind] : null;   // золотий вагон (за долари) — лише /club/buy
       if (!P) throw new HttpError(400, 'bad_pack');
       return newcomer(p.id, i, P.price, rules.packRarity(kind), 'pack');
     };
@@ -243,11 +256,11 @@ export function clubRoutes(ctx) {
 
   // магазин і лава (частина 'shop'): пак кладе новачка на лаву, продаж — лише з лави; правила й ціни з гри (packInto, sellFrom)
   if (rules.SHOP) {
-    const fail = (r) => { throw new HttpError(r.error === 'no_coins' || r.error === 'bench_full' ? 409 : 400, r.error); };
+    const fail = (r) => { throw new HttpError(r.error === 'no_coins' || r.error === 'no_iron' || r.error === 'bench_full' ? 409 : 400, r.error); };
     routes['POST /club/buy'] = async (req) => {
       const p = auth(req);
       const body = await readJson(req);
-      const i = heroIdx(body.hero), kind = String(body.pack || '');
+      const i = body.hero == null ? null : heroIdx(body.hero), kind = String(body.pack || '');   // без hero позицію обирає правило гри
       if (!Object.prototype.hasOwnProperty.call(rules.PACKS, kind)) throw new HttpError(400, 'bad_pack');
       return tx(db, () => {
         const s = need(p.id);
@@ -256,7 +269,8 @@ export function clubRoutes(ctx) {
         if (r.error) fail(r);
         store(p.id, s);
         ledger(p.id, -r.price, kind === 'scout' ? 'scout' : 'pack');
-        return { coins: s.coins, hero: r.hero, bench: r.bench, club: out(load(p.id)) };
+        if (r.iron) ctx.ironLedger(p.id, -r.iron, kind);                  // золотий вагон — за Iron Dollar
+        return { coins: s.coins, hero: r.hero, bench: r.bench, pity: r.pity, wagon: r.wagon, club: out(load(p.id)) };
       });
     };
     routes['POST /club/sell'] = async (req) => {

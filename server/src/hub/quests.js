@@ -2,7 +2,7 @@
 // Прогрес росте лише в підтвердженні дограного матчу (match.js → questsAfter). Рядки таблиці quests створюються ліниво.
 // Виконане й незабране з минулих періодів зараховується саме при першому GET /quests чи /me після зміни періоду.
 
-export function questRoutes(ctx) {
+export function questRoutes(ctx, club) {
   const { db, rules, auth, readJson, HttpError, sec, now, tx, ledger } = ctx;
   const q = {
     rows: db.prepare('SELECT period, id, p, got_at FROM quests WHERE player_id = ? AND period IN (?, ?)'),
@@ -24,21 +24,23 @@ export function questRoutes(ctx) {
     ];
   }
 
-  /** Монети клубу за квест (у транзакції). false — клубу немає. */
-  function pay(playerId, period, id, c) {
+  /** Монети клубу за квест і Iron Dollar, якщо квест їх дає (поле d), у транзакції. false — клубу немає чи вже забрано. */
+  function pay(playerId, period, id, c, d = 0) {
     if (!q.hasClub.get(playerId)) return false;
     if (q.got.run(sec(), playerId, period, id).changes !== 1) return false;   // уже забрано: монети вдруге не даємо
     q.coins.run(c, sec(), playerId);
     ledger(playerId, c, `quest:${period}:${id}`);
+    if (d > 0 && ctx.ironAdd) ctx.ironAdd(playerId, d, `quest:${period}:${id}`);
     return true;
   }
+  const dOf = (def) => (def && Number.isFinite(def.d) && def.d > 0 ? Math.floor(def.d) : 0);
 
   /** Незабране з минулих періодів: монети одразу, щоб нагорода не згоріла (як bank у грі). */
   function bank(playerId, cur) {
     const out = [];
     for (const r of q.old.all(playerId, cur[0].period, cur[1].period)) {
       const d = rules.questDef(r.id);
-      if (d && r.p >= d.n && pay(playerId, r.period, r.id, d.c)) out.push({ t: d.t, c: d.c });
+      if (d && r.p >= d.n && pay(playerId, r.period, r.id, d.c, dOf(d))) out.push({ t: d.t, c: d.c, d: dOf(d) });
     }
     return out;
   }
@@ -53,7 +55,7 @@ export function questRoutes(ctx) {
       period: c.period, left_ms: c.kind === 'day' ? left.day : left.week,
       list: c.ids.map((id) => {
         const d = rules.questDef(id), r = have.get(c.period + '/' + id);
-        return d && { id, t: d.t, n: d.n, c: d.c, p: Math.min(d.n, r ? r.p : 0), got: !!(r && r.got_at != null) };
+        return d && { id, t: d.t, n: d.n, c: d.c, d: dOf(d), p: Math.min(d.n, r ? r.p : 0), got: !!(r && r.got_at != null) };
       }).filter(Boolean),
     });
     return { day: part(cur[0]), week: part(cur[1]), banked };
@@ -92,8 +94,9 @@ export function questRoutes(ctx) {
         const r = q.row.get(p.id, period, id);
         if (!r || r.p < d.n) throw new HttpError(409, 'not_done');
         if (r.got_at != null) throw new HttpError(409, 'claimed');
-        if (!pay(p.id, period, id, d.c)) throw new HttpError(409, q.hasClub.get(p.id) ? 'claimed' : 'no_club');
-        return { coins: d.c, total: q.hasClub.get(p.id).coins };
+        if (!pay(p.id, period, id, d.c, dOf(d))) throw new HttpError(409, q.hasClub.get(p.id) ? 'claimed' : 'no_club');
+        const c = club ? club.load(p.id) : null;
+        return { coins: d.c, total: q.hasClub.get(p.id).coins, iron: dOf(d), iron_total: c ? c.iron | 0 : undefined };
       });
     },
   };

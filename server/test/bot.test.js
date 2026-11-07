@@ -147,7 +147,7 @@ test('флуд кнопками гаситься, inline не обмежуєть
   const bot = createBot({ db, config, rules, api, log: quiet, now: () => 5000 });
   await bot.handle(msg('/help'));
   await bot.handle(msg('/help'));
-  assert.equal(api.of('sendMessage').length, 1);
+  assert.equal(api.of('sendMessage').length, 1); assert.equal(api.of('sendMessage')[0].chat_id, 42);
 });
 
 test('вебхук: без секрету 403, із секретом 200 і оновлення йде боту', async () => {
@@ -192,4 +192,36 @@ test('картка виклику для shareMessage: віджет, а без �
   assert.equal(JSON.parse(w.result.input_message_content.public_data).code, 'K7QXP');
   assert.equal(t.result.reply_markup.inline_keyboard[0][0].url, 'https://t.me/loko_rush_bot?startapp=room_K7QXP');
   assert.equal(t.user_id, 42);
+});
+
+test('оплата зірками: бот питає сервер перед оплатою, зараховує після неї й робить рахунок у XTR', async () => {
+  const { api, bot } = setup({ createInvoiceLink: () => 'https://t.me/$abc' });
+  const seen = [];
+  const answer = { c1: 'paid', c2: 'refunded', c3: 'owed', c4: 'dup' };
+  bot.setPayments({ check: (pq) => (pq.total_amount === 50 ? null : 'Пакет не знайдено'), credit: async (m) => { const c = m.successful_payment.telegram_payment_charge_id; seen.push(c); return { status: answer[c] }; } });
+  await bot.handle({ update_id: 1, pre_checkout_query: { id: 'p1', from: { id: 42 }, currency: 'XTR', total_amount: 50, invoice_payload: 'x' } });
+  await bot.handle({ update_id: 2, pre_checkout_query: { id: 'p2', from: { id: 42 }, currency: 'XTR', total_amount: 1, invoice_payload: 'x' } });
+  assert.deepEqual(api.of('answerPreCheckoutQuery'), [{ pre_checkout_query_id: 'p1', ok: true }, { pre_checkout_query_id: 'p2', ok: false, error_message: 'Пакет не знайдено' }]);
+  for (const [i, c] of ['c1', 'c2', 'c3', 'c4'].entries()) await bot.handle({ update_id: 3 + i, message: { chat: { id: 42 }, from: { id: 42 }, successful_payment: { telegram_payment_charge_id: c } } });
+  assert.deepEqual(seen, ['c1', 'c2', 'c3', 'c4']);
+  const said = api.of('sendMessage');
+  assert.equal(said.length, 3); assert.ok(said.every((m) => m.chat_id === 42));   // дубль мовчить
+  assert.match(said[0].text, /Дякуємо/); assert.match(said[1].text, /повернено/); assert.match(said[2].text, /c3/);
+  await bot.refund(42, 'c2');
+  assert.deepEqual(api.of('refundStarPayment'), [{ user_id: 42, telegram_payment_charge_id: 'c2' }]);
+  assert.equal(await bot.invoice({ title: 'T', description: 'D', payload: 'iron:42:s25:abcd', stars: 50 }), 'https://t.me/$abc');
+  assert.deepEqual(api.of('createInvoiceLink')[0], { title: 'T', description: 'D', payload: 'iron:42:s25:abcd', currency: 'XTR', prices: [{ label: 'T', amount: 50 }] });
+});
+
+test('/paysupport: останні оплати з номерами, а без контакту наступне повідомлення стає зверненням у flags', async () => {
+  const { api, bot, db } = setup();
+  addClub(db, 42);
+  db.prepare("INSERT INTO stars_payments (charge_id, player_id, payer, pack, stars, iron, at) VALUES ('ch-9', 42, 42, 's25', 50, 25, 1800000000)").run();
+  db.prepare("INSERT INTO stars_payments (charge_id, player_id, payer, pack, stars, iron, status, at) VALUES ('ch-8', 42, 42, 's25', 50, 0, 'refunded', 1700000000)").run();
+  await bot.handle({ update_id: 1, message: { chat: { id: 42, type: 'private' }, from: { id: 42 }, text: '/paysupport' } });
+  const txt = api.of('sendMessage')[0].text;
+  assert.match(txt, /ch-9/); assert.match(txt, /50 ⭐ → 25 Iron Dollar/); assert.match(txt, /50 ⭐ → зірки повернено, номер <code>ch-8/);
+  await bot.handle({ update_id: 2, message: { chat: { id: 42, type: 'private' }, from: { id: 42 }, text: 'Не прийшли долари' } });
+  const f = db.prepare("SELECT json FROM flags WHERE kind = 'paysupport'").all();
+  assert.equal(f.length, 1); assert.equal(JSON.parse(f[0].json).text, 'Не прийшли долари');
 });

@@ -4,6 +4,8 @@ import { ACADEMY, FORMATIONS, freshHair } from '../config.js';
 import { makeStats, keysFor, ovr, gainXp } from '../state/squad.js';
 import { rollFlag, normFlag, upgradeFlag, flagSvg } from './flag.js';
 import { newName } from './names.js';
+// дата дня за Києвом для ринку: модуль квестів імпортує OP звідси, але кличе лише у функціях, тож коло імпорту безпечне
+import { questPeriods, questsLeft } from './quests.js';
 
 export { flagSvg };
 
@@ -50,19 +52,23 @@ export const ONLINE_AIM = { bounces: 2, jitter: 2.4 };
 export const ONLINE_GK = { concede: 0.8 };
 const lineOf = (s) => (s.name === 'GK' ? 'G' : s.line);
 
-/** Новий герой на слот: випадкове ім'я й вигляд (зі ширшого вибору редактора), рідкість, риса й навички. */
-/** hairs — зачіски, вже зайняті в клубі: новий герой бере вільну. */
-export function newHero(slot, used = new Set(), rar = rollRar(), hairs = new Set()) {
+/**
+ * Новий герой на слот: випадкове ім'я й вигляд (зі ширшого вибору редактора), рідкість, риса й навички. rnd — генератор:
+ * Math.random або сталий за зерном (вітрина ринку дня однакова в кожному відкритті). hairs — зачіски, вже зайняті в клубі:
+ * новий герой бере вільну (freshHair, рівно один виклик rnd, як і звичайний вибір).
+ */
+export function newHero(slot, used = new Set(), rar, rnd = Math.random, hairs = new Set()) {
+  if (!rar) rar = rollRar(rnd);
   const line = lineOf(slot), R = RARITY[rar];
-  const name = newName(used, rar);
-  const trait = pick(line === 'G' ? GK_TRAITS : FIELD_TRAITS[line]);
-  const stats = makeStats(line, R.base, Math.random, 6), t = TRAITS[trait];
+  const name = newName(used, rar, rnd);
+  const trait = pick(line === 'G' ? GK_TRAITS : FIELD_TRAITS[line], rnd);
+  const stats = makeStats(line, R.base, rnd, 6), t = TRAITS[trait];
   stats[t.stat] = clamp(stats[t.stat] + t.b, 8, 99);
-  const r = Math.random(), beard = r < 0.55 ? 0 : r < 0.72 ? 1 : r < 0.85 ? 2 : 3;
+  const r = rnd(), beard = r < 0.55 ? 0 : r < 0.72 ? 1 : r < 0.85 ? 2 : 3;
   return {
-    id: 'h' + Math.floor(Math.random() * 1e9).toString(36), role: slot.name, pos: slot.name, line, num: slot.num, name, custom: true,
+    id: 'h' + Math.floor(rnd() * 1e9).toString(36), role: slot.name, pos: slot.name, line, num: slot.num, name, custom: true,
     stats, xp: 0, lvl: 1, apps: 0, goals: 0, rar, trait,
-    skin: pick(ACADEMY.allSkins), hair: freshHair(ACADEMY.allHairs, hairs, Math.random), hairCol: pick(ACADEMY.allHairCols), beard,
+    skin: pick(ACADEMY.allSkins, rnd), hair: freshHair(ACADEMY.allHairs, hairs, rnd), hairCol: pick(ACADEMY.allHairCols, rnd), beard,
   };
 }
 
@@ -73,10 +79,12 @@ export function newClub() {
   const star = 1 + ((Math.random() * 10) | 0);
   const form = pick(['433', '442', '4231']);
   const hairs = new Set();
-  const heroes = slotsOf(form).map((s, i) => { const h = newHero(s, used, i === star ? (Math.random() < 0.35 ? 'l' : 'e') : rollRar(), hairs); hairs.add(h.hair); return h; });
-  return { v: 1, club: { name: pick(NAMES), city: pick(CITIES), flag, gk: pick(GK_COLS), form }, heroes, bench: [], nm: 1, lvl: 1, xp: 0, coins: 300, rating: 1000, rec: { w: 0, d: 0, l: 0 }, goals: 0, games: 0 };
+  const heroes = slotsOf(form).map((s, i) => { const h = newHero(s, used, i === star ? (Math.random() < 0.35 ? 'l' : 'e') : rollRar(), Math.random, hairs); hairs.add(h.hair); return h; });
+  return { v: 1, club: { name: pick(NAMES), city: pick(CITIES), flag, gk: pick(GK_COLS), form }, heroes, bench: [], mark: newMark(), pity: 0, iron: 0, slots: 0, nm: 1, lvl: 1, xp: 0, coins: 300, rating: 1000, rec: { w: 0, d: 0, l: 0 }, goals: 0, games: 0 };
 }
 
+/** Мітка клубу: зерно вітрини ринку на пристрої (на сервері зерно — непрозорий id гравця). */
+const newMark = () => Math.floor(Math.random() * 2 ** 31).toString(36) + Math.floor(Math.random() * 2 ** 31).toString(36);
 const isHex = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 const hasKey = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
 const count = (v, a, d, b = Infinity) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, a, b) : d);
@@ -108,8 +116,18 @@ function repair(o) {
     fixHero(e, sl[i].num);
   }
   relabel(H, c.form);
+  o.slots = Math.floor(count(o.slots, 0, 0, SLOTS_MAX));
   fixBench(o);
+  if (typeof o.mark !== 'string' || !/^[a-z0-9]{4,24}$/.test(o.mark)) o.mark = newMark();
+  o.pity = count(o.pity, 0, 0, PITY_N - 1);
+  o.iron = Math.floor(count(o.iron, 0, 0)); o.slots = Math.floor(count(o.slots, 0, 0, SLOTS_MAX));
+  if (o.mk != null && !marketOk(o.mk)) delete o.mk;             // зіпсована вітрина: на сьогодні збереться заново
 }
+/** Будова вітрини ринку: { d: день, n: оновлень сьогодні, offers: [герой], sold: [так/ні] }. */
+const marketOk = (m) => !!m && typeof m === 'object' && typeof m.d === 'string' && Number.isInteger(m.n) && m.n >= 0 && (m.ni == null || (Number.isInteger(m.ni) && m.ni >= 0))
+  && Array.isArray(m.offers) && m.offers.length <= MARKET_SIZE && Array.isArray(m.sold) && m.sold.length === m.offers.length
+  && m.offers.every((e) => e && typeof e === 'object' && e.stats && typeof e.stats === 'object' && typeof e.name === 'string' && typeof e.id === 'string' && hasKey(RARITY, e.rar))
+  && m.sold.every((x) => typeof x === 'boolean');
 /** Спільне для героя основи й лави: номер, досвід, рідкість, риса, вигляд. */
 function fixHero(e, num) {
   e.num = count(e.num, 1, num, 99); e.xp = count(e.xp, 0, 0); e.lvl = count(e.lvl, 1, 1); e.apps = count(e.apps, 0, 0); e.goals = count(e.goals, 0, 0); e.beard = count(e.beard, 0, 0, 3);
@@ -121,9 +139,15 @@ function fixHero(e, num) {
   if (typeof e.hairCol !== 'string') e.hairCol = '#1f2933';
 }
 /** Скільки героїв може сидіти на лаві. */
-export const BENCH_MAX = 5;
+export const BENCH_MAX = 10;
+/** Лава: BENCH_BASE місць даром, ще до SLOTS_MAX купуються за Iron Dollar (buySlot). BENCH_MAX — межа будь-якої лави. */
+export const BENCH_BASE = 5, SLOTS_MAX = 5;
+export const benchCap = (st) => BENCH_BASE + Math.min(SLOTS_MAX, Math.max(0, (st && st.slots) | 0));
 /** Воротар за навичками, а не за слотом: на лаві слота немає. */
 export const isKeeper = (e) => !!(e && e.stats && 'hands' in e.stats);
+/** Гарант рідкісного пака (див. packInto) і розмір вітрини ринку: тут, бо їх читає repair ще під час load. */
+export const PITY_N = 5;
+export const MARKET_SIZE = 6;
 const FIELD_LINES = ['D', 'M', 'W', 'F'], LINE_ROLE = { D: 'CB', M: 'CM', W: 'LW', F: 'ST' };
 /**
  * Лава запасних (до BENCH_MAX): кожен герой лишає свою лінію — воротар за навичками (є «Ловля»), польовий за line.
@@ -131,7 +155,7 @@ const FIELD_LINES = ['D', 'M', 'W', 'F'], LINE_ROLE = { D: 'CB', M: 'CM', W: 'LW
  */
 function fixBench(o) {
   const ok = (e) => e && typeof e === 'object' && e.stats && typeof e.stats === 'object' && typeof e.name === 'string' && e.name.trim();
-  const B = Array.isArray(o.bench) ? o.bench.filter(ok).slice(0, BENCH_MAX) : [];
+  const B = Array.isArray(o.bench) ? o.bench.filter(ok).slice(0, benchCap(o)) : [];
   const ids = new Set(o.heroes.map((e) => e.id));
   for (const e of B) {
     const gk = isKeeper(e), line = gk ? 'G' : FIELD_LINES.includes(e.line) ? e.line : 'M';
@@ -189,7 +213,7 @@ export function toServer() {
   return {
     club: { name: OP.club.name, city: OP.club.city, flag: OP.club.flag, gk: OP.club.gk, form: OP.club.form },
     heroes: OP.heroes.map(serverHero), bench: OP.bench.map(serverHero),
-    base: { coins: OP.coins, rating: OP.rating, lvl: OP.lvl, xp: OP.xp, rec: OP.rec, goals: OP.goals, games: OP.games },
+    base: { coins: OP.coins, rating: OP.rating, lvl: OP.lvl, xp: OP.xp, rec: OP.rec, goals: OP.goals, games: OP.games, iron: OP.iron, slots: OP.slots },
   };
 }
 function serverHero(e) { return { ...toWireHero(e), id: e.id, xp: e.xp, lvl: e.lvl, apps: e.apps, goals: e.goals }; }
@@ -206,9 +230,11 @@ export function adoptServer(c, looks = true) {
     if (!same) { try { if (!localStorage.getItem(DEVICE_KEY)) localStorage.setItem(DEVICE_KEY, JSON.stringify(OP)); } catch (_) { /* ignore */ } }
     const o = JSON.parse(JSON.stringify({ v: 1, nm: 1, club: c.club, heroes: c.heroes, bench: Array.isArray(c.bench) ? c.bench : OP.bench, lvl: c.lvl, xp: c.xp, coins: c.coins, rating: c.rating, rec: c.rec, goals: c.goals, games: c.games }));
     if (o.club.flag) o.club.flag = normFlag(o.club.flag);
-    o.q = OP.q; o.live = OP.live; repair(o); OP = o; saveOP(); return true;
+    o.q = OP.q; o.live = OP.live; o.mark = OP.mark; o.mk = OP.mk; o.pity = Number.isFinite(c.pity) ? c.pity : OP.pity;
+    o.iron = Number.isFinite(c.iron) ? c.iron : OP.iron; o.slots = Number.isFinite(c.slots) ? c.slots : OP.slots;
+    repair(o); OP = o; saveOP(); return true;
   }
-  for (const k of ['coins', 'rating', 'lvl', 'xp', 'goals', 'games']) if (Number.isFinite(c[k])) OP[k] = Math.max(0, c[k]);
+  for (const k of ['coins', 'rating', 'lvl', 'xp', 'goals', 'games', 'pity', 'iron', 'slots']) if (Number.isFinite(c[k])) OP[k] = Math.max(0, c[k]);
   if (c.rec && typeof c.rec === 'object') for (const k of ['w', 'd', 'l']) if (Number.isFinite(c.rec[k])) OP.rec[k] = c.rec[k];
   c.heroes.forEach((h, i) => adoptHero(i, h));
   if (Array.isArray(c.bench)) { const o = { ...OP, bench: JSON.parse(JSON.stringify(c.bench)) }; fixBench(o); OP.bench = o.bench; }   // лаву рахує сервер: беремо всю
@@ -280,9 +306,12 @@ export function swapHeroes(a, b) {
  * обраний слот із тим самим номером, старий іде з клубу. Сервер гри має рахувати паки за цими самими числами (rules.js).
  */
 export const PACKS = {
-  scout: { name: 'Скаут', price: SCOUT_PRICE, odds: { c: 0.5, r: 0.3, e: 0.15, l: 0.05 } },
-  rare: { name: 'Рідкісний пак', price: 450, odds: { r: 0.7, e: 0.25, l: 0.05 } },
+  // скаут — дешевий новачок на позицію, а не шлях до зірок: епік+ зі скаута в середньому ≈ 1300 монет навіть із продажем
+  // зайвих, легенда ≈ 11 500, тобто дорожче за епічний пак (1200 і ≈ 7000). Розрахунок: BUGS SHOP-1, server/README.md
+  scout: { name: 'Скаут', price: SCOUT_PRICE, odds: { c: 0.6, r: 0.3, e: 0.09, l: 0.01 } },
+  rare: { name: 'Рідкісний пак', price: 450, odds: { r: 0.7, e: 0.25, l: 0.05 }, pity: { n: 5, rar: 'e' } },   // гарант: n-й пак поспіль без епіка — епік+ (PITY_N)
   epic: { name: 'Епічний пак', price: 1200, odds: { e: 0.85, l: 0.15 } },
+  gold: { name: 'Золотий вагон', iron: 25, odds: { e: 0.75, l: 0.25 } },              // ціна в Iron Dollar (iron), а не в монетах; без гаранту
 };
 /** Рідкість за шансами пака: від легенди до звичайного. */
 export function packRarity(kind, rnd = Math.random) {
@@ -299,27 +328,51 @@ export function sellPrice(e) {
   const R = RARITY[e && e.rar] || RARITY.c;
   return (SELL[e && e.rar] || SELL.c) + 5 * Math.max(0, ovr(e) - R.base);
 }
-/** Склад чинний: 11 в основі, воротар на 0 і лише там, лава не більша за BENCH_MAX. */
-export function lineupOk(heroes, bench) {
-  return Array.isArray(heroes) && heroes.length === 11 && isKeeper(heroes[0]) && heroes.slice(1).every((e) => e && !isKeeper(e)) && Array.isArray(bench) && bench.length <= BENCH_MAX;
+/** Склад чинний: 11 в основі, воротар на 0 і лише там, лава не більша за cap (місткість лави клубу, benchCap). */
+export function lineupOk(heroes, bench, cap = BENCH_MAX) {
+  return Array.isArray(heroes) && heroes.length === 11 && isKeeper(heroes[0]) && heroes.slice(1).every((e) => e && !isKeeper(e)) && Array.isArray(bench) && bench.length <= Math.min(cap, BENCH_MAX);
 }
 const namesOf = (list) => new Set(list.flatMap((e) => [surname(e.name), 'f:' + e.name.split(' ')[0]]));
+/** Зачіски, уже зайняті в клубі: новачок бере вільну (newHero, hairs). */
+const hairsOf = (list) => new Set(list.map((e) => e.hair));
 /** Вільний номер для новачка: з 12, бо 1–11 носить основа нового клубу. */
 function freeNum(st) {
   const used = new Set(allHeroes(st).map((e) => e.num));
   for (let n = 12; n < 100; n++) if (!used.has(n)) return n;
   return 99;
 }
-/** Пак kind: новий герой на позицію слота i сідає на лаву. { hero, bench: його місце на лаві, price } або { error }. */
+/**
+ * Гарант рідкості рідкісного пака: PITY_N паків поспіль без епіка чи легенди — і цей гарантовано епік+ (шанси e і l
+ * пака, пропорційно). P(без епіка 4 рази) = 0.7⁴ ≈ 24 %, тож гарант спрацьовує рідко, а в середньому епік із рідкісних
+ * паків коштує (1 − 0.7⁵) / 0.3 ≈ 2.77 пака ≈ 1250 монет — майже як епічний пак (1200), але з шансом раніше. Скаут і
+ * епічний пак лічильника не чіпають: епічний і так завжди епік+, а скаут дешевий і без гаранту.
+ */
+const TOP = (r) => r === 'e' || r === 'l';
+/** Скільки рідкісних паків до гаранту (1 — наступний гарантовано епік+); для пака без гаранту — null. */
+export const pityLeft = (st, kind = 'rare') => (kind === 'rare' ? PITY_N - Math.min(PITY_N - 1, Math.max(0, st.pity | 0)) : null);
+/** Потяг відкриття: вагонів WAGONS, номер вагона героя сталий для цього відкриття (від id героя). */
+export const WAGONS = 20;   // склад потяга відкриття (src/ui/packtrain.js): 20 вагонів, кольори за odds × 20
+export const wagonOf = (h) => { let x = 0; for (const ch of String(h.id)) x = (x * 31 + ch.charCodeAt(0)) >>> 0; return { no: 1 + (x % WAGONS), rar: h.rar }; };
+/**
+ * Пак kind: новий герой на позицію слота i сідає на лаву. { hero, bench: його місце на лаві, price, pity: скільки
+ * рідкісних паків до гаранту, wagon: { no, rar } для потяга } або { error }.
+ */
 export function packInto(st, kind, i) {
   const P = PACKS[kind]; if (!P) return { error: 'bad_pack' };
+  if (i == null) i = weakestSlot(st);                           // позицію не обрано: новачок на позицію найслабшого в основі
   const slot = slotsOf(st.club.form)[i]; if (!slot || !st.heroes[i]) return { error: 'bad_hero' };
   const B = st.bench || (st.bench = []);
-  if (B.length >= BENCH_MAX) return { error: 'bench_full' };
-  if (st.coins < P.price) return { error: 'no_coins' };
-  const h = newHero(slot, namesOf(allHeroes(st)), packRarity(kind), new Set(allHeroes(st).map((e) => e.hair)));
-  h.num = freeNum(st); st.coins -= P.price; B.push(h);
-  return { hero: h, bench: B.length - 1, price: P.price };
+  if (B.length >= benchCap(st)) return { error: 'bench_full' };
+  if (P.iron ? (st.iron | 0) < P.iron : st.coins < P.price) return { error: P.iron ? 'no_iron' : 'no_coins' };
+  let rar = packRarity(kind);
+  if (kind === 'rare') {
+    if (!TOP(rar) && (st.pity | 0) >= PITY_N - 1) { const o = P.odds; rar = Math.random() * (o.e + o.l) < o.l ? 'l' : 'e'; }
+    st.pity = TOP(rar) ? 0 : Math.min(PITY_N - 1, (st.pity | 0) + 1);
+  } else if (kind === 'epic') st.pity = 0;
+  const h = newHero(slot, namesOf(allHeroes(st)), rar, Math.random, hairsOf(allHeroes(st)));
+  h.num = freeNum(st); B.push(h);
+  if (P.iron) st.iron = (st.iron | 0) - P.iron; else st.coins -= P.price;
+  return { hero: h, bench: B.length - 1, price: P.price || 0, iron: P.iron || 0, pity: pityLeft(st, kind), wagon: wagonOf(h) };
 }
 /** Продати героя з лави j: { gain } або { error }. Основу продати не можна: спершу на лаву. */
 export function sellFrom(st, j) {
@@ -351,8 +404,160 @@ export function moveDeny(st, a, b) {
   if (a < n !== b < n) return isKeeper(x) || isKeeper(y) ? 'Воротаря міняє лише воротар' : '';
   return '';
 }
+// ------------------------------------------------------------------ ринок готових героїв
+/**
+ * Ринок: щодня (за Києвом) вітрина на MARKET_SIZE готових героїв для кожного клубу. Двоє на позицію найслабшого героя
+ * основи, решта по одному з інших ліній. Вітрина фіксується в клубі (mk) на весь день: склад основи далі її не міняє.
+ * Зерно — key (на сервері непрозорий id гравця, на пристрої мітка клубу), день і номер оновлення: те саме зерно дає ту
+ * саму вітрину. Ціна — за вибір: дорожче за продаж і за очікувану ціну такого героя з пака.
+ */
+/** Шанси рідкості вітрини: рідкісних більше, ніж у скаута (c 50 %, r 30 %, e 15 %, l 5 %). */
+export const MARKET_ODDS = { c: 0.15, r: 0.45, e: 0.3, l: 0.1 };
+/**
+ * Ціна за рідкістю: героя рідкості X з паків у середньому отримуєш так — звичайного скаутом за 180 / 0.6 = 300, рідкісного
+ * скаутом 180 / 0.3 = 600, епіка епічним паком 1200 / 0.85 ≈ 1410 (епік+ рідкісними паками з гарантом ≈ 1250), легенду
+ * епічними паками ≈ 7000–8000. Вітрина дорожча (і позиція на вибір), плюс 15 за очко рейтингу понад базу (продаж дає 5).
+ */
+export const MARKET_BASE = { c: 400, r: 750, e: 1600, l: 9000 };
+export function marketPrice(e) {
+  const R = RARITY[e && e.rar] || RARITY.c;
+  return (MARKET_BASE[e && e.rar] || MARKET_BASE.c) + 15 * Math.max(0, ovr(e) - R.base);
+}
+/** Оновлення вітрини за монети: n — скільки разів уже оновлювали сьогодні. 60, 120, 240… до 1920. */
+export const refreshPrice = (n) => 60 * 2 ** Math.min(5, Math.max(0, n | 0));
+/** Сталий генератор від рядка (FNV-1a + mulberry32): однакове зерно — однакова вітрина. */
+export function seeded(seed) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return () => { h = (h + 0x6d2b79f5) | 0; let x = Math.imul(h ^ (h >>> 15), 1 | h); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+}
+const rarBy = (odds, rnd) => { let r = rnd(); for (const k of ['l', 'e', 'r', 'c']) { const p = odds[k] || 0; if (r < p) return k; r -= p; } return 'c'; };
+/** Слот для лінії: перший такий у схемі клубу, а якщо лінії в схемі немає — умовна роль лінії. */
+const slotFor = (form, line) => slotsOf(form).find((s) => lineOf(s) === line) || { name: LINE_ROLE[line], line, num: 0 };
+/** Слот найслабшого героя основи (за рейтингом). */
+function weakestSlot(st) { const H = st.heroes; let w = 0; for (let i = 1; i < H.length; i++) if (ovr(H[i]) < ovr(H[w])) w = i; return w; }
+function genMarket(st, key, day, n, ni = 0) {
+  const rnd = seeded(`m:${key}:${day}:${n}${ni ? 'i' + ni : ''}`), form = st.club.form, sl = slotsOf(form), w = weakestSlot(st);
+  const wl = lineOf(sl[w]), lines = ['G', ...FIELD_LINES].filter((l) => l !== wl);
+  const slots = [sl[w], sl[w], ...lines.map((l) => slotFor(form, l))].slice(0, MARKET_SIZE);
+  const used = namesOf(allHeroes(st)), ids = new Set(allHeroes(st).map((e) => e.id)), hairs = hairsOf(allHeroes(st));
+  const offers = slots.map((s) => {
+    const h = newHero(s, used, rarBy(MARKET_ODDS, rnd), rnd, hairs);   // freshHair бере рівно один rnd: зерно вітрини не зсувається
+    hairs.add(h.hair);
+    while (ids.has(h.id)) h.id = 'h' + Math.floor(rnd() * 1e9).toString(36);
+    ids.add(h.id); return h;
+  });
+  return { offers, sold: offers.map(() => false) };
+}
+/** Вітрина на день t (лінива: новий день — нова вітрина й лічильник оновлень з нуля). */
+function marketOf(st, key, t) {
+  const day = questPeriods(t).d;
+  if (!st.mk || st.mk.d !== day) st.mk = { d: day, n: 0, ...genMarket(st, key, day, 0) };
+  fitHairs(st, st.mk);
+  return st.mk;
+}
+/**
+ * Клуб міг узяти зачіску непроданого героя вітрини вже після її складання (пак, ринок): такий герой бере вільну,
+ * сталу за своїм id, тож екран і покупка показують ту саму, а повторний виклик нічого не міняє.
+ */
+function fitHairs(st, m) {
+  const taken = hairsOf(allHeroes(st));
+  m.offers.forEach((h, i) => {
+    if (m.sold[i]) return;
+    if (taken.has(h.hair)) h.hair = freshHair(ACADEMY.allHairs, taken, seeded('hair:' + h.id));
+    taken.add(h.hair);
+  });
+}
+/** Вітрина для екрана: { day, left_ms, offers: [{ slot, hero, price, sold }], refresh_price }. */
+export function marketView(st, key, t = Date.now()) {
+  const m = marketOf(st, key, t);
+  return { day: m.d, left_ms: questsLeft(t).day, offers: m.offers.map((hero, slot) => ({ slot, hero, price: marketPrice(hero), sold: m.sold[slot] })), refresh_price: refreshPrice(m.n) };
+}
+/** Купити героя з вітрини slot: на лаву. { hero, bench, price } або { error: 'bad_slot' | 'sold' | 'bench_full' | 'no_coins' }. */
+export function marketBuy(st, key, slot, t = Date.now()) {
+  const m = marketOf(st, key, t), e = m.offers[slot];
+  if (!Number.isInteger(slot) || !e) return { error: 'bad_slot' };
+  if (m.sold[slot]) return { error: 'sold' };
+  const B = st.bench || (st.bench = []);
+  if (B.length >= benchCap(st)) return { error: 'bench_full' };
+  const price = marketPrice(e);
+  if (st.coins < price) return { error: 'no_coins' };
+  const h = JSON.parse(JSON.stringify(e)), used = namesOf(allHeroes(st)), ids = new Set(allHeroes(st).map((x) => x.id));
+  if (used.has(surname(h.name)) || used.has('f:' + h.name.split(' ')[0])) h.name = newName(used, h.rar);   // за прізвищем рахуються голи: без однофамільців
+  while (ids.has(h.id)) h.id = 'h' + Math.floor(Math.random() * 1e9).toString(36);
+  h.num = freeNum(st); st.coins -= price; m.sold[slot] = true; B.push(h);
+  return { hero: h, bench: B.length - 1, price };
+}
+/** Оновити вітрину за refreshPrice: { price, view } або { error: 'no_coins' }. */
+export function marketRefresh(st, key, t = Date.now()) {
+  const m = marketOf(st, key, t), price = refreshPrice(m.n);
+  if (st.coins < price) return { error: 'no_coins' };
+  st.coins -= price; m.n++;
+  Object.assign(m, genMarket(st, key, m.d, m.n, m.ni | 0));
+  return { price, view: marketView(st, key, t) };
+}
+/** Оновити вітрину за Iron Dollar (IRON.mref): ціна стала, лічильник монетних оновлень не росте. */
+export function marketRefreshIron(st, key, t = Date.now()) {
+  const m = marketOf(st, key, t), price = IRON.mref;
+  if ((st.iron | 0) < price) return { error: 'no_iron' };
+  st.iron = (st.iron | 0) - price; m.ni = (m.ni | 0) + 1;
+  Object.assign(m, genMarket(st, key, m.d, m.n, m.ni));
+  return { iron: price, view: marketView(st, key, t) };
+}
+
+// ------------------------------------------------------------------ Iron Dollar: друга валюта
+/**
+ * Iron Dollar (st.iron): заробляється тижневими квестами (поле d у WEEK, quests.js), рівнями клубу (+IRON.lvl за рівень,
+ * applyResult), місцем у рейтингу раз на тиждень (IRON_TOP, лише сервер) і купується за Telegram Stars (STARS, лише сервер).
+ * Витрачається на місця лави, золотий вагон, мішок монет, нову рису героя й оновлення вітрини. Чисті правила для гри й сервера.
+ */
+// мішок: 5 доларів → 400 монет (80 за долар). Щедріший мішок робив би золотий вагон зайвим: 25 доларів у мішках по 1000
+// давали 5000 монет — чотири епічні паки замість одного героя. Тепер 25 доларів = 2000 монет ≈ 1.7 епічного пака, і шанс
+// легенди в них (0.25) той самий, що в золотому вагоні.
+export const IRON = { slot: [10, 15, 20, 25, 30], gold: 25, bag: 5, bagCoins: 400, mref: 2, trait: 6, lvl: 2 };
+/** Тижнева нагорода за місце в рейтингу (понеділок 00:00 за Києвом): до місця «до» включно — n доларів. */
+export const IRON_TOP = [{ to: 1, n: 30 }, { to: 3, n: 20 }, { to: 10, n: 10 }, { to: 50, n: 3 }];
+export const ironForPlace = (place) => { for (const r of IRON_TOP) if (place <= r.to) return r.n; return 0; };
+/** Пакети за Telegram Stars (валюта XTR). Ціни остаточно затверджує власник. */
+export const STARS = [{ id: 's25', iron: 25, stars: 50 }, { id: 's60', iron: 60, stars: 100 }, { id: 's150', iron: 150, stars: 225 }];
+/** Ще одне місце на лаві: ціна росте з кожним купленим. { slots, price } або { error: 'max' | 'no_iron' }. */
+export function buySlot(st) {
+  const k = Math.max(0, st.slots | 0);
+  if (k >= SLOTS_MAX) return { error: 'max' };
+  const price = IRON.slot[k];
+  if ((st.iron | 0) < price) return { error: 'no_iron' };
+  st.iron = (st.iron | 0) - price; st.slots = k + 1;
+  return { slots: st.slots, price };
+}
+/** Мішок монет: IRON.bag доларів на IRON.bagCoins монет. */
+export function ironBag(st) {
+  if ((st.iron | 0) < IRON.bag) return { error: 'no_iron' };
+  st.iron = (st.iron | 0) - IRON.bag; st.coins += IRON.bagCoins;
+  return { coins: IRON.bagCoins, price: IRON.bag };
+}
+/**
+ * Нова риса героя i (0–10 основа, далі лава): інша з набору його лінії. Бонус старої риси знімається з її навички, бонус
+ * нової додається до своєї (як у newHero). { hero, price } або { error: 'bad_hero' | 'no_iron' }.
+ */
+export function traitReroll(st, i, rnd = Math.random) {
+  const e = allHeroes(st)[i]; if (!e) return { error: 'bad_hero' };
+  if ((st.iron | 0) < IRON.trait) return { error: 'no_iron' };
+  const set = (isKeeper(e) ? GK_TRAITS : FIELD_TRAITS[e.line] || FIELD_TRAITS.M).filter((k) => k !== e.trait);
+  const old = TRAITS[e.trait], nw = pick(set, rnd), t = TRAITS[nw];
+  if (old && old.stat in e.stats) e.stats[old.stat] = clamp(e.stats[old.stat] - old.b, 8, 99);
+  if (t.stat in e.stats) e.stats[t.stat] = clamp(e.stats[t.stat] + t.b, 8, 99);
+  e.trait = nw; st.iron = (st.iron | 0) - IRON.trait;
+  return { hero: e, price: IRON.trait };
+}
+export function buySlotHere() { const r = buySlot(OP); if (!r.error) saveOP(); return r; }
+export function ironBagHere() { const r = ironBag(OP); if (!r.error) saveOP(); return r; }
+export function traitHere(i) { const r = traitReroll(OP, i); if (!r.error) saveOP(); return r; }
+export function marketRenewIron(t = Date.now()) { const r = marketRefreshIron(OP, OP.mark, t); saveOP(); return r; }
 /** Купити пак на пристрої: новий герой на лаві. { hero, bench } або { error }. */
 export function buyPack(kind, i) { const r = packInto(OP, kind, i); if (r.hero) saveOP(); return r; }
+export function marketHere(t = Date.now()) { const v = marketView(OP, OP.mark, t); saveOP(); return v; }
+export function marketTake(slot, t = Date.now()) { const r = marketBuy(OP, OP.mark, slot, t); saveOP(); return r; }
+export function marketRenew(t = Date.now()) { const r = marketRefresh(OP, OP.mark, t); saveOP(); return r; }
 export function sellHero(j) { const r = sellFrom(OP, j); if (!r.error) saveOP(); return r; }
 export function swapAny(a, b) { if (!moveHeroes(OP, a, b)) return false; saveOP(); return true; }
 /** Скаут: новий випадковий герой на позицію слота i (рідкість — за шансом, легенда — 5%) на лаву. */
@@ -414,7 +619,8 @@ export function applyResult(outcome, myGoals, oppRating, scorers = []) {
   OP.coins += coins; OP.goals += myGoals; OP.games++;
   OP.rec[win ? 'w' : draw ? 'd' : 'l']++;
   const xp = win ? 60 : draw ? 35 : 20; OP.xp += xp;
-  let clubUp = false; while (OP.xp >= clubXpNeed(OP.lvl)) { OP.xp -= clubXpNeed(OP.lvl); OP.lvl++; OP.coins += 100; clubUp = true; }
+  let clubUp = false, iron = 0; while (OP.xp >= clubXpNeed(OP.lvl)) { OP.xp -= clubXpNeed(OP.lvl); OP.lvl++; OP.coins += 100; iron += IRON.lvl; clubUp = true; }
+  OP.iron = (OP.iron | 0) + iron;                            // Iron Dollar за кожен новий рівень клубу
   const ups = [], left = scorers.slice();                    // кожен гол — одному героєві, навіть якщо в старому клубі є однофамільці
   for (const e of OP.heroes) {
     e.apps++;
@@ -424,5 +630,5 @@ export function applyResult(outcome, myGoals, oppRating, scorers = []) {
     gainXp(e, (win ? 30 : draw ? 20 : 12) + g * 25, ups);
   }
   saveOP();
-  return { dR, coins, xp, clubUp, lvl: OP.lvl, ups };
+  return { dR, coins, xp, clubUp, lvl: OP.lvl, ups, iron };
 }

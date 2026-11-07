@@ -89,6 +89,50 @@ const MIGRATIONS = [
    );
    CREATE INDEX flags_player ON flags(player_id);
    CREATE INDEX flags_at ON flags(at);`,
+  // Iron Dollar: журнал доларів (як coin_ledger) і платежі Telegram Stars, кожен рівно раз за charge id
+  `CREATE TABLE iron_ledger (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     player_id INTEGER NOT NULL REFERENCES players(id),
+     delta INTEGER NOT NULL,
+     reason TEXT NOT NULL,              -- import | lvl | quest:… | top:<тиждень> | stars:<charge> | slot | bag | trait | gold | market_refresh
+     at INTEGER NOT NULL
+   );
+   CREATE INDEX iron_ledger_player ON iron_ledger(player_id);
+   CREATE TABLE stars_payments (
+     charge_id TEXT PRIMARY KEY,        -- telegram_payment_charge_id
+     player_id INTEGER NOT NULL REFERENCES players(id),
+     pack TEXT NOT NULL,
+     stars INTEGER NOT NULL,
+     iron INTEGER NOT NULL,
+     at INTEGER NOT NULL
+   );`,
+  // Оплата зірками не губиться: умови кожного виданого рахунку (stars_invoices), статус платежу й без FK на players,
+  // бо платіж без клубу чи з невідомим пакетом теж треба записати (і повернути зірки)
+  `CREATE TABLE stars_invoices (
+     payload TEXT PRIMARY KEY,           -- iron:<гравець>:<пакет>:<nonce>
+     player_id INTEGER NOT NULL,
+     pack TEXT NOT NULL,
+     stars INTEGER NOT NULL,
+     iron INTEGER NOT NULL,
+     at INTEGER NOT NULL
+   );
+   CREATE TABLE stars_payments_v2 (
+     charge_id TEXT PRIMARY KEY,         -- telegram_payment_charge_id
+     player_id INTEGER NOT NULL,         -- кому рахунок (з payload), інакше платник
+     payer INTEGER NOT NULL,             -- хто платив: йому повертаються зірки
+     pack TEXT NOT NULL,
+     stars INTEGER NOT NULL,
+     iron INTEGER NOT NULL,              -- скільки доларів зараховано (0, якщо повернення)
+     status TEXT NOT NULL DEFAULT 'paid', -- paid | refund (чекає повернення) | refunded | owed (повернення не вдалось: власнику)
+     note TEXT NOT NULL DEFAULT '',
+     at INTEGER NOT NULL
+   );
+   INSERT INTO stars_payments_v2 (charge_id, player_id, payer, pack, stars, iron, at)
+     SELECT charge_id, player_id, player_id, pack, stars, iron, at FROM stars_payments;
+   DROP TABLE stars_payments;
+   ALTER TABLE stars_payments_v2 RENAME TO stars_payments;
+   CREATE INDEX stars_payments_player ON stars_payments(player_id);
+   CREATE INDEX stars_payments_status ON stars_payments(status);`,
 ];
 
 export function openDb(file) {

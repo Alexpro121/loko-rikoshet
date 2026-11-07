@@ -6,6 +6,7 @@ export const COMMANDS = [
   { command: 'top', description: 'Рейтинг гравців' },
   { command: 'challenge', description: 'Кинути виклик другу' },
   { command: 'help', description: 'Як грати' },
+  { command: 'paysupport', description: 'Допомога з оплатою зірками' },
 ];
 export const COMMANDS_EN = [
   { command: 'play', description: 'Play' },
@@ -13,6 +14,7 @@ export const COMMANDS_EN = [
   { command: 'top', description: 'Leaderboard' },
   { command: 'challenge', description: 'Challenge a friend' },
   { command: 'help', description: 'How to play' },
+  { command: 'paysupport', description: 'Help with Stars payments' },
 ];
 
 export const SHORT = "3D-футбол за ФК Локомотив Київ: кар'єра, пенальті, стадіон і онлайн-матчі з друзями.";
@@ -121,3 +123,23 @@ export const duelText = (d) => [
   d.code ? `Код кімнати: <code>${esc(d.code)}</code>` : '',
 ].filter(Boolean).join('\n');
 export const duelCaption = (d) => `⚔️ Виклик на матч від ${d.p || 'гравця'}${d.code ? ` · кімната ${d.code}` : ''}`;
+
+/** Оплату зірками зараховано (Iron Dollar). */
+export const PAID = '💎 Дякуємо! Iron Dollar уже в онлайн-клубі: відкрий гру, і баланс оновиться.';
+/** Оплату не вдалося зарахувати (рахунок застарів, сума не та, клубу немає): зірки повернено. */
+export const REFUNDED = '↩️ Цю оплату не вдалося зарахувати: рахунок застарів або онлайн-клубу немає. Зірки вже повернено, спробуй ще раз із гри.';
+/** Ні зарахувати, ні повернути одразу не вийшло: власник бачить платіж і поверне вручну. */
+export const payOwed = (charge) => `⚠️ Оплату отримано, але зарахувати її не вдалося, а повернення не пройшло само. Ми бачимо платіж і повернемо зірки вручну. Номер оплати: <code>${charge}</code>. Питання — /paysupport`;
+export const SUPPORT_OK = '📝 Записали. Ми перевіримо оплату за номером і відповімо тут.';
+const PAY_STATE = { refunded: 'зірки повернено', refund: 'чекає повернення', owed: 'чекає повернення вручну' };
+/** /paysupport: обов'язкова для оплати зірками. pays — останні оплати гравця, contact — кому писати (SUPPORT_CONTACT). */
+export const paySupport = (pays, contact) => [
+  '💎 <b>Допомога з оплатою</b>',
+  '',
+  'За зірки купується Iron Dollar для онлайн-клубу. Він зараховується сам за кілька секунд після оплати й одразу видно в грі.',
+  pays.length ? 'Твої останні оплати:' : 'Оплат зірками в тебе ще немає.',
+  ...pays.map((p) => `• ${p.when} — ${p.stars} ⭐ → ${PAY_STATE[p.status] || `${p.iron} Iron Dollar`}, номер <code>${p.charge}</code>`),
+  '',
+  'Не зарахувалось чи хочеш повернення? ' + (contact ? `Напиши ${contact} і додай номер оплати.` : 'Напиши сюди, у цей чат, що сталось, і додай номер оплати.'),
+  'Повернення зірок можливе, якщо долари ще не витрачені.',
+].join('\n');

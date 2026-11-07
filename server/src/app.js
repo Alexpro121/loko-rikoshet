@@ -9,6 +9,8 @@ import { matchRoutes } from './hub/match.js';
 import { questRoutes } from './hub/quests.js';
 import { queueRoutes } from './hub/queue.js';
 import { topRoutes } from './hub/top.js';
+import { marketRoutes } from './hub/market.js';
+import { ironRoutes } from './hub/iron.js';
 
 // API 2 — онлайн-хаб (клуб на сервері, підтверджений матч, квести, черга, таблиця). Клієнт вмикає кожну частину
 // за її назвою в features; без правил гри (rules) сервер лишається на API 1.
@@ -59,6 +61,7 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
     addClub: db.prepare('INSERT INTO clubs (player_id, data, coins, rating, lvl, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
     ledger: db.prepare('INSERT INTO coin_ledger (player_id, delta, reason, at) VALUES (?, ?, ?, ?)'),
     flag: db.prepare('INSERT INTO flags (player_id, kind, at, json) VALUES (?, ?, ?, ?)'),
+    iron: db.prepare('INSERT INTO iron_ledger (player_id, delta, reason, at) VALUES (?, ?, ?, ?)'),
   };
 
   function rateLimited(ip, bucket, max) {
@@ -81,6 +84,8 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
   const clubOut = (row) => (row ? { ...JSON.parse(row.data), coins: row.coins, rating: row.rating, lvl: row.lvl } : null);
   /** Кожна зміна монет — рядок у журналі. */
   const ledger = (id, delta, reason) => { if (delta) q.ledger.run(id, delta, reason, sec()); };
+  /** Кожна зміна Iron Dollar — рядок в iron_ledger. */
+  const ironLedger = (id, delta, reason) => { if (delta) q.iron.run(id, delta, reason, sec()); };
 
   // онлайн-хаб: частини додають свої маршрути; features — те, що клієнт може ввімкнути
   /** Журнал підозрілого для власника: import (обрізане перенесення), disputed, pair (фарм пари), fast (надто швидкий звіт). */
@@ -88,15 +93,21 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
   // Telegram ID інших гравців назовні не віддаємо: замість нього стабільний непрозорий id (HMAC секрету сервера)
   const pidKey = config.idSecret || config.botToken;
   const pid = (id) => createHmac('sha256', pidKey).update('pid:' + id).digest('base64url').slice(0, 12);
-  const ctx = { db, rules, auth, readJson, HttpError, sec, now, tx, ledger, flag, pid, newClub, questsAfter: null };
+  const ctx = { db, rules, auth, readJson, HttpError, sec, now, tx, ledger, ironLedger, flag, pid, newClub, bot, questsAfter: null, ironAdd: null };
   const hub = rules ? (() => {
     const club = clubRoutes(ctx);
+    /** Додати долари клубу (квести, рівні): у транзакції того, хто кличе. */
+    ctx.ironAdd = (id, n, reason) => { const s = club.load(id); if (!s || !n) return false; s.iron = (s.iron | 0) + n; club.store(id, s); ironLedger(id, n, reason); return true; };
     const match = matchRoutes(ctx, club);
-    const quests = rules.QUESTS ? questRoutes(ctx) : null;     // квести вимагають match: прогрес рахує підтвердження
+    const quests = rules.QUESTS ? questRoutes(ctx, club) : null;     // квести вимагають match: прогрес рахує підтвердження
     const queue = queueRoutes(ctx, club, match, queueWaitMs);
     const top = topRoutes(ctx);
-    const features = ['club', 'match', ...(quests ? ['quests'] : []), 'queue', 'top', ...(rules.SHOP ? ['shop'] : [])];
-    return { club, match, quests, queue, top, features };
+    const market = rules.MARKET ? marketRoutes(ctx, club) : null;
+    const iron = rules.IRONOK ? ironRoutes(ctx, club) : null;
+    const stars = !!(iron && bot && bot.invoice && rules.STARS && config.stars !== false);
+    if (stars && bot.setPayments) bot.setPayments({ check: iron.check, credit: iron.credit });   // бот передає платежі сюди
+    const features = ['club', 'match', ...(quests ? ['quests'] : []), 'queue', 'top', ...(rules.SHOP ? ['shop'] : []), ...(market ? ['market'] : []), ...(iron ? ['iron'] : []), ...(stars ? ['stars'] : [])];
+    return { club, match, quests, queue, top, market, iron, stars, features };
   })() : null;
 
   const routes = {
@@ -124,7 +135,8 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
       const club = clubOut(q.club.get(p.id));
       if (!hub) return { player: { id: p.id, name: p.name }, club };
       const quests = hub.quests ? hub.quests.list(p.id) : undefined;   // зараховує незабране з минулих періодів, тож клуб читаємо після
-      return { player: { id: p.id, name: p.name }, club: hub.club.out(hub.club.load(p.id)), rank: hub.top.rank(p.id), live: hub.match.live(p.id), quests };
+      const ironGot = hub.iron ? tx(db, () => hub.iron.takeGot(p.id)) : undefined;   // нараховані долари з минулого разу (рейтинг, зірки): показ їх знімає
+      return { player: { id: p.id, name: p.name }, club: hub.club.out(hub.club.load(p.id)), rank: hub.top.rank(p.id), live: hub.match.live(p.id), quests, ironGot };
     },
 
     // Клуб створює сервер за правилами гри; повторний виклик повертає вже наявний
@@ -161,7 +173,7 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
     },
   };
 
-  if (hub) Object.assign(routes, hub.club.routes, hub.match.routes, hub.quests ? hub.quests.routes : {}, hub.queue.routes, hub.top.routes);
+  if (hub) Object.assign(routes, hub.club.routes, hub.match.routes, hub.quests ? hub.quests.routes : {}, hub.queue.routes, hub.top.routes, hub.market ? hub.market.routes : {}, hub.iron ? hub.iron.routes : {}, hub.stars ? hub.iron.starsRoutes : {});
   const patterns = hub ? [...hub.match.patterns] : [];
 
   async function handle(req, res) {
@@ -211,6 +223,11 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
     }
   }
   /** Фонова перевірка хабу (server.js кличе раз на 30 с): матчі без пари й без звітів, черга. */
-  handle.sweep = () => { if (hub) { hub.match.sweep(); hub.queue.sweep(); } };
+  handle.sweep = () => {
+    if (!hub) return;
+    hub.match.sweep(); hub.queue.sweep();
+    if (hub.iron) hub.iron.weekly();
+    if (hub.stars) hub.iron.retryRefunds().catch(() => {});   // застряглі повернення зірок
+  };
   return handle;
 }
