@@ -27,6 +27,10 @@ export function loadConfig(env = process.env) {
     // оплата Iron Dollar зірками: STARS=0 вимикає частину 'stars'; SUPPORT_CONTACT — кому писати з /paysupport (@нік чи посилання)
     stars: env.STARS !== '0',
     supportContact: env.SUPPORT_CONTACT || '',
+    // ТИМЧАСОВО (прибрати перед справжнім запуском): POST /dev/grant дає монети й Iron Dollar для тестів. DEV_GRANT=0
+    // вимикає маршрут повністю (404, у /me немає dev). DEV_IDS звужує: список Telegram id через кому; порожній чи '*' — усі.
+    devGrant: env.DEV_GRANT !== '0',
+    devIds: !env.DEV_IDS || env.DEV_IDS.trim() === '*' ? null : list(env.DEV_IDS).map(Number).filter(Number.isSafeInteger),
   };
   if (!cfg.botToken) throw new Error('BOT_TOKEN не задано: без нього не перевірити вхід гравців');
   if (!cfg.origins.length) throw new Error('ALLOWED_ORIGINS не задано: адреса, з якої відкривається гра');

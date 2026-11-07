@@ -132,6 +132,8 @@ export const marketRefreshOnServer = (iron = false) => call('market', '/market/r
 export const ironOnServer = (kind, body = {}) => call('iron', '/iron/' + kind, body);
 /** Telegram Stars (частина 'stars'): рахунок на пакет доларів, { link } для Telegram.WebApp.openInvoice. */
 export const starsInvoice = (pack) => call('stars', '/stars/invoice', { pack });
+/** ТИМЧАСОВО: тестова кнопка магазину, what — 'coins' | 'iron'. Доступна, коли /me каже dev: true (DEV_GRANT на сервері). */
+export const devGrant = (what) => call('club', '/dev/grant', { [what]: true });
 /**
  * Матч: господар стартує й отримує { matchId, ticket }; квиток іде гостю напряму по P2P ('mt'), і гість стартує з ним.
  * Код кімнати знає кожен, кому його надіслали, тож за кодом сервер не парує: інакше чужий міг би стати «гостем» на сервері.

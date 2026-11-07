@@ -19,6 +19,9 @@ import { inTelegram, tgInvoice } from '../core/telegram.js';
 const TRAIN = import.meta.glob('../ui/packtrain.js');
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 const PACK_ART = { scout: 'binoculars', rare: 'crateRare', epic: 'crateEpic', gold: 'crateGold' };
+// ТИМЧАСОВО (прибрати перед справжнім запуском, BUGS DEV-1): тестова плашка «+10 000 монет / +100 Iron Dollar» для всіх.
+// Із сервером гри її показує dev: true з /me (DEV_GRANT=0 на сервері прибирає), клубу на пристрої — завжди.
+const DEV_COINS = 10000, DEV_IRON = 100;
 const WIN = 120;                                          // монет за перемогу (applyResult): мірило «скільки матчів до суми»
 const SUBS = { wagons: 'Вагони', market: 'Ринок', bench: 'Лава', iron: 'Iron Dollar' };
 const pct = (v) => Math.round(v * 100) + '%';
@@ -96,7 +99,31 @@ export class Shop {
   html() {
     const B = OP.bench || [], tabs = Object.keys(SUBS).map((k) => `<button class="sh-tab ${this.sub === k ? 'on' : ''}" data-act="sh-sub:${k}">${SUBS[k]}${k === 'bench' ? ` <em>${B.length}/${benchCap()}</em>` : ''}</button>`).join('');
     const body = this.sub === 'market' ? this.marketHtml() : this.sub === 'bench' ? this.benchHtml() : this.sub === 'iron' ? this.ironHtml() : this.wagonsHtml();
-    return `<div class="sh"><nav class="sh-tabs on-a">${tabs}</nav>${body}</div>`;
+    return `<div class="sh"><nav class="sh-tabs on-a">${tabs}</nav>${this.devHtml()}${body}</div>`;
+  }
+  /** ТИМЧАСОВО: тестова плашка. Із сервером — коли /me каже dev: true, на пристрої — завжди. */
+  devOn() { return has('club') ? !!(this.s.cloud && this.s.cloud.dev) : true; }
+  devHtml() {
+    if (!this.devOn()) return '';
+    const iron = !!ironMode();
+    return `<section class="sh-dev on-a"><b>ТЕСТ: +${fmt(DEV_COINS)} монет / +${DEV_IRON} Iron Dollar</b>
+      <div><button class="sh-mini" data-act="sh-dev:coins"><b>+${fmt(DEV_COINS)}</b><small>монет</small></button>
+      ${iron ? `<button class="sh-mini" data-act="sh-dev:iron"><b>+${DEV_IRON}</b><small>Iron Dollar</small></button>` : ''}</div>
+      <small>Тимчасова кнопка для тестування, у справжній грі її не буде</small></section>`;
+  }
+  async devGrant(what, el) {
+    if (this.busy || !this.devOn() || (what === 'iron' && !ironMode())) return;
+    this.busy = true;
+    if (has('club')) {
+      const r = await this.s.cloud.devGrant(what);
+      if (!r || r.error) { this.busy = false; this.say(r === null ? 'Немає зв’язку із сервером гри, спробуй ще раз' : r.error === 'too_fast' ? 'Не так швидко: раз на секунду' : 'Сервер не дав: ' + r.error); return this.re(); }
+    } else {
+      if (what === 'iron') OP.iron = (OP.iron | 0) + DEV_IRON; else OP.coins += DEV_COINS;
+      PR.saveOP();
+    }
+    this.busy = false;
+    audio.coin(3); vibrate(20); this.ui.toast(what === 'iron' ? `+${DEV_IRON} Iron Dollar (тест)` : `+${fmt(DEV_COINS)} монет (тест)`);
+    this.sc.bump = true; this.s.sync(true); this.re();
   }
   afterRender() { bindCards(this.ui.el.panel); bindCards(this.ui.el.reveal); }
 
@@ -287,6 +314,7 @@ export class Shop {
       case 'sh-itrait': audio.click(); this.sc.tab = 'heroes'; this.ui.toast('Обери гравця й натисни «Нова риса»'); return this.re();
       case 'sh-mrefi': return this.marketRefresh(el, true);
       case 'sh-stars': return this.stars(x);
+      case 'sh-dev': return this.devGrant(x, el);
     }
   }
   say(t) { audio.deny(); vibrate(20); this.ui.toast(t); }

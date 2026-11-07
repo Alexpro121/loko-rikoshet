@@ -94,6 +94,13 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
   const pidKey = config.idSecret || config.botToken;
   const pid = (id) => createHmac('sha256', pidKey).update('pid:' + id).digest('base64url').slice(0, 12);
   const ctx = { db, rules, auth, readJson, HttpError, sec, now, tx, ledger, ironLedger, flag, pid, newClub, bot, questsAfter: null, ironAdd: null };
+  // ТИМЧАСОВО: тестова кнопка магазину (POST /dev/grant). Суми задає сервер, тіло лише вибирає, що дати. Доступ усім, хто
+  // увійшов через Telegram, або лише DEV_IDS (config.devIds); config.devGrant === false (DEV_GRANT=0) вимикає все.
+  const DEV_GRANT = { coins: 10000, iron: 100 }, DEV_GAP_MS = 1000;
+  const devOn = config.devGrant !== false;
+  const devIds = Array.isArray(config.devIds) ? new Set(config.devIds) : null;
+  const isDev = (id) => devOn && (!devIds || devIds.has(Number(id)));
+  const devLast = new Map();                                       // гравець → мить останнього нарахування (не частіше 1/с)
   const hub = rules ? (() => {
     const club = clubRoutes(ctx);
     /** Додати долари клубу (квести, рівні): у транзакції того, хто кличе. */
@@ -136,7 +143,7 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
       if (!hub) return { player: { id: p.id, name: p.name }, club };
       const quests = hub.quests ? hub.quests.list(p.id) : undefined;   // зараховує незабране з минулих періодів, тож клуб читаємо після
       const ironGot = hub.iron ? tx(db, () => hub.iron.takeGot(p.id)) : undefined;   // нараховані долари з минулого разу (рейтинг, зірки): показ їх знімає
-      return { player: { id: p.id, name: p.name }, club: hub.club.out(hub.club.load(p.id)), rank: hub.top.rank(p.id), live: hub.match.live(p.id), quests, ironGot };
+      return { player: { id: p.id, name: p.name }, club: hub.club.out(hub.club.load(p.id)), rank: hub.top.rank(p.id), live: hub.match.live(p.id), quests, ironGot, ...(isDev(p.id) ? { dev: true } : {}) };
     },
 
     // Клуб створює сервер за правилами гри; повторний виклик повертає вже наявний
@@ -174,6 +181,28 @@ export function createApp({ db, config, newClub, rules = null, bot = null, now =
   };
 
   if (hub) Object.assign(routes, hub.club.routes, hub.match.routes, hub.quests ? hub.quests.routes : {}, hub.queue.routes, hub.top.routes, hub.market ? hub.market.routes : {}, hub.iron ? hub.iron.routes : {}, hub.stars ? hub.iron.starsRoutes : {});
+  if (hub && devOn) {
+    // ТИМЧАСОВО: { coins: true, iron: true } → +10 000 монет і +100 Iron Dollar; рейтинг і топ не міняються
+    routes['POST /dev/grant'] = async (req) => {
+      const p = auth(req);
+      if (!isDev(p.id)) throw new HttpError(403, 'forbidden');
+      const t = now(), last = devLast.get(p.id);
+      if (last !== undefined && t - last < DEV_GAP_MS) throw new HttpError(429, 'too_fast');   // скрипт не роздує журнал
+      if (devLast.size > 5000) devLast.clear();
+      devLast.set(p.id, t);
+      const b = await readJson(req);
+      const coins = b.coins ? DEV_GRANT.coins : 0, iron = b.iron && hub.iron ? DEV_GRANT.iron : 0;
+      if (!coins && !iron) throw new HttpError(400, 'bad_grant');
+      return tx(db, () => {
+        const s = hub.club.load(p.id);
+        if (!s) throw new HttpError(409, 'no_club');
+        s.coins += coins; s.iron = (s.iron | 0) + iron;
+        hub.club.store(p.id, s);
+        ledger(p.id, coins, 'dev'); ironLedger(p.id, iron, 'dev');
+        return { coins, iron, club: hub.club.out(hub.club.load(p.id)) };
+      });
+    };
+  }
   const patterns = hub ? [...hub.match.patterns] : [];
 
   async function handle(req, res) {

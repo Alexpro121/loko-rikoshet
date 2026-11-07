@@ -28,10 +28,10 @@ if (!rules.PACKS && process.env.LOKO_PACKS) {
 
 const initData = (id, name) => signInitData({ auth_date: String(NOW), query_id: 'q', user: JSON.stringify({ id, first_name: name, username: 'u' + id }) }, BOT);
 
-async function start(bot = null) {
+async function start(bot = null, over = {}) {
   const db = openDb(':memory:');
   const clock = { ms: NOW * 1000 };
-  const config = { botToken: BOT, origins: [ORIGIN], turnSecret: '', turnUrls: [], behindProxy: false };
+  const config = { botToken: BOT, origins: [ORIGIN], turnSecret: '', turnUrls: [], behindProxy: false, ...over };
   const app = createApp({ db, config, newClub: rules.newClub, rules, bot, now: () => clock.ms, queueWaitMs: 300 });
   const srv = createServer(app);
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
@@ -852,4 +852,58 @@ test('баланс: скаут не вигідніший за епічний п�
   // золотий вагон за долари не гірший за «мішок → епічні паки» на легендах
   const bagCoins = (rules.IRON.gold / rules.IRON.bag) * rules.IRON.bagCoins;
   assert.ok(rules.PACKS.gold.odds.l >= (bagCoins / epic.price) * epic.odds.l - 1e-9);
+});
+
+test('тестова кнопка /dev/grant: будь-кому з Telegram, суми задає сервер, рядки в обох журналах, не частіше раз на секунду', async () => {
+  const s = await start();
+  try {
+    await two(s);
+    assert.equal((await s.call('GET', '/me', null, s.tg)).body.dev, true);
+    const c0 = s.cg.coins, i0 = s.cg.iron | 0;
+    const r = (await s.call('POST', '/dev/grant', { coins: 1e9, iron: rules.IRONOK ? 1e9 : 0 }, s.tg)).body;
+    assert.equal(r.coins, 10000); assert.equal(r.club.coins, c0 + 10000);
+    assert.deepEqual(ledger(s.db, 20).at(-1), [10000, 'dev']);
+    if (rules.IRONOK) {
+      assert.equal(r.iron, 100); assert.equal(r.club.iron, i0 + 100);
+      assert.deepEqual(s.db.prepare("SELECT delta FROM iron_ledger WHERE player_id = 20 AND reason = 'dev'").all().map((x) => x.delta), [100]);
+    }
+    // частіше за раз на секунду — 429, після паузи знову можна
+    const fast = await s.call('POST', '/dev/grant', { coins: true }, s.tg);
+    assert.equal(fast.status, 429); assert.equal(fast.body.error, 'too_fast');
+    assert.equal(ledger(s.db, 20).filter(([, why]) => why === 'dev').length, 1);
+    s.tick(1);
+    if (rules.IRONOK) {
+      const only = (await s.call('POST', '/dev/grant', { iron: true }, s.tg)).body;
+      assert.equal(only.coins, 0); assert.equal(only.club.coins, c0 + 10000); assert.equal(only.club.iron, i0 + 200);
+      s.tick(1);
+    }
+    assert.equal((await s.call('POST', '/dev/grant', {}, s.tg)).body.error, 'bad_grant');
+    assert.equal((await s.call('GET', '/me', null, s.tg)).body.club.rating, s.cg.rating);   // рейтинг не міняється
+    assert.equal((await s.call('POST', '/dev/grant', { coins: true })).status, 401);         // без входу — ні
+  } finally { await s.close(); }
+});
+
+test('тестова кнопка: DEV_GRANT=0 прибирає маршрут і dev у /me, DEV_IDS звужує доступ', async () => {
+  const { loadConfig } = await import('../src/config.js');
+  const base = { BOT_TOKEN: 'x', ALLOWED_ORIGINS: 'https://x' };
+  assert.deepEqual([loadConfig(base).devGrant, loadConfig(base).devIds], [true, null]);
+  assert.equal(loadConfig({ ...base, DEV_IDS: '' }).devIds, null);
+  assert.equal(loadConfig({ ...base, DEV_IDS: '*' }).devIds, null);
+  assert.deepEqual(loadConfig({ ...base, DEV_IDS: '1, 2' }).devIds, [1, 2]);
+  assert.equal(loadConfig({ ...base, DEV_GRANT: '0' }).devGrant, false);
+  const off = await start(null, { devGrant: false });
+  try {
+    await two(off);
+    const r = await off.call('POST', '/dev/grant', { coins: true }, off.th);
+    assert.equal(r.status, 404);
+    assert.ok(!('dev' in (await off.call('GET', '/me', null, off.th)).body));
+  } finally { await off.close(); }
+  const some = await start(null, { devIds: [10] });
+  try {
+    await two(some);
+    assert.equal((await some.call('POST', '/dev/grant', { coins: true }, some.th)).status, 200);
+    const no = await some.call('POST', '/dev/grant', { coins: true }, some.tg);
+    assert.equal(no.status, 403); assert.equal(no.body.error, 'forbidden');
+    assert.ok(!('dev' in (await some.call('GET', '/me', null, some.tg)).body));
+  } finally { await some.close(); }
 });

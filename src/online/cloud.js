@@ -3,7 +3,7 @@
 // клуб і квести на пристрої (profile.js, quests.js). Коли частина є, головний сервер: гра показує результат одразу за
 // локальним підрахунком, а потім бере числа з відповіді сервера (adoptServer), тож розбіжність виправляється сама.
 import { OP, toServer, adoptServer, adoptHero, saveOP, allHeroes } from './profile.js';
-import { features, has, saveClub, meOnServer, trainOnServer, scoutOnServer, packOnServer, buyOnServer, sellOnServer, marketOnServer, marketBuyOnServer, marketRefreshOnServer, ironOnServer, starsInvoice, resetOnServer, matchStart, matchReport, matchState, serverQuests, claimOnServer, topList } from './server.js';
+import { features, has, saveClub, meOnServer, trainOnServer, scoutOnServer, packOnServer, buyOnServer, sellOnServer, marketOnServer, marketBuyOnServer, marketRefreshOnServer, ironOnServer, starsInvoice, devGrant, resetOnServer, matchStart, matchReport, matchState, serverQuests, claimOnServer, topList } from './server.js';
 import { questList, questsReady, claimQuest, questsLeft } from './quests.js';
 
 const SAVE_MS = 1500;                    // серія правок прапора й назви: на сервер іде лише остання
@@ -25,6 +25,7 @@ export class Cloud {
       const r = this.synced ? await meOnServer() : await saveClub(toServer());
       const c = r && !r.error ? r.club || null : null;
       if (c && adoptServer(c, true)) { this.synced = true; this.on.sync(true); }
+      if (r && !r.error) this.dev = !!r.dev;                       // ТИМЧАСОВО: тестова кнопка магазину (DEV_GRANT на сервері)
       if (r && r.quests) this.setQuests(r.quests);
       this.ironGot(r);
     }
@@ -48,7 +49,15 @@ export class Cloud {
   /** Правка складу ще чекає збереження: перед покупкою чи продажем зберегти зараз, щоб сервер бачив той самий склад. */
   async flush() { if (!this.pending) return; clearTimeout(this.saveT); await this.save(); }
   /** Сервер відмовив у дії: його клуб правильний, беремо весь. */
-  async resync() { const r = await meOnServer(); if (r && r.club && adoptServer(r.club, true)) this.refresh(); }
+  async resync() { const r = await meOnServer(); if (r && !r.error) this.dev = !!r.dev; if (r && r.club && adoptServer(r.club, true)) this.refresh(); }
+  /** ТИМЧАСОВО: тестове нарахування (what — 'coins' | 'iron'), гаманець береться з клубу сервера. { club } | { error } | null. */
+  async devGrant(what) {
+    await this.flush();
+    const r = await devGrant(what);
+    if (!r || r.error || !r.club) return r || null;
+    adoptServer(r.club, false);
+    return r;
+  }
   /** Знімок перед покупкою: після тайм-ауту по ньому видно, чи сервер її провів. */
   snap() { return { ids: allHeroes().map((e) => e.id), coins: OP.coins, iron: OP.iron | 0, slots: OP.slots | 0 }; }
   /**
