@@ -96,7 +96,118 @@ export class Replay {
   }
   saveLive() { this.write(this.live, 0); }
   restoreLive() { this.blend(this.live, 0, this.live, 0, 0); }
+
+  // ------------------------------------------------------------------ режисура повтору
+  /** М'яч у кадрі k кліпу (сирі координати з запису). */
+  ballK(c, k, o) { const q = k * this.N + this.v.players.length * this.per; o.x = c.buf[q]; o.y = c.buf[q + 1]; o.z = c.buf[q + 2]; return o; }
+  /** Точка гравця i (корінь) у кадрі k кліпу. */
+  rootK(c, k, i, o) { const q = k * this.N + i * this.per; o.x = c.buf[q]; o.y = c.buf[q + 1]; o.z = c.buf[q + 2]; return o; }
+  /** Кадр кліпу, найближчий до часу t. */
+  frameAt(c, t) { let k = 0; while (k < c.n - 1 && c.ts[k + 1] <= t) k++; return k; }
+
+  /**
+   * Чи закриває щось лінію камера p → ціль t у кадрі k: гравець (вертикальний стовпчик ~0.6 м до висоти 2 м), стовп
+   * воріт або сам гравець стоїть у камері. skipA/skipB — герої кадру (той, хто б'є, і воротар): вони й мають бути видні.
+   */
+  blocked(c, k, p, t, skipA, skipB) {
+    const P = this.v.players.length, dx = t.x - p.x, dz = t.z - p.z, l2 = dx * dx + dz * dz || 1;
+    const hit = (x, z, r, h, near) => {
+      if ((x - p.x) * (x - p.x) + (z - p.z) * (z - p.z) < near * near) return true;   // стоїть у камері
+      const s = ((x - p.x) * dx + (z - p.z) * dz) / l2;
+      if (s < 0.04 || s > 0.94) return false;
+      const ex = p.x + dx * s - x, ez = p.z + dz * s - z;
+      return ex * ex + ez * ez < r * r && p.y + (t.y - p.y) * s < h;
+    };
+    for (let i = 0; i < P; i++) { if (i === skipA || i === skipB) continue; this.rootK(c, k, i, _r); if (hit(_r.x, _r.z, 0.6, 2.0, 1.3)) return true; }
+    for (const sd of [-1, 1]) for (const zz of [-PITCH.G, PITCH.G]) if (hit(sd * PITCH.L, zz, 0.3, PITCH.GOAL_H + 0.15, 0)) return true;
+    return false;
+  }
+
+  /**
+   * План повтору як у телетрансляції, за геометрією моменту (кліп c, подія в tE, ворота з боку side):
+   *  A — реальний темп, загальний план збоку з боку камери (як основна, але ближче), до ~0.5 с перед ударом;
+   *  B — сповільнено, мить удару з одного ракурсу: з-за спини того, хто б'є (близький удар), низько з-за воріт крізь сітку
+   *      (дальній удар, штанга) або збоку від воротаря (сейв). Перший ракурс без перекриття гравцями чи стовпом;
+   *  C — лише гол: м'яч у сітці збоку стійки або автор гола крупно.
+   * Удар шукаємо в записі: останній стрибок швидкості м'яча до події. Рахується раз на кліп, не щокадру.
+   */
+  plan(c, kind, side, tE, pick) {
+    const gx = side * PITCH.L, G = PITCH.G, n = c.n;
+    const kE = this.frameAt(c, tE);
+    let kS = -1;
+    for (let k = kE; k >= 2; k--) {
+      const v1 = this.speedK(c, k), v0 = this.speedK(c, k - 1);
+      if (v1 > 12 && v1 - v0 > 6) { kS = k - 1; break; }
+    }
+    const shot = kS >= 0;
+    if (!shot) kS = Math.max(0, kE - 12);
+    const S = this.ballK(c, kS, { x: 0, y: 0, z: 0 }), E = this.ballK(c, kE, { x: 0, y: 0, z: 0 });
+    // той, хто б'є: найближчий до м'яча в мить удару; воротар — того боку, куди летить м'яч (перші 11 — наші, вони атакують +x)
+    let si = -1, bd = 1e9;
+    for (let i = 0; i < this.v.players.length; i++) { this.rootK(c, k0(kS), i, _r); const d = (_r.x - S.x) ** 2 + (_r.z - S.z) ** 2; if (d < bd) { bd = d; si = i; } }
+    const gk = side > 0 ? 11 : 0;
+    let ux = E.x - S.x, uz = E.z - S.z; const dist = Math.hypot(ux, uz) || 1; ux /= dist; uz /= dist;
+    if (dist < 2) { ux = side; uz = 0; }                                   // удар із-під воріт: вісь — до воріт
+    const tS = c.ts[kS], tA = shot ? Math.max(c.ts[0], tS - 0.5) : Math.max(c.ts[0] + 0.3, tE - 1.15);
+    const kA = this.frameAt(c, tA), kM = (kS + kE) >> 1;
+    const inside = (p) => { p.x = clamp(p.x, -PITCH.L + 0.6, PITCH.L - 0.6); p.z = clamp(p.z, -PITCH.W + 0.6, PITCH.W - 0.6); return p; };
+    const goalMouth = { x: gx, y: 1.1, z: clamp(E.z, -G + 0.8, G - 0.8) };
+    const cands = {
+      // з-за спини: позаду точки удару, трохи вбік (до центру поля) і над головами — видно удар і ворота попереду
+      behind: () => {
+        const s = S.z >= 0 ? -1 : 1, px = -uz * s, pz = ux * s;
+        const p = inside({ x: S.x - ux * 6 + px * 2.2, y: 2.4, z: S.z - uz * 6 + pz * 2.2 });
+        const d = Math.hypot(goalMouth.x - p.x, goalMouth.z - p.z);
+        const l = { x: S.x + (goalMouth.x - S.x) * 0.55, y: 1.0, z: S.z + (goalMouth.z - S.z) * 0.55 };
+        return { id: 'behind', p, l, fov: clamp(2 * Math.atan(Math.tan(Math.atan2(G + 3.5, d)) / 1.7) / DEG, 22, 44), push: 1.6 };
+      },
+      // низько з-за воріт: позаду сітки, м'яч летить у камеру, сітка між нами й полем
+      goal: () => {
+        const p = { x: side * (PITCH.L + PITCH.GOAL_D + 1.3), y: 1.9, z: clamp(S.z * 0.12 + E.z * 0.3, -G + 1.2, G - 1.2) };
+        const l = { x: S.x + (gx - S.x) * 0.35, y: 1.0, z: S.z + (E.z - S.z) * 0.35 };
+        const d = Math.hypot(S.x - p.x, S.z - p.z);
+        return { id: 'goal', p, l, fov: clamp(2 * Math.atan2(7.5, d) / DEG, 22, 44), push: 0 };
+      },
+      // збоку від воротаря, на продовженні лінії воріт з протилежного до удару боку
+      keeper: () => {
+        const s = S.z >= 0 ? -1 : 1;
+        const p = { x: gx - side * 2.4, y: 1.7, z: s * (G + 7.5) };
+        const l = { x: gx - side * 3.5, y: 1.1, z: E.z * 0.5 + S.z * 0.15 };
+        return { id: 'keeper', p, l, fov: 42, push: 0 };
+      },
+    };
+    const order = kind === 'save' ? ['keeper', 'goal', 'behind'] : kind === 'post' ? ['goal', 'keeper', 'behind'] : dist <= 22 ? ['behind', 'goal', 'keeper'] : ['goal', 'behind', 'keeper'];
+    if (kind === 'goal' && dist > 9 && dist < 30 && pick > 0.5) { const t = order[0]; order[0] = order[1]; order[1] = t; }   // різноманіття в підбірці
+    const free = (cam) => {
+      for (const k of [kA, kS, kM, kE]) {
+        this.ballK(c, k, _t); if (this.blocked(c, k, cam.p, _t, si, gk)) return false;
+        if (k <= kS && si >= 0) { this.rootK(c, k, si, _t); _t.y = 1.3; if (cam.id !== 'goal' && this.blocked(c, k, cam.p, _t, si, gk)) return false; }
+      }
+      return true;
+    };
+    let B = null;
+    for (const id of order) { const cam = cands[id](); if (free(cam)) { B = cam; break; } }
+    if (!B) { B = cands[order[0]](); B.p.y += 2.6; }                     // усе закрито: той самий ракурс вище, над головами
+    // C — гол: м'яч у сітці збоку стійки (з поля, з протилежного до м'яча боку) або автор гола крупно
+    let C = null;
+    if (kind === 'goal') {
+      const s = E.z >= 0 ? -1 : 1;
+      const net = { id: 'net', p: { x: gx - side * 3.4, y: 1.05, z: s * (G + 3.2) }, fov: 38 };
+      this.ballK(c, n - 1, _t);
+      C = (pick < 0.5 || this.blocked(c, n - 1, net.p, _t, si, gk)) && si >= 0 ? { id: 'scorer', fov: 30 } : net;
+    }
+    return { shot, tS, tA: tA - c.ts[0] < 0.5 ? c.ts[0] : tA, tB: kind === 'goal' ? tE + 0.12 : 1e9, S, E, ux, uz, dist, si, gk, B, C };
+  }
+  /** Горизонтальна швидкість м'яча між кадрами k−1 і k. */
+  speedK(c, k) {
+    this.ballK(c, k, _t); const x = _t.x, z = _t.z; this.ballK(c, k - 1, _t);
+    const dt = c.ts[k] - c.ts[k - 1];
+    return dt > 0 ? Math.hypot(x - _t.x, z - _t.z) / dt : 0;
+  }
 }
+const k0 = (k) => Math.max(0, k);
+const DEG = Math.PI / 180;
+const _r = { x: 0, y: 0, z: 0 }, _t = { x: 0, y: 0, z: 0 };
 
 const _sa = new THREE.Vector3(), _sb = new THREE.Vector3();
 /**

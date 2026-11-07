@@ -144,6 +144,7 @@
 | Вихід команд | `driveIntro`, `introCam`, `src/match/walkout.js` |
 | Святкування гола | `goalImportance`, `setupCelebration`, `updateCelebration` |
 | Повтори | `Replay` у `src/match/cinema.js`, `playClips` |
+| Ракурси повтору, порядок планів, сповільнення | `Replay.plan` (вибір планів A/B/C за геометрією удару), `Replay.blocked` (перекриття гравцем чи стовпом) у `src/match/cinema.js`; камера кадру `replayCam`, темп `updateClip` у `src/match/match.js` |
 | Рукостискання | `endShake`, `shakeHands`, `Slaps` |
 | Пенальті | `src/match/penalty.js` |
 
