@@ -10,7 +10,7 @@ import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact }
 import { Hud, fitText } from './hud.js';
 import { MapHud } from './minimap.js';
 import { playIntro } from './intro.js';
-import { trainBack, trainCovers } from './packtrain.js';
+import { trainBack, trainCovers } from './trainstate.js';   // без three: сам потяг вантажиться лише при відкритті пака
 import { splashHtml, runSplash } from './splash.js';
 import { portrait } from './portrait.js';
 import { ensureSquad, oppSquad, allPlayers, swapPlayers, swapStarters, setTactic, bestLine, CAREER_FORMS, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook, myKit, matchKit, lookSig, customizeLook, resetLook } from '../state/squad.js';

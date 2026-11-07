@@ -531,14 +531,14 @@ DemoMatch: маленька гра для зразка мінімапи в на�
 
 - Розділи: Пак-потяг (src/ui/packtrain.js): шар у хості (#reveal онлайн-хабу), 3D-канва на весь шар, віньєтка й спалах легенди. Класи з префіксом pt-.:1 · квиток «ЛОКО·ЕКСПРЕС» праворуч, герой у кадрі ліворуч: папір, перфорація, багаж із крапками, печатка рейтингу падає останньою:7
 
-## src/ui/packtrain.js (867 рядків)
+## src/ui/packtrain.js (881 рядків)
 
 openTrain: відкриття пака героїв — 3D-сцена на нічному пероні. Потяг ЛОКО (тепловоз у барвах герба) везе 20 критих вагонів
 
-- Експорти: trainMix:184, trainBack:195, trainCovers:197, openTrain:204
-- Внутрішні функції: paint:46, box:52, prismZ:54, prismX:56, wheel:57, quad:59, soil:62, carGeo:70, locoGeo:114, canvasTex:132, cardHtml:169
-- **Train** :214
-  constructor:215, go:250, build:258, station:314, board:360, fit:381, addMail:391, at:401, now:402, ms:403, simulate:410, look:451, bodyX:457, bodyV:458, bodyTh:459, noseX:460, pose:462, place:470, feed:484, clacks:495, got:508, consist:536, carBase:579, extras:581, prepHero:612, sparksInit:626, sparks:633, tween:650, frame:651, drawBlur:703, blurInit:714, blurFree:730, stopAt:733, flapTo:763, heroOut:772, walk:780, showCard:792, skipNow:801, final:807, heroRect:822, end:831, fail:837, close:845, kill:852
+- Експорти: trainMix:198, openTrain:213
+- Внутрішні функції: paint:47, box:53, prismZ:55, prismX:57, wheel:58, quad:60, soil:63, carGeo:71, locoGeo:115, canvasTex:133, cardHtml:171
+- **Train** :223
+  constructor:224, go:259, build:267, station:322, board:368, fit:389, addMail:399, at:409, now:410, ms:411, simulate:418, look:459, bodyX:465, bodyV:466, bodyTh:467, noseX:468, pose:470, place:478, feed:493, clacks:504, got:517, consist:545, carBase:592, extras:594, prepHero:625, sparksInit:639, sparks:646, tween:663, frame:664, drawBlur:717, blurInit:728, blurFree:744, stopAt:747, flapTo:777, heroOut:786, walk:794, showCard:806, skipNow:815, final:821, heroRect:836, end:845, fail:851, close:859, kill:866
 
 ## src/ui/portrait.js (134 рядків)
 
@@ -562,6 +562,12 @@ Tactics: екран складу для кар'єри й онлайн-клубу
 - Експорти: formName:8
 - **Tactics** :17
   constructor:18, reset:20, pos:21, token:26, formsHtml:30, popHtml:32, swapHtml:36, ttSig:41, ttHtml:42, html:46, afterRender:64, fill:71, patch:80, act:97
+
+## src/ui/trainstate.js (10 рядків)
+
+Стан пака-потяга без three: ui.js питає, чи потяг закриває екран, і передає йому «назад». Сам потяг (packtrain.js) з three
+
+- Експорти: setTrain:5, getTrain:6, trainBack:8, trainCovers:10
 
 ## src/ui/ui.js (1007 рядків)
 

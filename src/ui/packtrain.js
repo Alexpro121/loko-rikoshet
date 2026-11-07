@@ -6,7 +6,6 @@
 // Свій WebGL-контекст лише на час сцени (kill звільняє його одразу), головний цикл гри тим часом стоїть (trainCovers).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import './packtrain.css';
 import { PACKS, RARITY, TRAITS } from '../online/profile.js';
 import { STAT_NAMES, ROLE_UA, keysFor, ovr } from '../state/squad.js';
@@ -14,6 +13,8 @@ import { Player } from '../graphics/player.js';
 import { releaseTurntable } from './portrait.js';
 import { TrainSound } from '../core/audio-train.js';
 import { loadPerf } from '../core/perf.js';
+import { setTrain, getTrain } from './trainstate.js';
+export { trainBack, trainCovers } from './trainstate.js';
 
 // ---------- розміри, м ----------
 const LL = 21.5, P = 14.73, H2 = P / 2;        // тепловоз і критий вагон по осях зчеплення
@@ -151,7 +152,8 @@ const locoSide = () => canvasTex(2048, 400, (g, W, H) => {
   g.font = `800 ${0.3 * sy}px ${FONT}`; g.fillText('ЛОКОМОТИВ', X(9.4), Y(2.2));
 });
 /** Атлас бортових написів: номер, рідкість і позначки на кожен вагон. Плитка 512×256 на 3,6×1,8 м. */
-const numberAtlas = (cars) => canvasTex(2048, 1280, (g) => {
+const numberAtlas = (cars) => canvasTex(1024, 640, (g) => {
+  g.scale(0.5, 0.5);                                                 // атлас у 4 рази менший: номерам вистачає
   cars.forEach((c, i) => {
     const x = (i % 4) * 512, y = Math.floor(i / 4) * 256;
     g.fillStyle = c.rar === 'l' ? '#3d2c00' : '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
@@ -177,6 +179,18 @@ function cardHtml(e, no) {
     <footer><i></i><small>дійсний для виходу на поле</small></footer>
     <div class="pt-stamp"><b>${o || '—'}</b><small>${esc(R.name)}</small></div></div>`;
 }
+/** Принти клубу на правій панелі вагонів: шеврони герба, «1919», силует потяга, мʼяч, смуги, «ЛОКО» із зіркою. Плитка 256×128. */
+const PRINTS = 6;
+const printAtlas = () => canvasTex(1024, 256, (g) => {
+  const W = '#f4f2ea', R = '#e31119', Gn = '#4fae2c', tile = (i, fn) => { g.save(); g.translate((i % 4) * 256, Math.floor(i / 4) * 128); fn(); g.restore(); };
+  g.font = `800 40px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  tile(0, () => { g.fillStyle = R; g.beginPath(); g.moveTo(40, 110); g.lineTo(96, 18); g.lineTo(152, 110); g.lineTo(128, 110); g.lineTo(96, 58); g.lineTo(64, 110); g.fill(); g.fillStyle = Gn; g.fillRect(150, 70, 70, 40); g.fillStyle = W; g.font = `800 30px ${FONT}`; g.fillText('ЛОКО', 186, 52); });
+  tile(1, () => { g.strokeStyle = W; g.lineWidth = 5; g.font = `800 86px ${FONT}`; g.strokeText('1919', 128, 68); });
+  tile(2, () => { g.fillStyle = W; g.fillRect(30, 50, 150, 34); g.beginPath(); g.moveTo(180, 50); g.lineTo(212, 62); g.lineTo(226, 84); g.lineTo(180, 84); g.fill(); g.fillStyle = R; g.fillRect(30, 76, 196, 6); for (const x of [56, 96, 150, 196]) { g.beginPath(); g.arc(x, 92, 9, 0, 7); g.fill(); } g.fillStyle = W; g.font = `800 22px ${FONT}`; g.fillText('ЛОКО·ЕКСПРЕС', 128, 26); });
+  tile(3, () => { g.fillStyle = W; g.fillRect(36, 30, 64, 64); g.fillStyle = '#1d2125'; g.fillRect(56, 50, 24, 24); g.fillRect(36, 30, 14, 14); g.fillRect(86, 80, 14, 14); g.fillStyle = W; g.font = `800 44px ${FONT}`; g.fillText('КИЇВ', 170, 64); });
+  tile(4, () => { for (let k = 0; k < 6; k++) { g.fillStyle = k % 2 ? Gn : R; g.beginPath(); g.moveTo(10 + k * 42, 118); g.lineTo(40 + k * 42, 118); g.lineTo(80 + k * 42, 10); g.lineTo(50 + k * 42, 10); g.fill(); } });
+  tile(5, () => { g.fillStyle = W; g.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, r = k % 2 ? 14 : 34; g.lineTo(52 + Math.cos(a) * r, 64 + Math.sin(a) * r); } g.fill(); g.font = `800 56px ${FONT}`; g.fillText('ЛОКО', 166, 66); });
+});
 const mailSide = () => canvasTex(1024, 256, (g, W) => { g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.font = `800 150px ${FONT}`; g.fillText('ЛОКО', W / 2, 160); g.font = `800 44px ${FONT}`; g.fillText('1919 · КИЇВ', W / 2, 226); });
 
 // ---------- склад ----------
@@ -190,11 +204,6 @@ export function trainMix(odds) {
 let seed = 1;
 const srnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
 
-let cur = null;
-/** Кнопка «назад» Telegram і Esc: поки потяг їде — пропуск. Коли герой уже вийшов, false: далі закриває той, хто відкрив (онлайн-хаб — close-reveal і close()). */
-export function trainBack() { if (!cur || cur.closing || cur.ended) return false; cur.skipNow(); return true; }
-/** Шар потяга закриває екран: головний цикл гри не малює (ui.panelCovers). */
-export function trainCovers() { return !!(cur && cur.opaque); }
 
 /**
  * Відкриття пака. o.kind — 'scout' | 'rare' | 'epic' (назва й шанси з PACKS), o.odds — інші шанси; o.result — Promise<{ hero, wagon?: { no, rar } }>;
@@ -202,7 +211,7 @@ export function trainCovers() { return !!(cur && cur.opaque); }
  * Повертає Promise<{ end: 'done' | 'skip' | 'error', at: DOMRect | null, close() }>. Після 'done' і 'skip' шар із героєм стоїть, доки не close().
  */
 export function openTrain(o) {
-  return new Promise((res) => { if (cur) cur.kill(); cur = new Train(o, res); });
+  return new Promise((res) => { const old = getTrain(); if (old) old.kill(); setTrain(new Train(o, res)); });
 }
 
 // тимчасові об'єкти кадру
@@ -269,8 +278,7 @@ class Train {
     // Ламберт замість фізичного матеріалу: на пласких гранях різниці майже нема, а телефону вдвічі легше
     this.mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
     this.glowM = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
-    this.tmat = this.low ? this.mat : new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, metalness: 0.35, roughness: 0.5 });   // фарбований метал вагонів
-    if (!this.low) { const pm = new THREE.PMREMGenerator(r); this.env = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); sc.environment = this.env; sc.environmentIntensity = 0.2; }
+    this.tmat = this.low ? this.mat : new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 38, specular: 0x3a3a3a });   // фарбований метал вагонів: бліки від ліхтарів, без карти середовища (вона довго будується)
     this.stripM = new THREE.MeshBasicMaterial({ toneMapped: false });
     this.glow = glowTex();
     // світла сталий набір з першого кадру: нове світло посеред сцени перезбирало б усі шейдери
@@ -296,12 +304,12 @@ class Train {
     lside.position.set(-0.05, 2.82, 1.556); lg.add(lside);
     const lamps = merge([box(20.58, 20.64, 2.05, 2.35, 0.6, 1.1, '#fff4d0'), box(20.58, 20.64, 2.05, 2.35, -1.1, -0.6, '#fff4d0'), box(18.6, 18.9, 4.62, 4.78, -0.25, 0.25, '#fff4d0')]); lamps.translate(-LL / 2, 0, 0);
     lg.add(new THREE.Mesh(lamps, this.glowM));
-    const head = new THREE.SpotLight(0xfff0d0, 900, 90, 0.42, 0.55, 1.3); head.position.set(LL / 2 - 0.8, 2.3, 0); head.target.position.set(LL / 2 + 30, 0.6, 0); head.layers.mask = 3; lg.add(head, head.target);
-    const cone = new THREE.ConeGeometry(4.2, 46, 18, 1, true); cone.translate(0, -23, 0); cone.rotateZ(Math.PI / 2);
-    const cc = []; for (let i = 0; i < cone.attributes.position.count; i++) { const k = 1 - cone.attributes.position.getX(i) / 46; cc.push(k * 0.5, k * 0.46, k * 0.36); }
-    cone.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3));
-    const beam = new THREE.Mesh(cone, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
-    beam.position.set(LL / 2 - 0.1, 2.2, 0); lg.add(beam);
+    /* фара — лише промінь і ореоли: справжнє світло рахувалося б у кожному пікселі сцени */
+    /* прожектор: мʼякий стовп світла, що розширюється й тане вдалині (два схрещені полотна), і пляма на колії попереду */
+    const shaft = canvasTex(256, 128, (g, W, H) => { const img = g.createImageData(W, H); for (let x = 0; x < W; x++) { const t = x / W, half = 0.14 + 0.86 * t, fall = Math.pow(1 - t, 1.5) * Math.min(1, t * 12); for (let y = 0; y < H; y++) { const v = ((y / H - 0.5) * 2) / half, a = Math.exp(-v * v * 2.6) * fall, i = (y * W + x) * 4; img.data[i] = 255; img.data[i + 1] = 241; img.data[i + 2] = 208; img.data[i + 3] = Math.round(a * 255); } } g.putImageData(img, 0, 0); });
+    const shM = new THREE.MeshBasicMaterial({ map: shaft, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    for (const rx of [0, Math.PI / 2]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(30, 7), shM); p.rotation.x = rx; p.position.set(LL / 2 + 14.6, 2.15, 0); lg.add(p); }
+    const fp = new THREE.Mesh(new THREE.PlaneGeometry(16, 4.2), new THREE.MeshBasicMaterial({ map: this.glow, color: 0xfff0c8, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false })); fp.rotation.x = -Math.PI / 2; fp.position.set(LL / 2 + 9.5, 0.04, 0); lg.add(fp);
     for (const z of [0.85, -0.85]) { const hs = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glow, color: 0xfff1cf, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); hs.scale.set(3.2, 3.2, 1); hs.position.set(LL / 2 - 0.75, 2.2, z); lg.add(hs); }
     this.slots.push({ obj: lg });
     this.mailGeo = carGeo(GRN); this.mailTex = mailSide();
@@ -475,6 +483,7 @@ class Train {
       _m.makeRotationZ(q.th); _m.setPosition(q.x, q.y, 0);
       sl.im.setMatrixAt(sl.i, _m); this.strip.setMatrixAt(sl.si, _m);
       sl.dec.position.set(q.x - 4.615, q.y + 3.0 - 4.615 * q.th, HALF + 0.06); sl.dec.rotation.z = q.th;
+      sl.pdec.position.set(q.x + 4.4, q.y + 2.95 + 4.4 * q.th, HALF + 0.06); sl.pdec.rotation.z = q.th;
     }
     for (let i = 0; i < this.ims.length; i++) this.ims[i].instanceMatrix.needsUpdate = true;
     if (this.strip) this.strip.instanceMatrix.needsUpdate = true;
@@ -562,14 +571,18 @@ class Train {
     this.strip = new THREE.InstancedMesh(paint(box(BODY0 + 0.2 - H2, BODY1 - 0.2 - H2, FLOOR - 0.1, FLOOR - 0.04, HALF + 0.07, HALF + 0.09, '#ffffff'), '#ffffff'), this.stripM, N);   // світлова смуга кольору рідкості
     this.strip.frustumCulled = false; this.strip.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.scene.add(this.strip);
     const atlas = numberAtlas(list), decM = new THREE.MeshLambertMaterial({ map: atlas, transparent: true, polygonOffset: true, polygonOffsetFactor: -2 });
+    const prM = new THREE.MeshLambertMaterial({ map: (this.printTex ||= printAtlas()), transparent: true, polygonOffset: true, polygonOffsetFactor: -2 });
+    let lastPr = -1;
+    const print = () => { let d = Math.floor(srnd() * PRINTS); if (d === lastPr) d = (d + 1) % PRINTS; lastPr = d; const pl = new THREE.PlaneGeometry(3.6, 1.8), uv = pl.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, ((d % 4) + uv.getX(k)) / 4, 1 - (Math.floor(d / 4) + 1 - uv.getY(k)) / 2); const m = new THREE.Mesh(pl, prM); this.scene.add(m); return m; };
     list.forEach((c, i) => {
       this.strip.setColorAt(i, _c.set(RARITY[c.rar].col));
       const pl = new THREE.PlaneGeometry(3.6, 1.8), uv = pl.attributes.uv, u0 = (i % 4) / 4, v0 = 1 - (Math.floor(i / 4) + 1) / 5;
       for (let k = 0; k < uv.count; k++) uv.setXY(k, u0 + uv.getX(k) / 4, v0 + uv.getY(k) / 5);
       const dec = new THREE.Mesh(pl, decM); this.scene.add(dec);
-      if (c.target) { this.extras(dec, i); return; }
+      const pdec = print();
+      if (c.target) { this.extras(dec, i); pdec.position.set(4.4, 2.95, HALF + 0.06); this.tg.add(pdec); return; }
       im[c.rar].setColorAt(used[c.rar], _c.setScalar(0.88 + srnd() * 0.18));   // кожен вагон трохи свого відтінку: різний вік фарби
-      this.slots.push({ im: im[c.rar], i: used[c.rar]++, si: i, dec });
+      this.slots.push({ im: im[c.rar], i: used[c.rar]++, si: i, dec, pdec });
     });
     if (this.strip.instanceColor) this.strip.instanceColor.needsUpdate = true;
     for (const k in im) if (im[k].instanceColor) im[k].instanceColor.needsUpdate = true;
@@ -659,7 +672,8 @@ class Train {
     if (this.t0 == null && this.drawn) this.go(now);
     const s = this.frozen ? 1e6 : this.now(), x = this.place(s), v = this.bodyV(0, s);
     // камера: від погляду вздовж колії на тепловоз до бокового плану; дрижить від потяга, що мчить поруч, і здригається від удару зчеплень
-    const u = smooth((x - 4) / 22), push = this.stopT ? easeOut((now - this.stopT) / 2600) : 0;
+    const u = 1,                                                       // камера весь час збоку навпроти місця зупинки: потяг вʼїжджає в кадр, камера за ним не крутиться
+          push = this.stopT ? easeOut((now - this.stopT) / 2600) : 0;
     _p.lerpVectors(CAM0, CAM1, u); _l.lerpVectors(LOOK0, LOOK1, u);
     _p.z -= 1.2 * push; _p.y -= 0.15 * push; _l.y -= 0.2 * push;
     if (this.blurT) {                                                 // наїзд на героя: на весь екран, ноги трохи обрізані, сам герой ліворуч
@@ -862,6 +876,6 @@ class Train {
     if (this.env) this.env.dispose();
     if (this.r) { this.r.dispose(); this.r.forceContextLoss(); }
     this.el.remove();
-    if (cur === this) cur = null;
+    if (getTrain() === this) setTrain(null);
   }
 }
