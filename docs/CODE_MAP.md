@@ -244,11 +244,11 @@ Weather: дощ і сніг на InstancedMesh.
 
 - Внутрішні функції: ensureCtx:27, makeEngines:37, buildPhone:44, setPhone:53, trigger:118, stopAll:126, playScene:133, stopOldMusic:141, playOldMusic:142, fft:150, analyse:152, render:161, measure:179, measureScene:188, loopSeam:197, row:211, build:233
 
-## src/lab/train.js (66 рядків)
+## src/lab/train.js (79 рядків)
 
 Сторінка перевірки пака-потяга (train.html): кнопки пака, рідкості, затримки відповіді й помилки. Не вкладка з грою: Match і
 
-- Внутрішні функції: ui:19, roll:33, go:40
+- Внутрішні функції: ui:19, roll:34, go:41, hubCard:57
 
 ## src/main.js (39 рядків)
 
@@ -525,20 +525,20 @@ DemoMatch: маленька гра для зразка мінімапи в на�
 - **MapHud** :273
   constructor:274, apply:294, setKits:306, applyAlpha:312, layout:318, compute:328, planHtml:357, refreshPlan:373, animatePlan:379, placeJoyZone:387, update:397, ballCheck:412, pauseCheck:421, bindPreview:432, fitPreview:440, place:445, resetPlace:446, setEdit:448, syncBar:454, initDrag:459
 
-## src/ui/packtrain.css (25 рядків)
+## src/ui/packtrain.css (37 рядків)
 
 Пак-потяг (src/ui/packtrain.js): шар у хості (#reveal онлайн-хабу), 3D-канва на весь шар, віньєтка й спалах легенди. Класи з префіксом pt-.
 
-- Розділи: Пак-потяг (src/ui/packtrain.js): шар у хості (#reveal онлайн-хабу), 3D-канва на весь шар, віньєтка й спалах легенди. Класи з префіксом pt-.:1 · блок параметрів героя: праворуч, герой у кадрі зсунутий ліворуч; поява зсувом, смужки навичок наповнюються по черзі:6
+- Розділи: Пак-потяг (src/ui/packtrain.js): шар у хості (#reveal онлайн-хабу), 3D-канва на весь шар, віньєтка й спалах легенди. Класи з префіксом pt-.:1 · квиток «ЛОКО·ЕКСПРЕС» праворуч, герой у кадрі ліворуч: папір, перфорація, багаж із крапками, печатка рейтингу падає останньою:7
 
-## src/ui/packtrain.js (761 рядків)
+## src/ui/packtrain.js (867 рядків)
 
 openTrain: відкриття пака героїв — 3D-сцена на нічному пероні. Потяг ЛОКО (тепловоз у барвах герба) везе 20 критих вагонів
 
-- Експорти: trainMix:161, trainBack:172, trainCovers:174, openTrain:181
-- Внутрішні функції: paint:44, box:50, prismZ:52, prismX:54, wheel:55, quad:57, carGeo:62, locoGeo:97, canvasTex:115, cardHtml:149
-- **Train** :191
-  constructor:192, go:215, build:223, station:273, board:310, fit:331, addMail:340, at:350, now:351, ms:352, simulate:359, look:400, bodyX:406, bodyV:407, bodyTh:408, noseX:409, pose:411, place:419, feed:433, clacks:444, got:457, consist:485, carBase:526, extras:528, prepHero:562, sparksInit:575, sparks:582, tween:599, frame:600, stopAt:629, flapTo:660, heroOut:669, walk:676, showCard:688, skipNow:697, final:703, heroRect:718, end:727, fail:733, close:741, kill:748
+- Експорти: trainMix:184, trainBack:195, trainCovers:197, openTrain:204
+- Внутрішні функції: paint:46, box:52, prismZ:54, prismX:56, wheel:57, quad:59, soil:62, carGeo:70, locoGeo:114, canvasTex:132, cardHtml:169
+- **Train** :214
+  constructor:215, go:250, build:258, station:314, board:360, fit:381, addMail:391, at:401, now:402, ms:403, simulate:410, look:451, bodyX:457, bodyV:458, bodyTh:459, noseX:460, pose:462, place:470, feed:484, clacks:495, got:508, consist:536, carBase:579, extras:581, prepHero:612, sparksInit:626, sparks:633, tween:650, frame:651, drawBlur:703, blurInit:714, blurFree:730, stopAt:733, flapTo:763, heroOut:772, walk:780, showCard:792, skipNow:801, final:807, heroRect:822, end:831, fail:837, close:845, kill:852
 
 ## src/ui/portrait.js (134 рядків)
 

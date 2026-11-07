@@ -1,25 +1,37 @@
 /* Пак-потяг (src/ui/packtrain.js): шар у хості (#reveal онлайн-хабу), 3D-канва на весь шар, віньєтка й спалах легенди. Класи з префіксом pt-. */
 .pt { position: absolute; inset: 0; z-index: 4; overflow: hidden; background: #050d14; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
 .pt-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pt:has(.pt-card), .pt.spin { cursor: grab; }
 .pt-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 55%, rgba(0, 0, 0, .55)); }
 .pt-flash { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(ellipse 60% 55% at 50% 52%, #fffbe8, #ffe08a 45%, #f0b51f); }
-/* блок параметрів героя: праворуч, герой у кадрі зсунутий ліворуч; поява зсувом, смужки навичок наповнюються по черзі */
-.pt-card { position: absolute; right: max(4%, var(--pad-r, 0px) + 12px); top: 56%; width: min(38%, 440px); box-sizing: border-box; padding: clamp(12px, 2.2vh, 22px) clamp(14px, 2.4vw, 26px); border-radius: 18px; color: #f4f6f2;
-  font-family: Rubik, system-ui, sans-serif; background: linear-gradient(160deg, rgba(14, 26, 33, .9), rgba(6, 13, 18, .86)); border: 2px solid color-mix(in srgb, var(--rc) 70%, transparent);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, .05) inset, 0 18px 50px rgba(0, 0, 0, .55), 0 0 40px color-mix(in srgb, var(--rc) 28%, transparent); opacity: 0; transform: translate(40px, -50%); transition: opacity .45s ease, transform .55s cubic-bezier(.2, .8, .2, 1); pointer-events: none; }
-.pt-card.in { opacity: 1; transform: translate(0, -50%); }
-.pt-card.now, .pt-card.now * { transition: none !important; }
-.pt-card::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 5px; border-radius: 0 4px 4px 0; background: var(--rc); }
-.pt-card-h { display: flex; align-items: center; gap: clamp(10px, 1.6vw, 18px); }
-.pt-ovr { flex: none; display: grid; place-items: center; width: clamp(54px, 9vh, 80px); aspect-ratio: 1; border-radius: 14px; font-size: clamp(26px, 5vh, 42px); font-weight: 800; color: #0b1216; background: var(--rc); box-shadow: 0 0 22px color-mix(in srgb, var(--rc) 55%, transparent); }
-.pt-card-h small { display: block; font-size: clamp(10px, 1.7vh, 13px); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--rc); }
-.pt-card-h h3 { margin: 2px 0 1px; font-size: clamp(17px, 3.4vh, 27px); font-weight: 800; line-height: 1.05; }
-.pt-card-h span { font-size: clamp(11px, 1.9vh, 14px); font-weight: 600; color: #a9bdb4; }
-.pt-stats { list-style: none; margin: clamp(10px, 2vh, 16px) 0 0; padding: 0; display: grid; gap: clamp(5px, 1.1vh, 9px); }
-.pt-stats li { display: grid; grid-template-columns: 7.2em 1fr 2.2em; align-items: center; gap: 10px; font-size: clamp(11px, 1.9vh, 14px); font-weight: 600; color: #cfdcd6; }
-.pt-stats i { position: relative; height: 8px; border-radius: 6px; background: rgba(255, 255, 255, .08); overflow: hidden; }
-.pt-stats u { position: absolute; inset: 0; border-radius: 6px; background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 60%, #fff), var(--rc)); transform-origin: 0 50%; transform: scaleX(0); transition: transform .7s cubic-bezier(.2, .8, .2, 1) calc(.25s + var(--i) * .08s); }
-.pt-card.in .pt-stats u { transform: scaleX(var(--v)); }
-.pt-stats b { text-align: right; font-weight: 800; color: #fff; }
-.pt-trait { margin: clamp(9px, 1.8vh, 14px) 0 0; font-size: clamp(11px, 1.8vh, 13px); font-weight: 600; color: #a9bdb4; }
-.pt-trait b { color: var(--rc); font-weight: 800; margin-right: 4px; }
+/* квиток «ЛОКО·ЕКСПРЕС» праворуч, герой у кадрі ліворуч: папір, перфорація, багаж із крапками, печатка рейтингу падає останньою */
+.pt-card { position: absolute; right: max(3%, var(--pad-r, 0px) + 10px); top: 52%; width: min(47%, 600px); font-size: clamp(14px, 3.3vh, 22px); box-sizing: border-box; padding: 0 clamp(14px, 2.2vw, 22px) clamp(10px, 2vh, 16px) clamp(20px, 2.8vw, 28px);
+  color: #2b2418; font-family: Rubik, system-ui, sans-serif; background: repeating-linear-gradient(0deg, transparent 0 23px, rgba(80, 60, 30, .06) 23px 24px), linear-gradient(180deg, #f6eedc, #efe3c8);
+  border-radius: 4px; box-shadow: 0 14px 40px rgba(0, 0, 0, .5), 0 2px 0 rgba(0, 0, 0, .15); opacity: 0; transform: translate(60px, -50%) rotate(4deg); transition: opacity .35s ease, transform .6s cubic-bezier(.2, 1.25, .35, 1); pointer-events: none; overflow: hidden; }
+.pt-card.in { opacity: 1; transform: translate(0, -50%) rotate(-1.5deg); }
+.pt-card.now, .pt-card.now * { transition: none !important; animation: none !important; }
+.pt-card::before { content: ''; position: absolute; left: 7px; top: 0; bottom: 0; border-left: 3px dotted rgba(60, 45, 20, .35); }
+.pt-card header { display: flex; justify-content: space-between; align-items: baseline; margin: 0 calc(-1 * clamp(14px, 2.2vw, 22px)) clamp(6px, 1.4vh, 10px) calc(-1 * clamp(20px, 2.8vw, 28px)); padding: 7px clamp(14px, 2.2vw, 22px) 6px clamp(20px, 2.8vw, 28px); background: #1d2a22; color: #f6eedc; }
+.pt-card header b { font-size: 1.05em; font-weight: 800; letter-spacing: .12em; }
+.pt-card header span { font-size: .78em; font-weight: 600; letter-spacing: .08em; opacity: .75; font-variant-numeric: tabular-nums; }
+.pt-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; margin: 0; padding-right: 22%; }
+.pt-card dt { font-weight: 600; text-transform: uppercase; letter-spacing: .1em; font-size: .78em; color: #8a7a5c; align-self: center; }
+.pt-card dd { margin: 0; font-weight: 700; }
+.pt-card dd.nm { font-size: 1.25em; font-weight: 800; }
+.pt-card h4 { margin: .5em 0 .1em; font-size: .7em; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: #8a7a5c; }
+.pt-card ul { list-style: none; margin: 0; padding: 0; }
+.pt-card li { display: flex; align-items: baseline; gap: 8px; font-size: 1em; font-weight: 600; line-height: 1.55; opacity: 0; transform: translateX(-8px); transition: opacity .25s ease calc(.35s + var(--i) * .09s), transform .25s ease calc(.35s + var(--i) * .09s); }
+.pt-card li i { flex: 1; border-bottom: 2px dotted rgba(60, 45, 20, .35); transform: translateY(-4px); }
+.pt-card li b { font-weight: 800; font-size: 1.15em; font-variant-numeric: tabular-nums; min-width: 1.6em; text-align: right; }
+.pt-card.in li { opacity: 1; transform: none; }
+.pt-card p { margin: .5em 0 0; font-size: .92em; font-weight: 600; font-style: italic; }
+.pt-card p em { display: block; font-style: normal; font-size: .78em; text-transform: uppercase; letter-spacing: .1em; color: #8a7a5c; }
+.pt-card footer { display: flex; align-items: center; gap: 10px; margin-top: clamp(8px, 1.6vh, 12px); }
+.pt-card footer i { width: 38%; height: clamp(16px, 3vh, 22px); background: repeating-linear-gradient(90deg, #2b2418 0 2px, transparent 2px 4px, #2b2418 4px 5px, transparent 5px 8px, #2b2418 8px 11px, transparent 11px 12px); }
+.pt-card footer small { font-size: .68em; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #8a7a5c; }
+.pt-stamp { position: absolute; right: clamp(10px, 1.8vw, 20px); top: 2.6em; width: 5.4em; aspect-ratio: 1; border-radius: 50%; display: grid; place-content: center; text-align: center;
+  color: color-mix(in srgb, var(--rc) 75%, #2b1a00); border: 3px double currentColor; box-shadow: inset 0 0 0 4px rgba(255, 255, 255, .35); mix-blend-mode: multiply; transform: rotate(-14deg) scale(1.9); opacity: 0;
+  transition: transform .22s cubic-bezier(.5, 0, .75, 0) 1.05s, opacity .12s ease 1.05s; }
+.pt-stamp b { font-size: 2.1em; font-weight: 800; line-height: 1; }
+.pt-stamp small { font-size: .55em; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.pt-card.in .pt-stamp { transform: rotate(-14deg) scale(1); opacity: .9; }
