@@ -1,5 +1,4 @@
 // playIntro: заставка запуску: офіційний герб «Локомотива» Київ; з тунелю в червоному трикутнику виїжджає локомотив і стає на своє місце (SVG, WAAPI).
-import { audio } from '../core/audio.js';
 import CREST from '../../public/loko-logo.svg?raw';
 
 // ---------- деталі герба з офіційного SVG ----------
@@ -58,6 +57,12 @@ const loco = (fill, extra = '') => `<g class="pg"><g class="pc">${fill ? `<use h
 const scoped = (html) => html.replace(/\bid="([^"]+)"/g, 'id="li-$1"').replace(/url\(#([^)]+)\)/g, 'url(#li-$1)').replace(/href="#([^"]+)"/g, 'href="#li-$1"')
   .replace(/class="([^"]+)"/g, (_, c) => `class="${c.split(/\s+/).map((t) => 'li-' + t).join(' ')}"`);
 const sel = (s) => s.replace(/([.#])([\w-]+)/g, '$1li-$2');
+
+/** Підпис автора після герба, лише шрифтом. Кожна літера — три копії: червона й зелена (kr, kg) під білою (kw); рамка lt
+ *  ховає їх, поки вони піднімаються знизу (playIntro, крок 6). */
+const AUTHOR = 'ALEX SIZIKOV';
+const credit = () => scoped(`<div class="cr" aria-label="by ${AUTHOR}"><div class="dim"></div><div class="crb"><b class="by">by</b><span class="nm">${[...AUTHOR].map((c) => (c === ' ' ? '<span class="gap"></span>'
+  : '<span class="lt"><i class="kr">' + c + '</i><i class="kg">' + c + '</i><b class="kw">' + c + '</b></span>')).join('')}</span></div></div>`);
 
 function scene() {
   return scoped(`<div class="stage" aria-label="Герб ФК Локомотив Київ" role="img">
@@ -238,18 +243,19 @@ function suspension() {
 }
 
 /** Заставка запуску: повний герб із тунелем у червоному трикутнику; з тунелю виїжджає локомотив, гальмує й стає на своє місце,
- *  тунель розчиняється, фара гасне. Дотик будь-де пропускає. `done` кличеться один раз, коли заставка почала зникати. */
+ *  тунель розчиняється, фара гасне; потім на темному тлі світло фари пробігає підписом автора. Дотик будь-де пропускає.
+ *  `done` кличеться один раз, коли заставка почала зникати. */
 export function playIntro(root, done) {
   if (P.length !== 20 || !CAB) { done(); return; }                // герб змінили так, що деталі вже не впізнати: заставку пропускаємо
   const el = document.createElement('section');
   el.className = 'intro'; el.id = 'intro';
-  el.innerHTML = scene() + '<button class="li-skip" type="button" aria-label="Пропустити">ПРОПУСТИТИ ›</button>';
+  el.innerHTML = scene() + credit();
   root.appendChild(el);
   const $ = (s) => el.querySelector(sel(s)), $$ = (s) => [...el.querySelectorAll(sel(s))];
   const live = [], T = [], Q = [];
   const A = (node, kf, o) => { const a = node.animate(kf, o); live.push(a); return a; };
   const each = (s, kf, o) => $$(s).forEach((node) => A(node, kf, o));
-  const at = (ms, fn) => Q.push([ms, fn]);                        // годинники звуку стартують разом з анімаціями (go)
+  const at = (ms, fn) => Q.push([ms, fn]);                        // таймери стартують разом з анімаціями (go)
   let finished = false;
   const end = () => {
     if (finished) return; finished = true;
@@ -261,7 +267,8 @@ export function playIntro(root, done) {
   el.addEventListener('click', end);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) {   // без руху: лише готовий герб
     $('#tdark').remove(); $('#railExt').remove();
-    T.push(setTimeout(end, 1600));
+    const cr = $('.cr'); cr.style.opacity = 0;
+    T.push(setTimeout(() => { cr.style.transition = 'opacity .4s'; cr.style.opacity = 1; }, 1600), setTimeout(end, 3600));
     return;
   }
   textures().then((tex) => { if (!finished) $$('.sp').forEach((im, i) => { const l = tex[im.dataset.k]; im.setAttribute('href', l[i % l.length]); }); });
@@ -385,14 +392,26 @@ export function playIntro(root, done) {
   const SH = ARR + 1300;
   A($('#sheen'), [{ transform: 'skewX(-22deg) translateX(0)' }, { transform: 'skewX(-22deg) translateX(250px)' }], { duration: 1000, delay: SH, easing: 'cubic-bezier(.65,0,.35,1)', fill: 'both' });
 
-  // звук: гуркіт із глибини, гудок у тунелі, скрип гальм, глухий удар зупинки, шипіння пари, дзвін на фіналі
-  at(LT, () => audio.rumble());
-  at(LT + 900, () => audio.horn());
-  at(LT + D * C, () => audio.hiss(3600, 10, 0.8, 0.03));
-  at(ARR, () => audio.thud());
-  at(ARR + 240, () => audio.hiss(1500, 0.6, 0.8, 0.05));
-  at(SH + 200, () => audio.bell());
-  at(SH + 1350, end);
+  // 6. підпис автора: герб тоне в темряві, «by» випливає зліва, і хвилею зліва направо літери піднімаються з-під маски:
+  //    спершу червона копія, за нею зелена, остання біла, тож кожною літерою знизу вгору перетікає колір. Імʼя водночас
+  //    стискається з розрідженого до звичайного, а весь підпис повільно наближається. Кольорові копії стають із малим зсувом:
+  //    лишається тонка червоно-зелена кайма.
+  const C0 = SH + 1050, B0 = C0 + 500, SOFT = 'cubic-bezier(.16,1,.3,1)';
+  A($('.stage'), [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.88)' }], { duration: 650, delay: C0, easing: 'cubic-bezier(.45,0,.75,.4)', fill: 'both' });
+  A($('.dim'), [{ opacity: 0 }, { opacity: 1 }], { duration: 650, delay: C0 + 100, easing: 'ease-in-out', fill: 'both' });
+  A($('.crb'), [{ transform: 'scale(.96)' }, { transform: 'scale(1.03)' }], { duration: 3000, delay: B0 - 200, easing: 'cubic-bezier(.3,.6,.5,1)', fill: 'both' });
+  A($('.by'), [{ opacity: 0, transform: 'translateX(-.6em)' }, { opacity: 1, transform: 'none' }], { duration: 900, delay: B0 + 50, easing: SOFT, fill: 'both' });
+  const lts = $$('.lt'), mid = (lts.length - 1) / 2;
+  lts.forEach((lt, i) => {
+    const d = B0 + i * 55 + (i > 3 ? 80 : 0);                         // пробіл між імʼям і прізвищем — коротка пауза
+    A(lt, [{ transform: 'translateX(' + ((i - mid) * .13).toFixed(3) + 'em)' }, { transform: 'none' }], { duration: 1500, delay: B0, easing: SOFT, fill: 'both' });
+    const rise = (node, t, x, y) => A(node, [{ transform: 'translateY(115%)' }, { transform: 'translate(' + x + 'em,' + y + 'em)' }], { duration: 950, delay: d + t, easing: SOFT, fill: 'both' });
+    rise(lt.querySelector(sel('.kr')), 0, -.032, -.018);
+    rise(lt.querySelector(sel('.kg')), 75, .032, .018);
+    rise(lt.querySelector(sel('.kw')), 150, 0, 0);
+  });
+  // заставка беззвучна (так хоче власник): звук і музика вмикаються лише в меню
+  at(B0 + 2750, end);
 
   // 5. старт. Перший показ кожного виду деталей (маска, градієнт, дим) GPU зустрічає збиранням програм малювання: хвилі фризу
   //    по ~0,3 с посеред виїзду. Тому поруч ставимо невидиму копію герба, де видно все, і тримаємо анімації на першому кадрі
@@ -400,7 +419,7 @@ export function playIntro(root, done) {
   //    До LT - 300 (перший серпанок фари) кадр і так нерухомий, тож час очікування зараховуємо в цю паузу, а не додаємо до неї.
   for (const a of live) a.pause();
   const warm = document.createElement('div');
-  warm.className = 'li-warm'; warm.innerHTML = scene(); el.appendChild(warm);
+  warm.className = 'li-warm'; warm.innerHTML = scene() + credit(); el.appendChild(warm);
   const t0 = performance.now(); let prev = t0, calm = 0;
   const go = (now) => {
     const k = Math.min(LT - 300, now - t0);
