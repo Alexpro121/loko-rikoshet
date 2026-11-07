@@ -539,14 +539,14 @@ DemoMatch: маленька гра для зразка мінімапи в на�
 - **DemoMatch** :14
   constructor:15, lineUp:29, start:33, give:37, formation:40, press:54, stepPlayers:65, nearest:75, choosePass:83, pass:97, shoot:106, stepBall:113, goal:144, dead:149, step:154
 
-## src/ui/minimap.js (494 рядків)
+## src/ui/minimap.js (533 рядків)
 
 Мінімапа матчу: Minimap малює поле, гравців, напрямок бігу й траєкторію м'яча; MapHud ставить її на екран і веде режим перетягування.
 
-- **Minimap** :49
-  constructor:50, attach:63, setKits:65, resize:72, sx:82, sy:83, bake:85, reset:114, read:117, demo:136, sample:139, tick:162, draw:173, drawView:187, drawRuns:198, drawBallPath:213, drawTeam:241, nearBall:253, drawBall:259
-- **MapHud** :273
-  constructor:274, apply:294, setKits:306, applyAlpha:312, layout:318, compute:328, planHtml:357, refreshPlan:373, animatePlan:379, placeJoyZone:387, update:397, ballCheck:412, pauseCheck:421, bindPreview:432, fitPreview:440, place:445, resetPlace:446, setEdit:448, syncBar:454, initDrag:459
+- **Minimap** :74
+  constructor:75, attach:88, setKits:91, resize:99, sx:109, sy:110, bake:112, reset:141, read:144, demo:163, sample:166, tick:189, draw:201, drawView:215, drawRuns:226, drawBallPath:241, drawTeam:269, nearBall:281, drawBall:291
+- **MapHud** :312
+  constructor:313, apply:333, setKits:345, applyAlpha:351, layout:357, compute:367, planHtml:396, refreshPlan:412, animatePlan:418, placeJoyZone:426, update:436, ballCheck:451, pauseCheck:460, bindPreview:471, fitPreview:479, place:484, resetPlace:485, setEdit:487, syncBar:493, initDrag:498
 
 ## src/ui/packtrain.css (37 рядків)
 

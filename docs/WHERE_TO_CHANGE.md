@@ -165,6 +165,7 @@
 | Представлення суперника перед матчем | `Hud.matchday`; дані дають `Match.start` і `GuestMatch.start`; стилі `.md-*` у `src/style.css` |
 | Довгі назви клубів і прізвища без трикрапки | `fitText` у `src/ui/hud.js` і клас `.fit` (картка суперника, напис гола, табло рахунку, екран результату) |
 | Мінімапа: вигляд, лінії | `Minimap` у `src/ui/minimap.js` (`bake` для поля, `drawBallPath`, `drawRuns`, `SAMPLE`, `BALL_CAP`) |
+| Мінімапа: кольори команд і м'яча, вигляд м'яча | `setKits` (`teamColor`, `GRASS`, `SPARE`, `BALL_C`) і `drawBall` у `src/ui/minimap.js` |
 | Зразок мінімапи в налаштуваннях | `DemoMatch` у `src/ui/minimap-demo.js`; схема екрана: `planHtml`, `SPOTS` у `src/ui/minimap.js` |
 | Мінімапа: місце, розмір, обхід HUD | `MapHud.compute`, зони `.z-*` у `src/style.css`; поля `map*` у `SETTINGS_DEFAULT`; вкладка `map` у `renderSettings` |
 | Іконки | `src/ui/icons.js`, `src/ui/vox.js` |

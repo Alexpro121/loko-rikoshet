@@ -41,10 +41,35 @@ const rgb = (h) => { const n = parseInt(String(h).slice(1), 16); return [(n >> 1
 const hex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
 const mix = (h, t, k) => { const a = rgb(h), b = rgb(t); return hex(a.map((v, i) => v + (b[i] - v) * k)); };
 const lum = (h) => { const c = rgb(h); return (0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]) / 255; };
-const near = (a, b) => { const p = rgb(a), q = rgb(b); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < 110; };
+const dist = (a, b) => { const p = rgb(a), q = rgb(b); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
+const near = (a, b) => dist(a, b) < 110;
 /** Темна форма на темному полі зникла б: підсвічуємо до читабельної яскравості. */
 const readable = (h) => { const l = lum(h); return l < 0.42 ? mix(h, '#ffffff', Math.min(0.6, (0.42 - l) * 1.6)) : h; };
-const kitHex = (k, d) => (k && /^#[0-9a-f]{6}$/i.test(k.main) ? k.main : d);
+const HEX = /^#[0-9a-f]{6}$/i;
+const GRASS = '#155036', GRASS_D = 90;                  // середній колір газону на мапі й мінімальна відстань до нього
+const SPARE = ['#f1efe8', '#ffb020', '#ff5a5a', '#4fc3ff', '#c58bff'];   // запасні кольори команди, коли жоден тон форми не підійшов
+const BALL_C = ['#ffffff', '#ff3fd2', '#2ee8ff', '#ffe600'];   // м'яч: білий, якщо обидві команди далекі від білого, інакше найдальший
+const BALL_FAR = 170;
+const PULSE = 1.1;                                      // період хвилі навколо м'яча, с
+/** Тони форми в порядку переваги: футболка, другий колір, шорти. Приймає й готовий колір рядком. */
+const tones = (k, d) => {
+  const out = [];
+  if (typeof k === 'string') { if (HEX.test(k)) out.push(k); }
+  else if (k) for (const c of [k.main, k.second, k.shorts]) if (HEX.test(c)) out.push(c);
+  if (!out.length) out.push(d);
+  return out;
+};
+/** Найдальший від двох кольорів (і від газону) варіант зі списку. */
+const farthest = (list, a, b) => {
+  let best = list[0], bd = -1;
+  for (const c of list) { const d = Math.min(a ? dist(c, a) : 999, b ? dist(c, b) : 999, dist(c, GRASS)); if (d > bd) { bd = d; best = c; } }
+  return best;
+};
+/** Колір команди на мапі: перший тон форми, що не губиться на газоні й не схожий на іншу команду. */
+const teamColor = (list, avoid) => {
+  for (const c of list) { const v = readable(c); if (dist(v, GRASS) >= GRASS_D && !(avoid && near(v, avoid))) return v; }
+  return avoid ? farthest(SPARE, avoid) : readable(list[0]);
+};
 
 export class Minimap {
   constructor() {
@@ -54,7 +79,7 @@ export class Minimap {
     this.lx = new Float32Array(11); this.lz = new Float32Array(11);
     this.quad = new Float32Array(8);
     this.head = 0; this.cnt = 0; this.acc = 0; this.demoT = 0; this.sampT = 0; this.blx = NaN; this.blz = 0; this.bvx = 0; this.bvz = 0;
-    this.bx = 0; this.bz = 0; this.by = 0;
+    this.bx = 0; this.bz = 0; this.by = 0; this.pt = 0;
     this.w = 0; this.h = 0; this.vert = false; this.dpr = 1;
     this.layer = null; this.cv = null; this.g = null; this.sim = null;
     this.setKits('#d4202c', '#2b6fd6');
@@ -62,10 +87,12 @@ export class Minimap {
 
   attach(cv) { if (cv === this.cv) return; this.cv = cv; this.g = cv.getContext('2d'); this.w = 0; }
 
+  /** Форми команд (об'єкт kit або колір): свої беруть свій тон, суперник — тон, не схожий на наш, м'яч — колір, якого немає в жодної команди. */
   setKits(own, opp) {
-    own = readable(own); opp = readable(opp);
-    if (near(own, opp)) opp = lum(own) > 0.7 ? '#ffb020' : '#f1efe8';   // однакові форми: суперник стає контрастним
+    own = teamColor(tones(own, '#d4202c'));
+    opp = teamColor(tones(opp, '#2b6fd6'), own);
     this.own = own; this.opp = opp; this.line = mix(own, '#ffffff', 0.55);
+    this.ball = Math.min(dist(own, BALL_C[0]), dist(opp, BALL_C[0])) >= BALL_FAR ? BALL_C[0] : farthest(BALL_C, own, opp);
   }
 
   /** Новий розмір або орієнтація: поле перемальовуємо один раз у запасний канвас, далі лише копіюємо. */
@@ -163,6 +190,7 @@ export class Minimap {
     this.acc += dt;
     if (this.acc < (game && game.level === 0 || S.settings.quality === 'low' ? DRAW_T_LOW : DRAW_T)) return;
     const el = this.acc; this.acc = 0;
+    this.pt = (this.pt + el) % PULSE;
     if (m) {
       this.read(m, game);
       if (m.phase !== 'paused') this.sample(el * (m.ts ?? (m.slow ? 0.3 : 1)));
@@ -212,7 +240,7 @@ export class Minimap {
   /** Траєкторія м'яча: звідки летить (згасає) і короткий пунктир, куди летить. */
   drawBallPath(g, st) {
     const a0 = st.mapTrailA / 100, bt = this.bt, n = this.cnt;
-    g.strokeStyle = '#ffffff'; g.lineWidth = Math.max(1, this.r * 0.36); g.lineCap = 'round'; g.lineJoin = 'round';
+    g.strokeStyle = this.ball; g.lineWidth = Math.max(1, this.r * 0.36); g.lineCap = 'round'; g.lineJoin = 'round';
     for (let b = 0; b < BANDS; b++) {
       const from = Math.floor(n * b / BANDS), to = Math.min(n - 1, Math.floor(n * (b + 1) / BANDS));
       let pen = false;
@@ -256,16 +284,27 @@ export class Minimap {
     return who;
   }
 
+  /**
+   * М'яч не схожий на гравця ні кольором, ні обрисом: мішень (темна обвідка, кольорове ядро, темна цятка в центрі),
+   * більша за гравця, і хвиля, що розходиться від нього. Малюється останнім, поверх усіх.
+   */
   drawBall(g, st) {
-    const x = this.sx(this.bx, this.bz), y = this.sy(this.bx, this.bz), r = Math.max(2, this.r * 0.8) * (1 + Math.min(0.8, Math.max(0, this.by - 0.3) * 0.09));   // високий м'яч трохи більший
+    const x = this.sx(this.bx, this.bz), y = this.sy(this.bx, this.bz), r = Math.max(2.2, this.r * 0.8) * (1 + Math.min(0.8, Math.max(0, this.by - 0.3) * 0.09));   // високий м'яч трохи більший
     // хто з м'ячем: кільце навколо найближчого гравця, якщо він справді при м'ячі
     const who = this.nearBall(st.mapOpp ? 22 : 11);
     if (who >= 0) {
       g.strokeStyle = '#ffe28a'; g.lineWidth = Math.max(1, this.r * 0.4);
       g.beginPath(); g.arc(this.sx(this.px[who], this.pz[who]), this.sy(this.px[who], this.pz[who]), this.r + g.lineWidth * 1.4, 0, Math.PI * 2); g.stroke();
     }
-    g.fillStyle = '#ffffff'; g.strokeStyle = '#0a241b'; g.lineWidth = 1;
-    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
+    const ol = Math.max(1.2, this.r * 0.38), ph = this.pt / PULSE;
+    g.strokeStyle = this.ball; g.lineWidth = Math.max(1, this.r * 0.3); g.globalAlpha = 0.9 * (1 - ph);
+    g.beginPath(); g.arc(x, y, r + ol + this.r * (0.3 + 1.5 * ph), 0, Math.PI * 2); g.stroke();
+    g.globalAlpha = 1; g.fillStyle = '#06100b';
+    g.beginPath(); g.arc(x, y, r + ol, 0, Math.PI * 2); g.fill();
+    g.fillStyle = this.ball;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#06100b';
+    g.beginPath(); g.arc(x, y, r * 0.36, 0, Math.PI * 2); g.fill();
   }
 }
 
@@ -305,8 +344,8 @@ export class MapHud {
 
   setKits() {
     const sp = this.ui.hud.spec, live = this.ui.matchActive && sp;
-    if (!live) { this.mm.setKits(kitHex(myKit(), '#d4202c'), '#2b6fd6'); return; }
-    this.mm.setKits(kitHex(sp.home ? sp.home.kit : matchKit(sp.club), '#d4202c'), kitHex(sp.club && sp.club.kit, '#2b6fd6'));
+    if (!live) { this.mm.setKits(myKit(), '#2b6fd6'); return; }
+    this.mm.setKits(sp.home ? sp.home.kit : matchKit(sp.club), sp.club && sp.club.kit);
   }
 
   applyAlpha() {
@@ -432,7 +471,7 @@ export class MapHud {
   bindPreview(cv) {
     if (!cv) { this.prevOn = false; return; }
     this.prev ??= new Minimap();
-    this.prev.attach(cv); this.prev.setKits(kitHex(myKit(), '#d4202c'), '#2b6fd6');
+    this.prev.attach(cv); this.prev.setKits(myKit(), '#2b6fd6');
     this.prevOn = true;
     this.fitPreview();
   }
