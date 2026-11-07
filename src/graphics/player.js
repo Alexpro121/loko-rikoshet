@@ -222,17 +222,18 @@ const vox = () => new VoxelBuilder(0.2, true);
 // Стиль: рівні блоки без зайвого рельєфу. Кожна частина — один-два прямокутники; смуги й манжети — кольорові
 // сегменти того самого перерізу, тож поверхня лишається гладкою.
 /** Стегно: штанина шортів і стегно. Початок = тазостегновий суглоб. */
-const thighGeo = (kit, gk, skin) => cached('th' + kit.shorts + skin + gk, () => {
+const thighGeo = (kit, gk, skin) => cached('th' + kit.shorts + (kit.strim || '') + skin + gk, () => {
   const b = vox(), S = kit.shorts;
   if (gk) { b.box(0, -0.3, 0, 0.24, 0.6, 0.25, S); return b.build(); }   // воротар: довгі штани
-  b.box(0, -0.135, 0, 0.25, 0.27, 0.26, S);                 // штанина
+  if (kit.strim) { b.box(0, -0.12, 0, 0.25, 0.24, 0.26, S); b.box(0, -0.255, 0, 0.25, 0.03, 0.26, kit.strim); }   // штанина з кантом
+  else b.box(0, -0.135, 0, 0.25, 0.27, 0.26, S);            // штанина
   b.box(0, -0.435, 0.005, 0.19, 0.33, 0.2, skin);           // стегно до коліна
   return b.build();
 });
 
 /** Гомілка: коліно, гетра зі смугою. Початок = коліно. */
-const shinGeo = (kit, gk, skin) => cached('sh' + kit.socks + kit.shorts + (kit.under || kit.second) + skin + gk, () => {
-  const b = vox(), K = kit.socks, band = kit.under || kit.second;
+const shinGeo = (kit, gk, skin) => cached('sh' + kit.socks + kit.shorts + (kit.sband || kit.under || kit.second) + skin + gk, () => {
+  const b = vox(), K = kit.socks, band = kit.sband || kit.under || kit.second;
   if (gk) {
     b.box(0, -0.17, 0, 0.17, 0.34, 0.18, kit.shorts);
     b.box(0, -0.455, -0.005, 0.15, 0.23, 0.165, K);          // трохи заходить у бутсу: без щілини на щиколотці
@@ -265,14 +266,14 @@ const hipsGeo = (kit) => cached('hp' + kit.shorts, () => {
 
 // ---------------------------------------------------------------- руки
 /** Плече: рукав із манжетою й рука до ліктя. Початок = плечовий суглоб. */
-const upperGeo = (kit, gk, skin) => cached('up' + kit.second + kit.main + (kit.sleeve || '') + (kit.under || '') + skin + gk, () => {
+const upperGeo = (kit, gk, skin) => cached('up' + kit.second + kit.main + (kit.sleeve || '') + (kit.cuff || '') + (kit.under || '') + skin + gk, () => {
   const b = vox();
   if (gk) {                                                // довгий рукав, верх плеча в другому кольорі
     b.box(0, 0.02, 0, 0.16, 0.13, 0.16, kit.second);
     b.box(0, -0.235, 0, 0.15, 0.38, 0.15, kit.main);
     return b.build();
   }
-  const A = kit.under || skin, SL = kit.sleeve || kit.second, CU = kit.under ? '#c01a26' : kit.second;
+  const A = kit.under || skin, SL = kit.sleeve || kit.second, CU = kit.cuff || (kit.under ? '#c01a26' : kit.second);
   b.box(0, -0.05, 0, 0.16, 0.27, 0.16, SL);                 // рукав
   b.box(0, -0.2, 0, 0.16, 0.03, 0.16, CU);                  // манжета
   b.box(0, -0.32, 0, 0.115, 0.21, 0.12, A);                 // рука до ліктя
@@ -545,8 +546,8 @@ function bodyGeo(look) {
     L.box(0, 0.19, 0, 0.52, 0.24, 0.33, M); L.box(0, 0.33, 0, 0.52, 0.04, 0.33, S2); L.box(0, 0.43, 0, 0.52, 0.16, 0.33, M);
     b.box(0, 0.58, 0.005, 0.54, 0.16, 0.34, M); b.box(0, 0.73, 0.005, 0.54, 0.14, 0.34, S2);
   } else {
-    L.box(0, 0.29, 0, 0.52, 0.44, 0.33, M);                      // поперек (заходить під груди, щоб на згині не було щілини)
-    b.box(0, 0.65, 0.005, 0.54, 0.3, 0.34, M);                    // груди й плечі
+    patBox(L, kit, 0, 0.29, 0, 0.52, 0.44, 0.33);                 // поперек (заходить під груди, щоб на згині не було щілини)
+    patBox(b, kit, 0, 0.65, 0.005, 0.54, 0.3, 0.34);              // груди й плечі
   }
   b.box(0, 0.825, -0.01, 0.3, 0.05, 0.23, C);                    // комір навколо шиї
   // друк: тонкий шар трохи над поверхнею, малюється матеріалом із зсувом глибини
@@ -556,7 +557,7 @@ function bodyGeo(look) {
   else P.box(0, 0.785, F, 0.18, 0.02, 0.002, C);
   if (!look.gk) for (const sx of [-1, 1]) P.box(sx * 0.22, 0.8015, 0.005, 0.05, 0.002, 0.343, S2);   // смуги на плечах
   if (kit.stripe) for (const sx of [-0.17, 0.17]) { P.box(sx, 0.65, F, 0.05, 0.3, 0.002, kit.stripe); P.box(sx, 0.65, BK, 0.05, 0.3, 0.002, kit.stripe); }
-  const num = numberCell(look.num), ink = numInk(kit);
+  const num = numberCell(look.num), ink = numInk(kit), yoke = kit.pat && kit.pat.t === 'yoke';
   if (kit.sponsor) {
     P.box(-0.03, 0.6, F, 0.2, 0.15, 0.002, '#ffffff', 0, 0, 0, [null, null, null, null, sponsorCell(), null]);
     P.box(0.19, 0.66, F, 0.07, 0.07, 0.002, '#ffffff', 0, 0, 0, [null, null, null, null, crestCell(), null]);
@@ -564,13 +565,51 @@ function bodyGeo(look) {
   } else {
     P.box(0, 0.63, F, 0.17, 0.17, 0.002, ink, 0, 0, 0, [null, null, null, null, num, null]);
   }
-  P.box(0, 0.655, BK, 0.28, 0.28, 0.002, ink, 0, 0, 0, [null, null, null, null, null, num]);   // номер на спині (смуги форми стоять за ±0.145)
+  // номер на спині (смуги друку стоять за ±0.145); під кокеткою нижчий і менший, щоб не лягав на неї
+  P.box(0, yoke ? 0.625 : 0.655, BK, yoke ? 0.22 : 0.28, yoke ? 0.22 : 0.28, 0.002, ink, 0, 0, 0, [null, null, null, null, null, num]);
   return { lower: L.build(), upper: b.build(), prints: P.build() };
 }
 
+/**
+ * Візерунок форми (kit.pat): бокс тулуба ріжеться на прямокутні клітини врівень одна з одною, кожна свого кольору, тож
+ * поверхня лишається пласкою. t: stripes (n, gap, w), hoops (h), halves, quarters, band (y0, y1), vband (w), yoke (y),
+ * sides (x), split, cross (x, w, y0, y1). Колір смуг kit.pat.c, інакше kit.second. Затемнення знизу (як ao у vox) рахується
+ * за всім боксом, а не за клітиною: інакше на кожному обручі був би свій перепад.
+ */
+const AO = 0.2;
+function patBox(B, kit, x, y, z, sx, sy, sz) {
+  const p = kit.pat, M = kit.main;
+  if (!p || p.t === 'plain') { B.box(x, y, z, sx, sy, sz, M); return; }
+  const C = p.c || kit.second, x0 = x - sx / 2, x1 = x + sx / 2, y0 = y - sy / 2, y1 = y + sy / 2, xs = [x0, x1], ys = [y0, y1];
+  const cutX = (v) => { if (v > x0 + 1e-4 && v < x1 - 1e-4) xs.push(v); }, cutY = (v) => { if (v > y0 + 1e-4 && v < y1 - 1e-4) ys.push(v); };
+  let at;
+  switch (p.t) {
+    case 'stripes': { const c = []; for (let i = 0; i < p.n; i++) c.push((i - (p.n - 1) / 2) * p.gap); c.forEach((v) => { cutX(v - p.w / 2); cutX(v + p.w / 2); }); at = (cx) => c.some((v) => Math.abs(cx - v) < p.w / 2); break; }
+    case 'hoops': { for (let v = 0.8 - p.h; v > 0; v -= p.h) cutY(v); at = (cx, cy) => (Math.floor((0.8 - cy) / p.h) % 2 === 1); break; }
+    case 'halves': cutX(0); at = (cx) => cx > 0; break;
+    case 'quarters': cutX(0); at = (cx, cy) => (cx > 0) !== (cy < 0.5); break;
+    case 'band': cutY(p.y0); cutY(p.y1); at = (cx, cy) => cy > p.y0 && cy < p.y1; break;
+    case 'vband': cutX(-p.w / 2); cutX(p.w / 2); at = (cx) => Math.abs(cx) < p.w / 2; break;
+    case 'yoke': cutY(p.y); at = (cx, cy) => cy > p.y; break;
+    case 'sides': cutX(-p.x); cutX(p.x); at = (cx) => Math.abs(cx) > p.x; break;
+    case 'split': at = (cx, cy) => cy < 0.5; break;
+    case 'cross': cutX(p.x - p.w / 2); cutX(p.x + p.w / 2); cutY(p.y0); cutY(p.y1); at = (cx, cy) => Math.abs(cx - p.x) < p.w / 2 || (cy > p.y0 && cy < p.y1); break;
+    default: at = () => false;
+  }
+  xs.sort((a, b) => a - b); ys.sort((a, b) => a - b);
+  const ao = B.ao, v0 = B.n; B.ao = 0;
+  for (let i = 0; i < xs.length - 1; i++) for (let j = 0; j < ys.length - 1; j++) {
+    const ax = xs[i], bx = xs[i + 1], ay = ys[j], by = ys[j + 1];
+    B.box((ax + bx) / 2, (ay + by) / 2, z, bx - ax, by - ay, sz, at((ax + bx) / 2, (ay + by) / 2) ? C : M);
+  }
+  B.ao = ao;
+  for (let v = v0; v < B.n; v++) { const k = 1 - AO * (0.5 - (B.pos[v * 3 + 1] - y) / sy); B.col[v * 3] *= k; B.col[v * 3 + 1] *= k; B.col[v * 3 + 2] *= k; }
+}
+
 const lumOf = (h) => { const c = new THREE.Color(h); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
-/** Колір цифр без плашки: другий колір форми, якщо він помітно контрастує з основним; інакше кремовий чи темний за яскравістю тканини. */
+/** Колір цифр без плашки: kit.num, якщо клуб його задав; інакше другий колір форми, якщо він помітно контрастує з основним; інакше кремовий чи темний за яскравістю тканини. */
 function numInk(kit) {
+  if (kit.num) return kit.num;
   const m = lumOf(kit.main);
   if (kit.second && Math.abs(lumOf(kit.second) - m) > 0.22) return kit.second;
   return m > 0.35 ? '#1a1f26' : '#f4f1e8';

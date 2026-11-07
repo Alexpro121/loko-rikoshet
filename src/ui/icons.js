@@ -1,4 +1,5 @@
 // Прості вбудовані SVG-іконки: без емодзі та зовнішніх файлів.
+import { crestSvg } from '../graphics/crest.js';
 const svg = (body, vb = '0 0 24 24', cls = 'ic') => `<svg class="${cls}" viewBox="${vb}" aria-hidden="true">${body}</svg>`;
 
 export const I = {
@@ -31,6 +32,9 @@ export function crest(kit, label) {
   const a = kit.main, b = kit.second;
   return `<svg class="crest" viewBox="0 0 40 46" aria-hidden="true"><path d="M3 3h34v22c0 9-9 16-17 19C12 41 3 34 3 25z" fill="${a}" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M20 3h17v22c0 9-9 16-17 19z" fill="${b}"/><path d="M3 3h34v22c0 9-9 16-17 19C12 41 3 34 3 25z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/></svg><b class="crest-t">${label}</b>`;
 }
+
+/** Герб суперника: свій герб клубу кар'єри (badge), інакше щит у кольорах форми з ініціалами. */
+export const clubCrest = (club) => (club.badge ? crestSvg(club) : crest(club.kit, club.name.slice(0, 2)));
 
 /** Емблема ФК «Локомотив» Київ (файл з Вікіпедії, public/loko-logo.svg). */
 export function lokoCrest() {

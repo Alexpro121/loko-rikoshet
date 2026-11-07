@@ -9,11 +9,11 @@
 
 - Експорти: CLUB:4, CHRONICLE:15, FACTS:31, LEGENDS:43, ALUMNI:44, HONOURS:46, STADIUM:51, randomFact:61
 
-## src/config.js (232 рядків)
+## src/config.js (295 рядків)
 
 Усі числові константи гри в одному місці.
 
-- Експорти: PITCH:3, PHYS:20, COL:35, KIT_LOKO:42, KITS:44, KIT_GK_LOKO:49, KIT_CLASH:52, kitDist:55, pickKit:60, LEAGUES:74, STAT_KEYS:88, GK_KEYS:89, LINE_OF:90, FORMATIONS:95, CLUB_HAIRS:109, HAIR_GENERIC:117, freshHair:119, hairDeck:121, FIXTURES:127, SEASON_HEAT:138, heatOf:139, matchSpec:142, STRIKERS:166, shotSkill:176, KEEPERS:178, ACADEMY:186, STADIUM_TIERS:210, STADIUM_TIER_NAMES:211, SETTINGS_DEFAULT:213, CAM_PRESETS:225
+- Експорти: PITCH:3, PHYS:20, COL:35, KIT_LOKO:42, KITS:44, KIT_GK_LOKO:49, KIT_CLASH:52, kitDist:55, pickKit:60, LEAGUES:78, STAT_KEYS:151, GK_KEYS:152, LINE_OF:153, FORMATIONS:158, CLUB_HAIRS:172, HAIR_GENERIC:180, freshHair:182, hairDeck:184, FIXTURES:190, SEASON_HEAT:201, heatOf:202, matchSpec:205, STRIKERS:229, shotSkill:239, KEEPERS:241, ACADEMY:249, STADIUM_TIERS:273, STADIUM_TIER_NAMES:274, SETTINGS_DEFAULT:276, CAM_PRESETS:288
 
 ## src/core/audio-bank.js (153 рядків)
 
@@ -94,6 +94,13 @@ CineFX: постобробка кат-сцен (кінофокус) через E
 - **CineFX** :51
   constructor:52, verify:71, resize:82, render:84
 
+## src/graphics/crest.js (76 рядків)
+
+Герб клубу кар'єри: форма щита, поле в кольорах клубу, знак і назва на стрічці. Одні шляхи для SVG (табло, екрани)
+
+- Експорти: crestSvg:46, drawCrest:59
+- Внутрішні функції: build:33
+
 ## src/graphics/gait.js (604 рядків)
 
 Gait: процедурна хода гравця (стопи в світі, ритм, рівновага); викликається з Player.animate.
@@ -124,23 +131,23 @@ Particles: пул частинок без алокацій (голи, удари
 - **Particles** :12
   constructor:13, emit:32, burst:44, update:52, clear:90
 
-## src/graphics/pitch.js (201 рядків)
+## src/graphics/pitch.js (204 рядків)
 
 buildPitch: газон, розмітка, борти, ворота й сітки матчу; OUTLINE — контур арени.
 
-- Експорти: OUTLINE:14, buildPitch:36
-- Внутрішні функції: lineSeg:16, insetPolygon:21
+- Експорти: OUTLINE:15, buildPitch:37
+- Внутрішні функції: lineSeg:17, insetPolygon:22
 
-## src/graphics/player.js (3025 рядків)
+## src/graphics/player.js (3064 рядків)
 
 Player: воксельна модель гравця, усі анімації (Player.animate), IK рук і ніг, пози воротаря.
 
 - Експорти: angDiff:21, GK_STRIKE:60, diveKin:146
-- Внутрішні функції: capQ:50, spring:90, oscS:106, accent:120, jumpPhase:121, atlasMat:165, printMat:175, rigidMats:189, hairBlock:324, headGeo:519, bodyGeo:541, numInk:573
+- Внутрішні функції: capQ:50, spring:90, oscS:106, accent:120, jumpPhase:121, atlasMat:165, printMat:175, rigidMats:189, hairBlock:325, headGeo:520, bodyGeo:542, patBox:580, numInk:611
 - **RigidSkeleton** :203
   update:204
-- **Player** :584
-  constructor:586, setLook:662, useSkin:686, skinGeo:700, setExpr:725, setMode:740, kick:745, volley:754, backLeg:759, dropPose:772, cheer:774, react:786, sad:793, reach:807, engage:809, solveReach:815, poleIK:849, bodyGuard:872, impulse:927, jolt:931, gesture:937, tapBall:946, feint:954, ballHint:956, faceNow:958, control:963, receive:969, chest:975, header:977, block:978, hit:979, emote:984, beaten:989, tackle:997, stumble:1004, downed:1009, stagger:1014, knock:1023, dropRag:1037, slideTackle:1044, kneel:1045, rest:1047, bakeSlide:1049, hug:1051, gkDive:1053, gkSmother:1061, diveReset:1063, setAim:1064, startPDive:1071, planDive:1085, startPKick:1120, jumpC:1122, gkJump:1124, saveSide:1126, gkPunch:1134, gkTip:1136, gkFoot:1138, shinAim:1140, gkShin:1145, gkStar:1151, parry:1156, ballAt:1166, perceive:1180, catchBall:1198, catchMk:1205, gkKnee:1211, gkFall:1213, throwBall:1214, setThreat:1215, fendAt:1217, hipTurn:1226, jostle:1253, rise:1256, animate:1286, groundGuard:2430, diveTakeoff:2452, armGuard:2480, hitbox:2556, handsIK:2589, kickIK:2827, shinIK:2865, shinLat:2893, tackleIK:2899, reachFoot:2911, plantFeet:2939, solveArms:3001
+- **Player** :623
+  constructor:625, setLook:701, useSkin:725, skinGeo:739, setExpr:764, setMode:779, kick:784, volley:793, backLeg:798, dropPose:811, cheer:813, react:825, sad:832, reach:846, engage:848, solveReach:854, poleIK:888, bodyGuard:911, impulse:966, jolt:970, gesture:976, tapBall:985, feint:993, ballHint:995, faceNow:997, control:1002, receive:1008, chest:1014, header:1016, block:1017, hit:1018, emote:1023, beaten:1028, tackle:1036, stumble:1043, downed:1048, stagger:1053, knock:1062, dropRag:1076, slideTackle:1083, kneel:1084, rest:1086, bakeSlide:1088, hug:1090, gkDive:1092, gkSmother:1100, diveReset:1102, setAim:1103, startPDive:1110, planDive:1124, startPKick:1159, jumpC:1161, gkJump:1163, saveSide:1165, gkPunch:1173, gkTip:1175, gkFoot:1177, shinAim:1179, gkShin:1184, gkStar:1190, parry:1195, ballAt:1205, perceive:1219, catchBall:1237, catchMk:1244, gkKnee:1250, gkFall:1252, throwBall:1253, setThreat:1254, fendAt:1256, hipTurn:1265, jostle:1292, rise:1295, animate:1325, groundGuard:2469, diveTakeoff:2491, armGuard:2519, hitbox:2595, handsIK:2628, kickIK:2866, shinIK:2904, shinLat:2932, tackleIK:2938, reachFoot:2950, plantFeet:2978, solveArms:3040
 
 ## src/graphics/ragdoll.js (427 рядків)
 
@@ -330,12 +337,12 @@ Walkout: декорації виходу команд: прапори, кили�
 
 - Експорти: NODES:5, EXPR:6, PER:8, BALL:9, PHASES:11, F:13, captureRef:16, encode:26, decode:57
 
-## src/online/flag.js (358 рядків)
+## src/online/flag.js (373 рядків)
 
 Прапор онлайн-клубу: шари «поле → оздоба → плашка і знак → рамка», малювання в SVG і на canvas з одних шляхів,
 
-- Експорти: FLAG_PATS:80, FLAG_EMB:138, FLAG_PLATES:151, FLAG_OVS:174, FLAG_EDGES:176, flagSvg:212, flagUri:214, drawFlag:216, emblemSvg:227, FLAG_COLS:234, contrast:241, FLAG_STYLES:286, rollColors:295, rollFlag:315, normFlag:340, upgradeFlag:351
-- Внутрішні функції: shapes:181, fitEmblem:302
+- Експорти: FLAG_PATS:80, FLAG_EMB:138, embPaths:153, FLAG_PLATES:166, FLAG_OVS:189, FLAG_EDGES:191, flagSvg:227, flagUri:229, drawFlag:231, emblemSvg:242, FLAG_COLS:249, contrast:256, FLAG_STYLES:301, rollColors:310, rollFlag:330, normFlag:355, upgradeFlag:366
+- Внутрішні функції: shapes:196, fitEmblem:317
 
 ## src/online/guest.js (434 рядків)
 
@@ -483,11 +490,11 @@ Hud: табло матчу, годинник, картка гравця, бан�
 - **Hud** :28
   constructor:29, show:71, hide:88, matchday:95, setScore:127, setTime:139, setProg:158, addedTime:165, scored:172, scoreCard:181, setSignal:201, pauseDim:207, setCoins:209, bump:213, warn:215, hint:221, combo:226, banner:232, goal:244, clearGoal:274, cine:276, setCard:286, clearFloats:297, float:298
 
-## src/ui/icons.js (38 рядків)
+## src/ui/icons.js (42 рядків)
 
 Прості вбудовані SVG-іконки: без емодзі та зовнішніх файлів.
 
-- Експорти: I:4, crest:30, lokoCrest:36
+- Експорти: I:5, crest:31, clubCrest:37, lokoCrest:40
 
 ## src/ui/intro.js (417 рядків)
 

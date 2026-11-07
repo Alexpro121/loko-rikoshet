@@ -13,7 +13,10 @@
 | Швидкість наших гравців | `speed: 9.2` у `Match.start` |
 | Шанс відбору | `tackleChance`, `resolveTackle` |
 | Вплив навичок на удар | `shotSkill` у `src/config.js`, `shotMul`, `kickErr` |
-| Ліги, клуби, форма суперників | `LEAGUES` у `src/config.js` |
+| Ліги, клуби, форма суперників | `LEAGUES` у `src/config.js` (кожен клуб: форма з візерунком, форма воротаря, прапор, герб) |
+| Візерунок форми (смуги, обручі, половини, кокетка, хрест), кант шортів, манжети, смуга гетр | `patBox` і `bodyGeo`, `thighGeo`, `upperGeo`, `shinGeo` у `src/graphics/player.js`; поля `pat`, `strim`, `cuff`, `sband`, `num` у формі клубу |
+| Герб клубу кар'єри | `SHAPE`, `FIELD`, `crestSvg`, `drawCrest` у `src/graphics/crest.js`; поле `badge` клубу; вивід `clubCrest` у `src/ui/icons.js`, емблема на полі `drawOpp` у `src/graphics/pitch.js` |
+| Знаки на гербах і прапорах клубів кар'єри (лелека, журавлі, глечик, молоти) | `CLUB_EMB` у `src/online/flag.js` (поза редактором онлайн-прапора) |
 | Схеми команд | `FORMATIONS` у `src/config.js`; наша схема в кар'єрі: `S.tactic`, запасна `MY_FORMATION` |
 | Нападники й воротарі в трансферах | `STRIKERS`, `KEEPERS` у `src/config.js` |
 | Ціна й дохід стадіону | `src/state/economy.js` |

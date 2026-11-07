@@ -1,5 +1,5 @@
 // Hud: табло матчу, годинник, картка гравця, банери. Методи з HUD_FWD (online/host.js) віддзеркалюються гостю.
-import { I, crest, lokoCrest } from './icons.js';
+import { I, clubCrest, lokoCrest } from './icons.js';
 import { KIT_LOKO } from '../config.js';
 import { esc } from '../online/profile.js';
 
@@ -81,8 +81,8 @@ export class Hud {
     this.meName = H ? H.name : 'Локомотив';
     this.el.querySelector('#h-me-name').textContent = H ? H.short : 'ЛОК';
     this.t.crestMe.innerHTML = H && H.crest ? H.crest : lokoCrest();
-    this.el.style.setProperty('--cb', spec.club.kit.main); this.el.style.setProperty('--cbt', spec.club.kit.main === '#eceff1' || spec.club.kit.main === '#f4f4f1' || spec.club.kit.main === '#e4e8ec' ? '#14231e' : '#fff');
-    this.t.crestOpp.innerHTML = spec.club.crest || crest(spec.club.kit, spec.club.name.slice(0, 2));
+    this.el.style.setProperty('--cb', spec.club.kit.main); this.el.style.setProperty('--cbt', light(spec.club.kit.main) ? '#14231e' : '#fff');
+    this.t.crestOpp.innerHTML = spec.club.crest || clubCrest(spec.club);
     this.last = { time: '', me: -1, opp: -1, coins: -1 };
   }
   hide() { if (this.onHide) this.onHide(); this.cine(false); this.el.hidden = true; this.clearFloats(); this.clearGoal(); this.matchday(null); this.warn(null); this.hint(null); this.t.banner.hidden = true; }

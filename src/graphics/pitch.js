@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PITCH } from '../config.js';
 import { VoxelBuilder, rng } from './voxel.js';
 import { whenLogo } from './logo.js';
+import { drawCrest } from './crest.js';
 import { netTexture, netPlane, grassTexture, ANISO } from './textures.js';
 import { Boards, FRAME_LEN, BOARD_H } from './boards.js';
 
@@ -178,7 +179,9 @@ export function buildPitch() {
   whenLogo((img) => { dMine.g.clearRect(0, 0, 256, 256); const lh = 244, lw = lh * 166 / 180; dMine.g.drawImage(img, 128 - lw / 2, 6, lw, lh); dMine.t.needsUpdate = true; });
   const drawOpp = (club) => {
     const g = dOpp.g, a = club ? club.kit.main : '#254e9c', b2 = club ? club.kit.second : '#e4e8ec', name = club ? String(club.name).slice(0, 2).toUpperCase() : 'ГО';
-    g.clearRect(0, 0, 256, 256); g.save(); g.translate(14, 6); g.scale(5.5, 5.5);
+    g.clearRect(0, 0, 256, 256);
+    if (club && club.badge) { drawCrest(g, club, 18, 3, 5.4); dOpp.t.needsUpdate = true; return; }   // свій герб клубу кар'єри
+    g.save(); g.translate(14, 6); g.scale(5.5, 5.5);
     const p = new Path2D('M3 3h34v22c0 9-9 16-17 19C12 41 3 34 3 25z');
     g.fillStyle = a; g.fill(p); g.save(); g.clip(p); g.fillStyle = b2; g.fillRect(20, 0, 20, 46); g.restore(); g.lineWidth = 2.2; g.strokeStyle = '#fff'; g.stroke(p);
     g.restore(); g.fillStyle = '#fff'; g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 8; g.font = '800 86px Rubik, "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';

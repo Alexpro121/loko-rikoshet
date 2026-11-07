@@ -4,7 +4,7 @@ import { LEAGUES, FIXTURES, STRIKERS, KEEPERS, ACADEMY, STADIUM_TIERS, STADIUM_T
 import { stadiumCost, INCOME_STEP, incomePct, incomeMult, stadiumTier, nextTierLevel, pendingCash, keepCash, cashRate, CASH_CAP_MIN, rollGraduate, fmt } from '../state/economy.js';
 import { audio, vibrate } from '../core/audio.js';
 import { appHidden, inTelegram } from '../core/telegram.js';
-import { I, crest, lokoCrest } from './icons.js';
+import { I, clubCrest, lokoCrest } from './icons.js';
 import { VOX } from './vox.js';
 import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact } from '../club.js';
 import { Hud, fitText } from './hud.js';
@@ -938,7 +938,7 @@ export class UI {
     const next = FIXTURES[S.fixture];
     this.renderResult({
       outcome: r.outcome, title: win ? 'ПЕРЕМОГА!' : draw ? 'НІЧИЯ' : 'ПОРАЗКА', tag: spec.leagueName + ' · матч ' + spec.no + ' з ' + spec.of,
-      me: { name: 'Локомотив', crest: lokoCrest() }, opp: { name: spec.club.name, crest: crest(spec.club.kit, spec.club.name.slice(0, 2)) },
+      me: { name: 'Локомотив', crest: lokoCrest() }, opp: { name: spec.club.name, crest: clubCrest(spec.club) },
       score: [r.me, r.opp], pens: r.pens, scorers: r.scorers, chips: extras, fact: 'Чи знаєш? ' + randomFact(),
       head: 'Каса матчу', lines: r.lines.map((l) => ({ label: l.label, value: l.value, coin: true })), total: r.total,
       buttons: [win ? ['go', 'result-next', `ДАЛІ: ${next.club.name}`, I.play] : ['go', 'result-retry', 'РЕВАНШ', I.play], ['alt', 'result-menu', 'В МЕНЮ']],

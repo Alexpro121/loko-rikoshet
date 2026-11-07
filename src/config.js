@@ -64,24 +64,87 @@ export function pickKit(kit, oppKit, alts = []) {
   return best;
 }
 
-const club = (name, city, a, b, gk) => ({
-  name, city,
-  kit: { main: a, second: b, shorts: b, socks: a, plate: '#f1efe8', numInk: '#1f2933', ink: 'dark' },
-  gk: { main: gk, second: '#1f2933', shorts: '#1f2933', socks: gk, plate: '#1f2933', numInk: '#f1efe8', ink: 'light' },
-});
+/**
+ * Клуб кар'єри: форма, форма воротаря, прапор на стадіоні й герб. Форма: main, second, pat (візерунок тулуба, patBox у
+ * src/graphics/player.js), sleeve, cuff (манжета), collar, shorts, strim (кант шортів), socks, sband (смуга гетр), num (колір номера).
+ * Прапор у форматі онлайн-прапора (src/online/flag.js): візерунок, кольори [поле, візерунок, оздоба, знак, плашка], знак.
+ * Герб (src/graphics/crest.js): форма щита sh, поле f, кольори [поле, поле 2, знак, обід і стрічка, текст, поле 3], знак, назва.
+ */
+const club = (name, city, kit, gk, flag, badge) => ({ name, city, kit, gk, flag, badge });
+const gkKit = (main, second = '#1f2933') => ({ main, second, shorts: second, socks: main });
+const flag = (pat, c, em = 'none', o = {}) => ({ pat, c: [c[0], c[1], c[2] || c[1], c[3] || c[1], c[4] || c[0]], em, pl: 'none', ov: 'none', edge: 'thin', pos: 4, sz: 100, rot: 0, rep: 1, flip: 0, ...o });
 
 // Ліги: що вище, то щільніший пресинг, швидші гравці й краща розстановка суперника.
 export const LEAGUES = [
   { id: 'l2', name: 'Друга ліга', short: '2', formation: '442', note: '',
-    clubs: [club('ЛЕЛЕКИ', 'Вербогір', '#8fc3dc', '#f1efe8', '#9fbf3a'), club('ГОНЧАРІ', 'Глинополь', '#d9b02a', '#23272b', '#d86a8a'), club('ЖУРАВЛІ', 'Журавлин', '#8d98a3', '#1f2933', '#9fbf3a')] },
+    clubs: [
+      club('ЛЕЛЕКИ', 'Вербогір', { main: '#f2f0ea', second: '#1d2126', pat: { t: 'yoke', y: 0.735 }, sleeve: '#1d2126', cuff: '#d9462b', collar: '#d9462b', shorts: '#1d2126', strim: '#f2f0ea', socks: '#d9462b', sband: '#f2f0ea', num: '#d9462b' },
+        gkKit('#8fc3dc', '#1d2126'), flag('band', ['#8fc3dc', '#f2f0ea', '#d9462b', '#1d2126'], 'stork', { edge: 'white' }),
+        { sh: 'round', f: 'plain', c: ['#8fc3dc', '#8fc3dc', '#1d2126', '#f2f0ea', '#1d2126'], em: 'stork', tx: 'ЛЕЛЕКИ', at: 'ribbon' }),
+      club('ГОНЧАРІ', 'Глинополь', { main: '#b8693a', second: '#1e1a17', pat: { t: 'band', y0: 0.555, y1: 0.7 }, sleeve: '#b8693a', cuff: '#1e1a17', collar: '#1e1a17', shorts: '#1e1a17', strim: '#b8693a', socks: '#1e1a17', sband: '#b8693a', num: '#efe2c8' },
+        gkKit('#2f8f83', '#1e1a17'), flag('band', ['#b8693a', '#1e1a17', '#efe2c8', '#efe2c8'], 'pot', { edge: 'none' }),
+        { sh: 'shield', f: 'chief', c: ['#b8693a', '#1e1a17', '#efe2c8', '#efe2c8', '#efe2c8'], em: 'pot', tx: 'ГОНЧАРІ', at: 'chief' }),
+      club('ЖУРАВЛІ', 'Журавлин', { main: '#9aa5ae', second: '#1f2933', pat: { t: 'sides', x: 0.19 }, sleeve: '#1f2933', cuff: '#c8323c', collar: '#c8323c', shorts: '#1f2933', strim: '#c8323c', socks: '#9aa5ae', sband: '#1f2933', num: '#1f2933' },
+        gkKit('#9fbf3a'), flag('pale', ['#9aa5ae', '#1f2933', '#c8323c', '#f2f0ea'], 'crane'),
+        { sh: 'hex', f: 'plain', c: ['#9aa5ae', '#9aa5ae', '#1f2933', '#1f2933', '#f2f0ea'], em: 'crane', tx: 'ЖУРАВЛІ', at: 'ribbon' }),
+    ] },
   { id: 'l1', name: 'Перша ліга', short: '1', formation: '433', note: 'Суперник тисне вище',
-    clubs: [club('БУРЕВІЙ', 'Золотополе', '#dcc12c', '#1f4fa8', '#d86a8a'), club('ПРИБІЙ', 'Мореград', '#254e9c', '#e4e8ec', '#9fbf3a'), club('СМЕРЕКА', 'Верхоліс', '#eceff1', '#237a3f', '#d86a8a')] },
+    clubs: [
+      club('БУРЕВІЙ', 'Золотополе', { main: '#e3c22b', second: '#1f4fa8', pat: { t: 'halves' }, sleeve: '#1f4fa8', cuff: '#e3c22b', collar: '#1f4fa8', shorts: '#1f4fa8', strim: '#e3c22b', socks: '#e3c22b', sband: '#1f4fa8', num: '#f6f4ec' },
+        gkKit('#d86a8a'), flag('v2', ['#e3c22b', '#1f4fa8', '#f6f4ec', '#f6f4ec'], 'bolt', { sz: 90, edge: 'white' }),
+        { sh: 'spade', f: 'halves', c: ['#e3c22b', '#1f4fa8', '#f6f4ec', '#f6f4ec', '#1f4fa8'], em: 'bolt', tx: 'БУРЕВІЙ', at: 'ribbon' }),
+      club('ПРИБІЙ', 'Мореград', { main: '#254e9c', second: '#e9edf1', pat: { t: 'hoops', h: 0.06 }, sleeve: '#254e9c', cuff: '#e9edf1', collar: '#e9edf1', shorts: '#e9edf1', strim: '#254e9c', socks: '#254e9c', sband: '#e9edf1', num: '#f2c230' },
+        gkKit('#ff8c1a'), flag('sea', ['#254e9c', '#e9edf1', '#3cb7c4', '#e9edf1'], 'anchor', { pos: 1, sz: 70, edge: 'white' }),
+        { sh: 'round', f: 'waves', c: ['#254e9c', '#3cb7c4', '#e9edf1', '#e9edf1', '#254e9c', '#e9edf1'], em: 'anchor', at: '' }),
+      club('СМЕРЕКА', 'Верхоліс', { main: '#1f6b3a', second: '#eef0ea', pat: { t: 'vband', w: 0.32 }, sleeve: '#1f6b3a', cuff: '#eef0ea', collar: '#eef0ea', shorts: '#eef0ea', strim: '#1f6b3a', socks: '#1f6b3a', sband: '#eef0ea', num: '#1f6b3a' },
+        gkKit('#d86a8a'), flag('border', ['#eef0ea', '#1f6b3a', '#1f6b3a', '#1f6b3a'], 'pine', { edge: 'none' }),
+        { sh: 'shield', f: 'plain', c: ['#eef0ea', '#eef0ea', '#1f6b3a', '#1f6b3a', '#eef0ea'], em: 'pine', tx: 'СМЕРЕКА', at: 'ribbon' }),
+    ] },
   { id: 'upl', name: 'Вища ліга', short: 'В', formation: '4231', note: 'Швидкі фланги й кращі воротарі',
-    clubs: [club('ТЕРИКОН', 'Рудоград', '#3a4048', '#eceff1', '#9fbf3a'), club('БАСТІОН', 'Кам’яноград', '#eceff1', '#6a3fa0', '#d98a3a'), club('ГОРНИЛО', 'Вогнеград', '#e0762a', '#2a2f6b', '#9fbf3a')] },
+    clubs: [
+      club('ТЕРИКОН', 'Рудоград', { main: '#2f343b', second: '#f08a24', pat: { t: 'band', y0: 0.6, y1: 0.66 }, sleeve: '#2f343b', cuff: '#f08a24', collar: '#f08a24', shorts: '#2f343b', strim: '#f08a24', socks: '#2f343b', sband: '#f08a24', num: '#eef0f2' },
+        gkKit('#9fbf3a'), flag('peak', ['#2f343b', '#f08a24', '#5a6068', '#f08a24'], 'hammers', { pos: 1, sz: 60 }),
+        { sh: 'hex', f: 'plain', c: ['#2f343b', '#2f343b', '#f08a24', '#f08a24', '#2f343b'], em: 'hammers', tx: 'ТЕРИКОН', at: 'ribbon' }),
+      club('БАСТІОН', 'Кам’яноград', { main: '#eceae4', second: '#6a3fa0', pat: { t: 'stripes', n: 2, gap: 0.21, w: 0.1 }, sleeve: '#6a3fa0', cuff: '#eceae4', collar: '#6a3fa0', shorts: '#6a3fa0', strim: '#eceae4', socks: '#eceae4', sband: '#6a3fa0', num: '#e8b923' },
+        gkKit('#d98a3a'), flag('pale', ['#eceae4', '#6a3fa0', '#e8b923', '#eceae4'], 'tower'),
+        { sh: 'tower', f: 'chief', c: ['#eceae4', '#6a3fa0', '#6a3fa0', '#6a3fa0', '#eceae4'], em: 'tower', tx: 'БАСТІОН', at: 'chief' }),
+      club('ГОРНИЛО', 'Вогнеград', { main: '#e0762a', second: '#2a2f6b', pat: { t: 'hoops', h: 0.12 }, sleeve: '#2a2f6b', cuff: '#e0762a', collar: '#2a2f6b', shorts: '#2a2f6b', strim: '#e0762a', socks: '#e0762a', sband: '#2a2f6b', num: '#ffffff' },
+        gkKit('#9fbf3a'), flag('zig', ['#2a2f6b', '#e0762a', '#f2c230', '#f2c230'], 'flame', { pos: 1, sz: 65 }),
+        { sh: 'spade', f: 'plain', c: ['#2a2f6b', '#2a2f6b', '#e0762a', '#e0762a', '#2a2f6b'], em: 'flame', tx: 'ГОРНИЛО', at: 'ribbon' }),
+    ] },
   { id: 'ucl', name: 'Ліга чемпіонів', short: 'ЛЧ', formation: '433', note: 'Високий тиск і швидкі контратаки',
-    clubs: [club('ВАЛЬДОРА', 'Вальдора', '#3b2a5c', '#e8b923', '#9fbf3a'), club('НОРДГАЙМ', 'Нордгайм', '#eceff1', '#1c2b4a', '#e0a81c'), club('ТОРРЕМАР', 'Торремар', '#f4f4f1', '#c6a02a', '#d86a8a'), club('ГРЕЙВЕЛЛ', 'Грейвелл', '#2f8f8a', '#12294d', '#e0a81c'), club('ЛІНДЕНБУРГ', 'Лінденбург', '#1c3f94', '#d9e021', '#d86a8a')] },
+    clubs: [
+      club('ВАЛЬДОРА', 'Вальдора', { main: '#3b2a5c', second: '#e8b923', pat: { t: 'stripes', n: 2, gap: 0.3, w: 0.035 }, sleeve: '#3b2a5c', cuff: '#e8b923', collar: '#e8b923', shorts: '#3b2a5c', strim: '#e8b923', socks: '#3b2a5c', sband: '#e8b923', num: '#e8b923' },
+        gkKit('#9fbf3a'), flag('border', ['#3b2a5c', '#e8b923', '#e8b923', '#e8b923'], 'crown', { edge: 'gold' }),
+        { sh: 'shield', f: 'plain', c: ['#3b2a5c', '#3b2a5c', '#e8b923', '#e8b923', '#3b2a5c'], em: 'crown', tx: 'ВАЛЬДОРА', at: 'ribbon' }),
+      club('НОРДГАЙМ', 'Нордгайм', { main: '#eef0f2', second: '#1c2b4a', pat: { t: 'cross', x: -0.1, w: 0.07, y0: 0.6, y1: 0.67 }, sleeve: '#1c2b4a', cuff: '#eef0f2', collar: '#1c2b4a', shorts: '#1c2b4a', strim: '#eef0f2', socks: '#eef0f2', sband: '#1c2b4a', num: '#c8323c' },
+        gkKit('#ff8c1a'), flag('bend', ['#1c2b4a', '#eef0f2', '#5ea3c9', '#eef0f2'], 'axe', { pos: 2, sz: 60 }),
+        { sh: 'shield', f: 'nordic', c: ['#1c2b4a', '#eef0f2', '#eef0f2', '#eef0f2', '#1c2b4a', '#5ea3c9'], em: 'none', tx: 'НОРДГАЙМ', at: 'ribbon' }),
+      club('ТОРРЕМАР', 'Торремар', { main: '#f6f5f0', second: '#c6a02a', pat: { t: 'sides', x: 0.2 }, sleeve: '#f6f5f0', cuff: '#c6a02a', collar: '#c6a02a', shorts: '#f6f5f0', strim: '#c6a02a', socks: '#f6f5f0', sband: '#c6a02a', num: '#1c3f6e' },
+        gkKit('#d86a8a'), flag('sea', ['#f6f5f0', '#1c3f6e', '#2a7fb8', '#c6a02a'], 'tower', { pos: 1, sz: 65 }),
+        { sh: 'round', f: 'waves', c: ['#f6f5f0', '#1c3f6e', '#c6a02a', '#c6a02a', '#1c3f6e', '#2a7fb8'], em: 'tower', at: '' }),
+      club('ГРЕЙВЕЛЛ', 'Грейвелл', { main: '#2f8f8a', second: '#12294d', pat: { t: 'quarters' }, sleeve: '#12294d', cuff: '#2f8f8a', collar: '#f2f0ea', shorts: '#f2f0ea', strim: '#12294d', socks: '#12294d', sband: '#2f8f8a', num: '#f2f0ea' },
+        gkKit('#ff8c1a'), flag('quad', ['#2f8f8a', '#12294d', '#f2f0ea', '#12294d', '#f2f0ea'], 'stag', { pl: 'disc' }),
+        { sh: 'shield', f: 'quarters', c: ['#2f8f8a', '#12294d', '#f2f0ea', '#f2f0ea', '#12294d'], em: 'stag', tx: 'ГРЕЙВЕЛЛ', at: 'ribbon' }),
+      club('ЛІНДЕНБУРГ', 'Лінденбург', { main: '#1c3f94', second: '#d9e021', pat: { t: 'yoke', y: 0.735 }, sleeve: '#1c3f94', cuff: '#d9e021', collar: '#d9e021', shorts: '#1c3f94', strim: '#d9e021', socks: '#d9e021', sband: '#1c3f94', num: '#d9e021' },
+        gkKit('#d86a8a'), flag('v3', ['#1c3f94', '#d9e021', '#1c3f94', '#d9e021'], 'horse', { pos: 3, sz: 70 }),
+        { sh: 'spade', f: 'plain', c: ['#1c3f94', '#1c3f94', '#d9e021', '#d9e021', '#1c3f94'], em: 'horse', tx: 'ЛІНДЕНБУРГ', at: 'ribbon' }),
+    ] },
   { id: 'wc', name: 'Чемпіонат світу', short: 'ЧС', formation: '4231', note: 'Найсильніші клуби світу', cup: 'Кубок світу',
-    clubs: [club('ЗАМБАРА', 'Замбара', '#7b2cbf', '#f4d35e', '#9fbf3a'), club('АСАГАО', 'Асагао', '#f4f4f1', '#c2185b', '#e0a81c'), club('ОРІЛЬЯ', 'Санта-Орілья', '#f2c14e', '#0b5d8f', '#d86a8a'), club('ЛЕЙКВЮ', 'Лейквю', '#101820', '#00b4d8', '#9fbf3a')] },
+    clubs: [
+      club('ЗАМБАРА', 'Замбара', { main: '#7b2cbf', second: '#f4d35e', pat: { t: 'split' }, sleeve: '#7b2cbf', cuff: '#f4d35e', collar: '#f4d35e', shorts: '#1a1424', strim: '#f4d35e', socks: '#f4d35e', sband: '#7b2cbf', num: '#f4d35e' },
+        gkKit('#9fbf3a'), flag('chev', ['#7b2cbf', '#f4d35e', '#1a1424', '#f4d35e'], 'sun', { pos: 5, sz: 70 }),
+        { sh: 'round', f: 'plain', c: ['#7b2cbf', '#7b2cbf', '#f4d35e', '#f4d35e', '#7b2cbf'], em: 'sun', tx: 'ЗАМБАРА', at: 'ribbon' }),
+      club('АСАГАО', 'Асагао', { main: '#f6f5f0', second: '#c2185b', pat: { t: 'band', y0: 0.705, y1: 0.745 }, sleeve: '#c2185b', cuff: '#f6f5f0', collar: '#c2185b', shorts: '#f6f5f0', strim: '#c2185b', socks: '#c2185b', sband: '#f6f5f0', num: '#1a1f26' },
+        gkKit('#9fbf3a', '#1a1f26'), flag('pile', ['#c2185b', '#f6f5f0', '#1a1f26', '#f6f5f0'], 'star8', { pos: 5, sz: 60 }),
+        { sh: 'round', f: 'plain', c: ['#f6f5f0', '#f6f5f0', '#c2185b', '#c2185b', '#f6f5f0'], em: 'star8', tx: 'АСАГАО', at: 'ribbon' }),
+      club('ОРІЛЬЯ', 'Санта-Орілья', { main: '#f2c14e', second: '#0b5d8f', sleeve: '#f2c14e', cuff: '#1f8f4f', collar: '#1f8f4f', shorts: '#0b5d8f', strim: '#f6f5f0', socks: '#f6f5f0', sband: '#1f8f4f', num: '#0b5d8f' },
+        gkKit('#d86a8a'), flag('swoop', ['#0b5d8f', '#f2c14e', '#1f8f4f', '#f6f5f0'], 'eagle', { pos: 1, sz: 65 }),
+        { sh: 'shield', f: 'chief', c: ['#f2c14e', '#0b5d8f', '#0b5d8f', '#0b5d8f', '#f2c14e'], em: 'eagle', tx: 'ОРІЛЬЯ', at: 'chief' }),
+      club('ЛЕЙКВЮ', 'Лейквю', { main: '#101820', second: '#00b4d8', pat: { t: 'stripes', n: 5, gap: 0.1, w: 0.018 }, sleeve: '#101820', cuff: '#00b4d8', collar: '#00b4d8', shorts: '#101820', strim: '#00b4d8', socks: '#101820', sband: '#00b4d8', num: '#eef0f2' },
+        gkKit('#9fbf3a', '#101820'), flag('wave', ['#101820', '#00b4d8', '#eef0f2', '#eef0f2'], 'peak', { pos: 1, sz: 55 }),
+        { sh: 'hex', f: 'waves', c: ['#101820', '#00b4d8', '#eef0f2', '#00b4d8', '#101820', '#0a7fa0'], em: 'peak', at: '' }),
+    ] },
 ];
 
 /** Навички польового гравця й воротаря, лінія кожної ролі. */
