@@ -1,0 +1,25 @@
+/* Пак-потяг (src/ui/packtrain.js): шар у хості (#reveal онлайн-хабу), 3D-канва на весь шар, віньєтка й спалах легенди. Класи з префіксом pt-. */
+.pt { position: absolute; inset: 0; z-index: 4; overflow: hidden; background: #050d14; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.pt-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pt-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 55%, rgba(0, 0, 0, .55)); }
+.pt-flash { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(ellipse 60% 55% at 50% 52%, #fffbe8, #ffe08a 45%, #f0b51f); }
+/* блок параметрів героя: праворуч, герой у кадрі зсунутий ліворуч; поява зсувом, смужки навичок наповнюються по черзі */
+.pt-card { position: absolute; right: max(4%, var(--pad-r, 0px) + 12px); top: 56%; width: min(38%, 440px); box-sizing: border-box; padding: clamp(12px, 2.2vh, 22px) clamp(14px, 2.4vw, 26px); border-radius: 18px; color: #f4f6f2;
+  font-family: Rubik, system-ui, sans-serif; background: linear-gradient(160deg, rgba(14, 26, 33, .9), rgba(6, 13, 18, .86)); border: 2px solid color-mix(in srgb, var(--rc) 70%, transparent);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .05) inset, 0 18px 50px rgba(0, 0, 0, .55), 0 0 40px color-mix(in srgb, var(--rc) 28%, transparent); opacity: 0; transform: translate(40px, -50%); transition: opacity .45s ease, transform .55s cubic-bezier(.2, .8, .2, 1); pointer-events: none; }
+.pt-card.in { opacity: 1; transform: translate(0, -50%); }
+.pt-card.now, .pt-card.now * { transition: none !important; }
+.pt-card::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 5px; border-radius: 0 4px 4px 0; background: var(--rc); }
+.pt-card-h { display: flex; align-items: center; gap: clamp(10px, 1.6vw, 18px); }
+.pt-ovr { flex: none; display: grid; place-items: center; width: clamp(54px, 9vh, 80px); aspect-ratio: 1; border-radius: 14px; font-size: clamp(26px, 5vh, 42px); font-weight: 800; color: #0b1216; background: var(--rc); box-shadow: 0 0 22px color-mix(in srgb, var(--rc) 55%, transparent); }
+.pt-card-h small { display: block; font-size: clamp(10px, 1.7vh, 13px); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--rc); }
+.pt-card-h h3 { margin: 2px 0 1px; font-size: clamp(17px, 3.4vh, 27px); font-weight: 800; line-height: 1.05; }
+.pt-card-h span { font-size: clamp(11px, 1.9vh, 14px); font-weight: 600; color: #a9bdb4; }
+.pt-stats { list-style: none; margin: clamp(10px, 2vh, 16px) 0 0; padding: 0; display: grid; gap: clamp(5px, 1.1vh, 9px); }
+.pt-stats li { display: grid; grid-template-columns: 7.2em 1fr 2.2em; align-items: center; gap: 10px; font-size: clamp(11px, 1.9vh, 14px); font-weight: 600; color: #cfdcd6; }
+.pt-stats i { position: relative; height: 8px; border-radius: 6px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.pt-stats u { position: absolute; inset: 0; border-radius: 6px; background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 60%, #fff), var(--rc)); transform-origin: 0 50%; transform: scaleX(0); transition: transform .7s cubic-bezier(.2, .8, .2, 1) calc(.25s + var(--i) * .08s); }
+.pt-card.in .pt-stats u { transform: scaleX(var(--v)); }
+.pt-stats b { text-align: right; font-weight: 800; color: #fff; }
+.pt-trait { margin: clamp(9px, 1.8vh, 14px) 0 0; font-size: clamp(11px, 1.8vh, 13px); font-weight: 600; color: #a9bdb4; }
+.pt-trait b { color: var(--rc); font-weight: 800; margin-right: 4px; }

@@ -10,6 +10,7 @@ import { CLUB, CHRONICLE, LEGENDS, ALUMNI, HONOURS, STADIUM, FACTS, randomFact }
 import { Hud, fitText } from './hud.js';
 import { MapHud } from './minimap.js';
 import { playIntro } from './intro.js';
+import { trainBack, trainCovers } from './packtrain.js';
 import { splashHtml, runSplash } from './splash.js';
 import { portrait } from './portrait.js';
 import { ensureSquad, oppSquad, allPlayers, swapPlayers, swapStarters, setTactic, bestLine, CAREER_FORMS, ovr, tierOf, keysFor, STAT_NAMES, STAT_HINT, ROLE_UA, trainCost, trainStat, xpNeed, squadRating, signGraduate, squadLook, myKit, matchKit, lookSig, customizeLook, resetLook } from '../state/squad.js';
@@ -181,6 +182,7 @@ export class UI {
 
   /** Крок «назад»: Esc на клавіатурі й кнопка «назад» у Telegram. Спершу закривається верхнє вікно, а вже потім пауза чи панель. */
   goBack() {
+    if (trainBack()) return;                                         // пак-потяг: «назад» пропускає анімацію
     if (this.joyEdit) this.act('joy-done');
     else if (this.map.editing) this.act('map-done');
     else if (!this.el.reveal.hidden) this.act('close-reveal');
@@ -191,7 +193,7 @@ export class UI {
     else if (this.panel) this.closePanel();
   }
   canGoBack() {
-    return !!(this.joyEdit || this.map.editing || !this.el.reveal.hidden || !this.el.settings.hidden || !this.el.custom.hidden || this.game.sm.name === 'MATCH' || this.panel);
+    return !!(trainCovers() || this.joyEdit || this.map.editing || !this.el.reveal.hidden || !this.el.settings.hidden || !this.el.custom.hidden || this.game.sm.name === 'MATCH' || this.panel);
   }
 
   /** Ховає екран ЛОКО РАШ. Другий дотик подвійного тапу влучив би в заставку (пропустив її) або в меню, тому півсекунди кліки не проходять. */
@@ -606,6 +608,7 @@ export class UI {
   }
   /** Панель закрила весь екран: острів за нею не видно, тож малювати його нема потреби. */
   panelCovers() {
+    if (trainCovers()) return true;                                  // пак-потяг закрив екран
     if (this.panel === 'online') return !(this.game && this.game.splash && this.game.splash.hub);   // хаб на стадіоні: стадіон малюється; без нього тло суцільне
     return !!this.panel && this.el.panel.classList.contains('full') && LOW_SCREEN.matches;
   }

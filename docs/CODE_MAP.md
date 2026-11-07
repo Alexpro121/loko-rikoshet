@@ -24,6 +24,13 @@
 - **Bank** :28
   constructor:29, has:43, count:44, load:47, loadAll:66, fetchBuf:75, prepare:86, take:96, swap:108, pick:120
 
+## src/core/audio-train.js (158 рядків)
+
+Звуки паку-потяга (src/ui/packtrain.js): гул і перестук коліс за швидкістю, гудок, гальма, повітря, двері, табло, акорди рідкості.
+
+- **TrainSound** :7
+  constructor:9, rel:29, at:30, rumble:33, panTo:40, clack:43, hold:51, horn:63, squeal:69, sparks:85, air:91, door:97, clank:105, thud:113, flap:115, step:120, chord:123, silence:143, stop:150
+
 ## src/core/audio.js (645 рядків)
 
 AudioEngine: гібрид. Натовп, удар, свисток, сітка, стовп, рукавиці це справжні записи (audio-bank.js), тонкі шари, інтерфейс
@@ -236,6 +243,12 @@ Weather: дощ і сніг на InstancedMesh.
 Сторінка прослуховування (sound.html): кнопка на кожен звук, старий/новий, сцена «хвилина матчу» й заміри через
 
 - Внутрішні функції: ensureCtx:27, makeEngines:37, buildPhone:44, setPhone:53, trigger:118, stopAll:126, playScene:133, stopOldMusic:141, playOldMusic:142, fft:150, analyse:152, render:161, measure:179, measureScene:188, loopSeam:197, row:211, build:233
+
+## src/lab/train.js (66 рядків)
+
+Сторінка перевірки пака-потяга (train.html): кнопки пака, рідкості, затримки відповіді й помилки. Не вкладка з грою: Match і
+
+- Внутрішні функції: ui:19, roll:33, go:40
 
 ## src/main.js (39 рядків)
 
@@ -512,6 +525,21 @@ DemoMatch: маленька гра для зразка мінімапи в на�
 - **MapHud** :273
   constructor:274, apply:294, setKits:306, applyAlpha:312, layout:318, compute:328, planHtml:357, refreshPlan:373, animatePlan:379, placeJoyZone:387, update:397, ballCheck:412, pauseCheck:421, bindPreview:432, fitPreview:440, place:445, resetPlace:446, setEdit:448, syncBar:454, initDrag:459
 
+## src/ui/packtrain.css (25 рядків)
+
+Пак-потяг (src/ui/packtrain.js): шар у хості (#reveal онлайн-хабу), 3D-канва на весь шар, віньєтка й спалах легенди. Класи з префіксом pt-.
+
+- Розділи: Пак-потяг (src/ui/packtrain.js): шар у хості (#reveal онлайн-хабу), 3D-канва на весь шар, віньєтка й спалах легенди. Класи з префіксом pt-.:1 · блок параметрів героя: праворуч, герой у кадрі зсунутий ліворуч; поява зсувом, смужки навичок наповнюються по черзі:6
+
+## src/ui/packtrain.js (761 рядків)
+
+openTrain: відкриття пака героїв — 3D-сцена на нічному пероні. Потяг ЛОКО (тепловоз у барвах герба) везе 20 критих вагонів
+
+- Експорти: trainMix:161, trainBack:172, trainCovers:174, openTrain:181
+- Внутрішні функції: paint:44, box:50, prismZ:52, prismX:54, wheel:55, quad:57, carGeo:62, locoGeo:97, canvasTex:115, cardHtml:149
+- **Train** :191
+  constructor:192, go:215, build:223, station:273, board:310, fit:331, addMail:340, at:350, now:351, ms:352, simulate:359, look:400, bodyX:406, bodyV:407, bodyTh:408, noseX:409, pose:411, place:419, feed:433, clacks:444, got:457, consist:485, carBase:526, extras:528, prepHero:562, sparksInit:575, sparks:582, tween:599, frame:600, stopAt:629, flapTo:660, heroOut:669, walk:676, showCard:688, skipNow:697, final:703, heroRect:718, end:727, fail:733, close:741, kill:748
+
 ## src/ui/portrait.js (134 рядків)
 
 portrait: рендерить 3D-модель гравця один раз у PNG для карток.
@@ -535,13 +563,13 @@ Tactics: екран складу для кар'єри й онлайн-клубу
 - **Tactics** :17
   constructor:18, reset:20, pos:21, token:26, formsHtml:30, popHtml:32, swapHtml:36, ttSig:41, ttHtml:42, html:46, afterRender:64, fill:71, patch:80, act:97
 
-## src/ui/ui.js (1004 рядків)
+## src/ui/ui.js (1007 рядків)
 
 UI: меню, панелі, пауза, налаштування, результат, джойстик. Кнопки: data-act -> UI.act.
 
-- Внутрішні функції: countTo:28, redraw:49
-- **UI** :55
-  constructor:56, onResize:155, key:166, goBack:183, canGoBack:193, hideSplash:198, skipToRoom:211, splashReady:218, isIOS:233, isStandalone:234, iosHint:235, useJoy:243, setMatchUi:247, applyControls:248, joyCenter:267, placeJoy:272, initJoy:277, act:325, kitNote:392, setJoyEdit:398, editDone:404, menuTap:410, toast:419, setSlow:424, flash:425, showMenu:431, tiltNav:442, rollFlaps:454, hideMenu:471, leagueStrip:478, refresh:493, menuCards:510, fitFlaps:551, clock:560, tickCash:565, claimCash:573, deny:581, pop:582, buyStadium:584, openPanel:595, panelCovers:608, leaveHub:613, closePanel:614, renderPanel:622, showTier:640, statBar:646, teamSheet:649, careerLook:661, careerDetail:662, squadHtml:675, train:694, transfersHtml:702, academyHtml:719, stadiumHtml:734, chronicleHtml:752, symbolsHtml:762, buy:773, equip:782, collectGraduate:788, boostAcademy:808, openCustom:818, closeCustom:821, customAct:822, renderCustom:839, openSettings:862, closeSettings:865, renderSettings:866, pause:909, showResult:925, renderResult:954, hideResult:1003
+- Внутрішні функції: countTo:29, redraw:50
+- **UI** :56
+  constructor:57, onResize:156, key:167, goBack:184, canGoBack:195, hideSplash:200, skipToRoom:213, splashReady:220, isIOS:235, isStandalone:236, iosHint:237, useJoy:245, setMatchUi:249, applyControls:250, joyCenter:269, placeJoy:274, initJoy:279, act:327, kitNote:394, setJoyEdit:400, editDone:406, menuTap:412, toast:421, setSlow:426, flash:427, showMenu:433, tiltNav:444, rollFlaps:456, hideMenu:473, leagueStrip:480, refresh:495, menuCards:512, fitFlaps:553, clock:562, tickCash:567, claimCash:575, deny:583, pop:584, buyStadium:586, openPanel:597, panelCovers:610, leaveHub:616, closePanel:617, renderPanel:625, showTier:643, statBar:649, teamSheet:652, careerLook:664, careerDetail:665, squadHtml:678, train:697, transfersHtml:705, academyHtml:722, stadiumHtml:737, chronicleHtml:755, symbolsHtml:765, buy:776, equip:785, collectGraduate:791, boostAcademy:811, openCustom:821, closeCustom:824, customAct:825, renderCustom:842, openSettings:865, closeSettings:868, renderSettings:869, pause:912, showResult:928, renderResult:957, hideResult:1006
 
 ## src/ui/vox.js (292 рядків)
 
