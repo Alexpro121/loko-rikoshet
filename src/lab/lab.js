@@ -444,7 +444,7 @@ function renderPanel() {
   panel.append(h('h2', { textContent: 'Гравець' }));
   panel.append(row('Форма', select('kit', KIT_LIST.map((k) => [k[0], k[1]]), relook)));
   panel.append(row('Номер', range('num', 1, 99, 1, relook)));
-  panel.append(row('Зачіска', select('hair', ACADEMY.allHairs.map((x) => [x, ({ crop: 'Коротка', buzz: 'Їжачок', slick: 'Зачесана', curly: 'Кучері', pony: 'Хвіст', long: 'Довга', mohawk: 'Ірокез', band: 'Пов’язка', bald: 'Лиса' })[x]]), relook)));
+  panel.append(row('Зачіска', select('hair', ACADEMY.allHairs.map((x) => [x, ACADEMY.hairNames[x]]), relook)));
   panel.append(row('Волосся', swatches('hairCol', ACADEMY.allHairCols, relook)));
   panel.append(row('Шкіра', swatches('skin', ACADEMY.allSkins, relook)));
   panel.append(row('Борода', select('beard', [[0, 'Немає'], [1, 'Щетина'], [2, 'Вуса'], [3, 'Борода']], relook)));

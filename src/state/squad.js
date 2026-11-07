@@ -1,6 +1,6 @@
 // Склад: реальний ROSTER, навички, рівні, заміни, тренування, склади суперників (oppSquad).
 import { S, commit } from './save.js';
-import { ACADEMY, FORMATIONS, KITS, STAT_KEYS, GK_KEYS, LINE_OF, pickKit, heatOf } from '../config.js';
+import { ACADEMY, FORMATIONS, KITS, STAT_KEYS, GK_KEYS, LINE_OF, pickKit, heatOf, hairDeck } from '../config.js';
 import { striker, keeper, keeperTier } from './economy.js';
 import { rng } from '../graphics/voxel.js';
 import { rivalOf, hashStr } from './rivals.js';
@@ -97,6 +97,8 @@ export function defaultSquad() {
   const byNum = new Map(ROSTER.map((r) => [r[0], r]));
   const squad = slots.map((slot, i) => rosterEntry(byNum.get(STARTERS[i]), i, rnd, 40, slot));
   const bench = ROSTER.filter((r) => !STARTERS.includes(r[0])).map((r, i) => rosterEntry(r, 20 + i, rnd, 34));
+  const deck = hairDeck('', rng(4243));                            // зачіски без повторів, окремим генератором (rnd не зсуваємо)
+  [...squad, ...bench].forEach((e, i) => { e.hair = deck[i % deck.length]; });
   return { squad, bench };
 }
 
@@ -111,6 +113,25 @@ export function ensureSquad() {
     const ids = new Set(S.squad.map((e) => e.id));
     S.bench = (Array.isArray(S.bench) ? S.bench : d.bench).filter((e) => !ids.has(e.id)); commit();
   }
+  if (uniqueHairs(allPlayers())) commit();
+}
+
+/**
+ * Однакові зачіски в одній команді: другий і далі власник повтору отримує вільну зачіску. Свій вигляд (custom) не чіпаємо,
+ * він лише займає зачіску. Вибір за id гравця, без Math.random, тож повторний виклик нічого не міняє. Повертає, чи щось змінилось.
+ */
+export function uniqueHairs(list) {
+  const taken = new Set(list.filter((e) => e.custom).map((e) => e.hair)), pool = ACADEMY.hairs;
+  let changed = false;
+  for (const e of list) {
+    if (e.custom) continue;
+    if (taken.has(e.hair)) {
+      const free = pool.filter((h) => !taken.has(h));
+      if (free.length) { e.hair = free[hashStr(String(e.id)) % free.length]; changed = true; }
+    }
+    taken.add(e.hair);
+  }
+  return changed;
 }
 
 /** Усі гравці клубу: спершу основа, потім запас. */
@@ -171,6 +192,9 @@ export function oppSquad(spec) {
     for (let j = LAST.indexOf(e.name.slice(sp + 1)); seen.has(e.name);) { j = (j + 1) % LAST.length; e.name = first + ' ' + LAST[j]; }
     seen.add(e.name);
   }
+  // зачіски без повторів у складі (закордонний клуб — спершу фірмові), окремим генератором, щоб не зсунути rnd і склади
+  const deck = hairDeck(spec.club.name, rng(h % 1e6 + 4243));
+  sq.forEach((e, i) => { e.hair = deck[i % deck.length]; });
   // зірка клубу — нападник/фланговий (за клубом), у деяких клубів — воротар
   const att = sq.map((e, i) => i).filter((i) => sq[i].line === 'F' || sq[i].line === 'W' || sq[i].role === 'AM');
   const star = h % 5 === 0 ? 0 : att[h % att.length] ?? 10;

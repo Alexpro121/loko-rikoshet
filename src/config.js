@@ -102,6 +102,28 @@ export const FORMATIONS = {
   '4231': [role('D', -0.78, 3, 'LB'), role('D', -0.27, 4, 'CB'), role('D', 0.27, 5, 'CB'), role('D', 0.78, 2, 'RB'), role('M', -0.3, 6, 'DM'), role('M', 0.3, 8, 'DM'), role('W', -0.8, 11, 'LW'), role('M', 0, 10, 'AM'), role('W', 0.8, 7, 'RW'), role('F', 0, 9, 'ST')],
 };
 
+/**
+ * Фірмові зачіски закордонних клубів (Ліга чемпіонів, Чемпіонат світу). Частина є лише в них (вікінг, шипи, самурай, кіски,
+ * закрутки, афро-ірокез, малет, проділ, чубчик на око), а не в українських складах. Решту складу добирає HAIR_GENERIC.
+ */
+export const CLUB_HAIRS = {
+  'ВАЛЬДОРА': ['slick', 'sidepart', 'curtains', 'halfbun', 'curly', 'band'], 'НОРДГАЙМ': ['viking', 'halfbun', 'bun', 'long', 'wolf', 'undercut'],
+  'ТОРРЕМАР': ['mullet', 'slick', 'band', 'long', 'curtains', 'quiff'], 'ГРЕЙВЕЛЛ': ['mop', 'sidepart', 'quiff', 'fringe', 'curtains', 'crop'],
+  'ЛІНДЕНБУРГ': ['undercut', 'flattop', 'mullet', 'sidepart', 'wolf', 'buzz'], 'ЗАМБАРА': ['afro', 'cornrows', 'twists', 'frohawk', 'dreads', 'buzz'],
+  'АСАГАО': ['spiky', 'topknot', 'emo', 'frosted', 'halfbun', 'fringe'], 'ОРІЛЬЯ': ['frohawk', 'curly', 'mullet', 'mohawk', 'twists', 'afro'],
+  'ЛЕЙКВЮ': ['flattop', 'cornrows', 'frosted', 'quiff', 'buzz', 'twists'],
+};
+/** Звичайні зачіски, якими закордонний клуб добирає склад після фірмових (без українських і без чужих фірмових). */
+export const HAIR_GENERIC = ['crop', 'buzz', 'slick', 'curly', 'pony', 'long', 'mohawk', 'band', 'bald', 'quiff', 'afro', 'undercut', 'flattop', 'bun', 'dreads', 'fringe', 'curtains', 'mop', 'frosted', 'wolf', 'halfbun'];
+/** Зачіска, якої в команді ще немає (taken — Set): повтор лише коли вільних не лишилось. Рівно один виклик r(), як у звичайного вибору. */
+export const freshHair = (pool, taken, r) => { const free = pool.filter((h) => !taken.has(h)); const a = free.length ? free : pool; return a[(r() * a.length) | 0]; };
+/** Колода зачісок команди без повторів: спершу фірмові клубу (у випадковому порядку), далі решта. r — окремий генератор. */
+export function hairDeck(clubName, r) {
+  const shuf = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = (r() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const sig = CLUB_HAIRS[clubName];
+  return sig ? [...shuf(sig), ...shuf(HAIR_GENERIC.filter((h) => !sig.includes(h)))] : shuf(ACADEMY.hairs);
+}
+
 export const FIXTURES = [];
 LEAGUES.forEach((lg, li) => lg.clubs.forEach((c, ci) => FIXTURES.push({ league: li, club: c, no: ci + 1, of: lg.clubs.length, final: ci === lg.clubs.length - 1 })));
 
@@ -171,11 +193,15 @@ export const ACADEMY = {
     { id: 'r', name: 'Рідкісний', bonus: [4, 5], w: 28, col: '#5fb3e6' },
     { id: 'e', name: 'Золотий', bonus: [7, 9], w: 10, col: '#e8b923' },
   ],
-  hairs: ['crop', 'mohawk', 'long', 'band', 'bald'],
+  // випадкові зачіски згенерованих гравців (склади, суперники, випускники, статисти на виході)
+  hairs: ['crop', 'mohawk', 'long', 'band', 'bald', 'quiff', 'afro', 'undercut', 'fringe', 'flattop', 'dreads', 'buzz', 'curly', 'slick', 'bun', 'pony', 'oseledets', 'makitra', 'chub', 'curtains', 'mop', 'frosted', 'wolf', 'halfbun'],
   hairCols: ['#4a2c17', '#1f2933', '#8a6a1c', '#9c2a1c', '#6b4423', '#111827'],
   skins: ['#e8bf9b', '#d4a074', '#b07a52', '#8a5a3c'],
   // для редактора вигляду: ширший вибір
-  allHairs: ['crop', 'buzz', 'slick', 'curly', 'pony', 'long', 'mohawk', 'band', 'bald'],
+  allHairs: ['crop', 'buzz', 'slick', 'curly', 'pony', 'long', 'mohawk', 'band', 'bald', 'quiff', 'afro', 'undercut', 'flattop', 'bun', 'dreads', 'fringe', 'oseledets', 'makitra', 'chub', 'braidcrown', 'vinok', 'viking', 'spiky', 'topknot', 'cornrows', 'mullet', 'sidepart', 'twists', 'frohawk', 'frosted', 'curtains', 'emo', 'halfbun', 'mop', 'wolf'],
+  hairNames: { crop: 'Класика', buzz: 'Їжачок', slick: 'Зачесане', curly: 'Кучері', pony: 'Хвіст', long: 'Довге', mohawk: 'Ірокез', band: 'Пов’язка', bald: 'Лисий', quiff: 'Кок', afro: 'Афро', undercut: 'Андеркат', flattop: 'Майданчик', bun: 'Гулька', dreads: 'Дреди', fringe: 'Чубчик',
+    oseledets: 'Оселедець', makitra: 'Під макітру', chub: 'Чуб набік', braidcrown: 'Коса-корона', vinok: 'Вінок', viking: 'Вікінг', spiky: 'Шипи', topknot: 'Самурай', cornrows: 'Кіски', mullet: 'Малет', sidepart: 'Проділ',
+    twists: 'Закрутки', frohawk: 'Афро-ірокез', frosted: 'Світлі кінчики', curtains: 'Штори', emo: 'Чубчик на око', halfbun: 'Пів-гулька', mop: 'Швабра', wolf: 'Вовча' },
   allHairCols: ['#111827', '#1f2933', '#4a2c17', '#6b4423', '#8a6a1c', '#d8b25a', '#9c2a1c', '#cfcfcf'],
   allSkins: ['#f3d2b3', '#e8bf9b', '#d4a074', '#b07a52', '#8a5a3c', '#5f3d29'],
 };

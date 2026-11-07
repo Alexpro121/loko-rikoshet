@@ -9,11 +9,11 @@
 
 - Експорти: CLUB:4, CHRONICLE:15, FACTS:31, LEGENDS:43, ALUMNI:44, HONOURS:46, STADIUM:51, randomFact:61
 
-## src/config.js (206 рядків)
+## src/config.js (232 рядків)
 
 Усі числові константи гри в одному місці.
 
-- Експорти: PITCH:3, PHYS:20, COL:35, KIT_LOKO:42, KITS:44, KIT_GK_LOKO:49, KIT_CLASH:52, kitDist:55, pickKit:60, LEAGUES:74, STAT_KEYS:88, GK_KEYS:89, LINE_OF:90, FORMATIONS:95, FIXTURES:105, SEASON_HEAT:116, heatOf:117, matchSpec:120, STRIKERS:144, shotSkill:154, KEEPERS:156, ACADEMY:164, STADIUM_TIERS:184, STADIUM_TIER_NAMES:185, SETTINGS_DEFAULT:187, CAM_PRESETS:199
+- Експорти: PITCH:3, PHYS:20, COL:35, KIT_LOKO:42, KITS:44, KIT_GK_LOKO:49, KIT_CLASH:52, kitDist:55, pickKit:60, LEAGUES:74, STAT_KEYS:88, GK_KEYS:89, LINE_OF:90, FORMATIONS:95, CLUB_HAIRS:109, HAIR_GENERIC:117, freshHair:119, hairDeck:121, FIXTURES:127, SEASON_HEAT:138, heatOf:139, matchSpec:142, STRIKERS:166, shotSkill:176, KEEPERS:178, ACADEMY:186, STADIUM_TIERS:210, STADIUM_TIER_NAMES:211, SETTINGS_DEFAULT:213, CAM_PRESETS:225
 
 ## src/core/audio-bank.js (153 рядків)
 
@@ -131,16 +131,16 @@ buildPitch: газон, розмітка, борти, ворота й сітки
 - Експорти: OUTLINE:14, buildPitch:36
 - Внутрішні функції: lineSeg:16, insetPolygon:21
 
-## src/graphics/player.js (2881 рядків)
+## src/graphics/player.js (3016 рядків)
 
 Player: воксельна модель гравця, усі анімації (Player.animate), IK рук і ніг, пози воротаря.
 
 - Експорти: angDiff:21, GK_STRIKE:60, diveKin:146
-- Внутрішні функції: capQ:50, spring:90, oscS:106, accent:120, jumpPhase:121, atlasMat:165, printMat:175, rigidMats:189, hairBlock:322, headGeo:384, bodyGeo:406
+- Внутрішні функції: capQ:50, spring:90, oscS:106, accent:120, jumpPhase:121, atlasMat:165, printMat:175, rigidMats:189, hairBlock:324, headGeo:519, bodyGeo:541
 - **RigidSkeleton** :203
   update:204
-- **Player** :440
-  constructor:442, setLook:518, useSkin:542, skinGeo:556, setExpr:581, setMode:596, kick:601, volley:610, backLeg:615, dropPose:628, cheer:630, react:642, sad:649, reach:663, engage:665, solveReach:671, poleIK:705, bodyGuard:728, impulse:783, jolt:787, gesture:793, tapBall:802, feint:810, ballHint:812, faceNow:814, control:819, receive:825, chest:831, header:833, block:834, hit:835, emote:840, beaten:845, tackle:853, stumble:860, downed:865, stagger:870, knock:879, dropRag:893, slideTackle:900, kneel:901, rest:903, bakeSlide:905, hug:907, gkDive:909, gkSmother:917, diveReset:919, setAim:920, startPDive:927, planDive:941, startPKick:976, jumpC:978, gkJump:980, saveSide:982, gkPunch:990, gkTip:992, gkFoot:994, shinAim:996, gkShin:1001, gkStar:1007, parry:1012, ballAt:1022, perceive:1036, catchBall:1054, catchMk:1061, gkKnee:1067, gkFall:1069, throwBall:1070, setThreat:1071, fendAt:1073, hipTurn:1082, jostle:1109, rise:1112, animate:1142, groundGuard:2286, diveTakeoff:2308, armGuard:2336, hitbox:2412, handsIK:2445, kickIK:2683, shinIK:2721, shinLat:2749, tackleIK:2755, reachFoot:2767, plantFeet:2795, solveArms:2857
+- **Player** :575
+  constructor:577, setLook:653, useSkin:677, skinGeo:691, setExpr:716, setMode:731, kick:736, volley:745, backLeg:750, dropPose:763, cheer:765, react:777, sad:784, reach:798, engage:800, solveReach:806, poleIK:840, bodyGuard:863, impulse:918, jolt:922, gesture:928, tapBall:937, feint:945, ballHint:947, faceNow:949, control:954, receive:960, chest:966, header:968, block:969, hit:970, emote:975, beaten:980, tackle:988, stumble:995, downed:1000, stagger:1005, knock:1014, dropRag:1028, slideTackle:1035, kneel:1036, rest:1038, bakeSlide:1040, hug:1042, gkDive:1044, gkSmother:1052, diveReset:1054, setAim:1055, startPDive:1062, planDive:1076, startPKick:1111, jumpC:1113, gkJump:1115, saveSide:1117, gkPunch:1125, gkTip:1127, gkFoot:1129, shinAim:1131, gkShin:1136, gkStar:1142, parry:1147, ballAt:1157, perceive:1171, catchBall:1189, catchMk:1196, gkKnee:1202, gkFall:1204, throwBall:1205, setThreat:1206, fendAt:1208, hipTurn:1217, jostle:1244, rise:1247, animate:1277, groundGuard:2421, diveTakeoff:2443, armGuard:2471, hitbox:2547, handsIK:2580, kickIK:2818, shinIK:2856, shinLat:2884, tackleIK:2890, reachFoot:2902, plantFeet:2930, solveArms:2992
 
 ## src/graphics/ragdoll.js (427 рядків)
 
@@ -372,12 +372,12 @@ Walkout: декорації виходу команд: прапори, кили�
 - **Net** :76
   constructor:77, on:82, emit:83, kept:86, watch:92, host:100, join:125, connectTo:141, attach:154, setupStream:171, onMsg:182, startPing:189, send:201, sendFrame:203, drop:209, offline:212, lost:214, rejoin:222, close:229
 
-## src/online/profile.js (426 рядків)
+## src/online/profile.js (428 рядків)
 
 Онлайн-клуб гравця: окремий від кар'єри «Локомотива» — своя назва, прапор, форма, 11 унікальних героїв, рівень,
 
-- Експорти: esc:15, TRAITS:23, RARITY:36, ONLINE_FORMS:45, slotsOf:46, ONLINE_AIM:49, ONLINE_GK:50, newHero:54, newClub:69, BENCH_MAX:122, isKeeper:124, OP:177, saveOP:178, markLive:180, clearLive:181, settleLive:182, toServer:186, adoptServer:200, adoptHero:216, resetOP:227, kitOf:233, awayKit:240, gkKitOf:246, shortOf:247, heroOvr:251, teamRating:252, trainPrice:253, SCOUT_PRICE:254, clubXpNeed:255, allHeroes:258, trainHero:259, setForm:266, swapHeroes:271, PACKS:280, packRarity:286, SELL:295, sellPrice:296, lineupOk:301, packInto:312, sellFrom:323, moveHeroes:332, moveDeny:345, buyPack:353, sellHero:354, swapAny:355, scoutHero:357, toWire:361, plain:373, fromWire:377, matchClub:399, applyResult:406
-- Внутрішні функції: repair:82, fixHero:112, fixBench:130, migrate:152, load:159, serverHero:193, freeNum:306, toWireHero:368
+- Експорти: esc:15, TRAITS:23, RARITY:36, ONLINE_FORMS:45, slotsOf:46, ONLINE_AIM:49, ONLINE_GK:50, newHero:55, newClub:70, BENCH_MAX:124, isKeeper:126, OP:179, saveOP:180, markLive:182, clearLive:183, settleLive:184, toServer:188, adoptServer:202, adoptHero:218, resetOP:229, kitOf:235, awayKit:242, gkKitOf:248, shortOf:249, heroOvr:253, teamRating:254, trainPrice:255, SCOUT_PRICE:256, clubXpNeed:257, allHeroes:260, trainHero:261, setForm:268, swapHeroes:273, PACKS:282, packRarity:288, SELL:297, sellPrice:298, lineupOk:303, packInto:314, sellFrom:325, moveHeroes:334, moveDeny:347, buyPack:355, sellHero:356, swapAny:357, scoutHero:359, toWire:363, plain:375, fromWire:379, matchClub:401, applyResult:408
+- Внутрішні функції: repair:84, fixHero:114, fixBench:132, migrate:154, load:161, serverHero:195, freeNum:308, toWireHero:370
 
 ## src/online/quests.js (144 рядків)
 
@@ -442,11 +442,11 @@ World: фізика м'яча з кроком 120 Гц: борти, штанги
 - **World** :62
   constructor:63, seg:71, buildStatic:73, integrate:88, wallHit:214, players:224, net:276, goalSide:301
 
-## src/state/economy.js (76 рядків)
+## src/state/economy.js (77 рядків)
 
 Економіка кар'єри: ціна стадіону, дохід, каса, поточні нападник і воротар, випускник академії.
 
-- Експорти: stadiumCost:11, INCOME_STEP:13, academyBonus:22, incomePct:23, incomeMult:24, stadiumTier:26, nextTierLevel:31, striker:36, keeper:37, keeperTier:38, CASH_CAP_MIN:41, cashRate:42, pendingCash:44, keepCash:49, rollGraduate:55, fmt:71
+- Експорти: stadiumCost:11, INCOME_STEP:13, academyBonus:22, incomePct:23, incomeMult:24, stadiumTier:26, nextTierLevel:31, striker:36, keeper:37, keeperTier:38, CASH_CAP_MIN:41, cashRate:42, pendingCash:44, keepCash:49, rollGraduate:55, fmt:72
 
 ## src/state/rivals.js (86 рядків)
 
@@ -462,12 +462,12 @@ World: фізика м'яча з кроком 120 Гц: борти, штанги
 - Експорти: S:121, subscribe:126, onSaveError:129, holdSave:132, flush:134, commit:142, resetAll:147
 - Внутрішні функції: merge:31, cleanPlayer:52, cleanSquad:64, normalize:78, load:102
 
-## src/state/squad.js (268 рядків)
+## src/state/squad.js (292 рядків)
 
 Склад: реальний ROSTER, навички, рівні, заміни, тренування, склади суперників (oppSquad).
 
-- Експорти: STAT_NAMES:10, STAT_HINT:11, keysFor:15, ROLE_UA:16, myKit:34, matchKit:36, makeStats:39, ovr:44, xpNeed:49, trainCost:51, tierOf:52, newEntry:58, ROSTER:72, defaultSquad:95, ensureSquad:103, allPlayers:117, swapPlayers:120, CAREER_FORMS:132, setTactic:138, swapStarters:140, bestLine:145, oppSquad:157, skillOf:187, gkBonus:194, squadLook:201, lookSig:208, customizeLook:211, resetLook:218, gainXp:225, trainStat:241, signGraduate:250, squadRating:268
-- Внутрішні функції: rosterEntry:83, relabelSquad:134
+- Експорти: STAT_NAMES:10, STAT_HINT:11, keysFor:15, ROLE_UA:16, myKit:34, matchKit:36, makeStats:39, ovr:44, xpNeed:49, trainCost:51, tierOf:52, newEntry:58, ROSTER:72, defaultSquad:95, ensureSquad:105, uniqueHairs:123, allPlayers:138, swapPlayers:141, CAREER_FORMS:153, setTactic:159, swapStarters:161, bestLine:166, oppSquad:178, skillOf:211, gkBonus:218, squadLook:225, lookSig:232, customizeLook:235, resetLook:242, gainXp:249, trainStat:265, signGraduate:274, squadRating:292
+- Внутрішні функції: rosterEntry:83, relabelSquad:155
 
 ## src/style.css (2007 рядків)
 

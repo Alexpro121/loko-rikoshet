@@ -1,6 +1,6 @@
 // Онлайн-клуб гравця: окремий від кар'єри «Локомотива» — своя назва, прапор, форма, 11 унікальних героїв, рівень,
 // рейтинг і монети. Зберігається окремо (loko-online-v1), щоб онлайн не чіпав прогрес кар'єри.
-import { ACADEMY, FORMATIONS } from '../config.js';
+import { ACADEMY, FORMATIONS, freshHair } from '../config.js';
 import { makeStats, keysFor, ovr, gainXp } from '../state/squad.js';
 import { rollFlag, normFlag, upgradeFlag, flagSvg } from './flag.js';
 import { newName } from './names.js';
@@ -51,7 +51,8 @@ export const ONLINE_GK = { concede: 0.8 };
 const lineOf = (s) => (s.name === 'GK' ? 'G' : s.line);
 
 /** Новий герой на слот: випадкове ім'я й вигляд (зі ширшого вибору редактора), рідкість, риса й навички. */
-export function newHero(slot, used = new Set(), rar = rollRar()) {
+/** hairs — зачіски, вже зайняті в клубі: новий герой бере вільну. */
+export function newHero(slot, used = new Set(), rar = rollRar(), hairs = new Set()) {
   const line = lineOf(slot), R = RARITY[rar];
   const name = newName(used, rar);
   const trait = pick(line === 'G' ? GK_TRAITS : FIELD_TRAITS[line]);
@@ -61,7 +62,7 @@ export function newHero(slot, used = new Set(), rar = rollRar()) {
   return {
     id: 'h' + Math.floor(Math.random() * 1e9).toString(36), role: slot.name, pos: slot.name, line, num: slot.num, name, custom: true,
     stats, xp: 0, lvl: 1, apps: 0, goals: 0, rar, trait,
-    skin: pick(ACADEMY.allSkins), hair: pick(ACADEMY.allHairs), hairCol: pick(ACADEMY.allHairCols), beard,
+    skin: pick(ACADEMY.allSkins), hair: freshHair(ACADEMY.allHairs, hairs, Math.random), hairCol: pick(ACADEMY.allHairCols), beard,
   };
 }
 
@@ -71,7 +72,8 @@ export function newClub() {
   const flag = rollFlag();
   const star = 1 + ((Math.random() * 10) | 0);
   const form = pick(['433', '442', '4231']);
-  const heroes = slotsOf(form).map((s, i) => newHero(s, used, i === star ? (Math.random() < 0.35 ? 'l' : 'e') : rollRar()));
+  const hairs = new Set();
+  const heroes = slotsOf(form).map((s, i) => { const h = newHero(s, used, i === star ? (Math.random() < 0.35 ? 'l' : 'e') : rollRar(), hairs); hairs.add(h.hair); return h; });
   return { v: 1, club: { name: pick(NAMES), city: pick(CITIES), flag, gk: pick(GK_COLS), form }, heroes, bench: [], nm: 1, lvl: 1, xp: 0, coins: 300, rating: 1000, rec: { w: 0, d: 0, l: 0 }, goals: 0, games: 0 };
 }
 
@@ -315,7 +317,7 @@ export function packInto(st, kind, i) {
   const B = st.bench || (st.bench = []);
   if (B.length >= BENCH_MAX) return { error: 'bench_full' };
   if (st.coins < P.price) return { error: 'no_coins' };
-  const h = newHero(slot, namesOf(allHeroes(st)), packRarity(kind));
+  const h = newHero(slot, namesOf(allHeroes(st)), packRarity(kind), new Set(allHeroes(st).map((e) => e.hair)));
   h.num = freeNum(st); st.coins -= P.price; B.push(h);
   return { hero: h, bench: B.length - 1, price: P.price };
 }

@@ -1,6 +1,6 @@
 // Економіка кар'єри: ціна стадіону, дохід, каса, поточні нападник і воротар, випускник академії.
 import { S, commit } from './save.js';
-import { STADIUM_TIERS, STRIKERS, KEEPERS, ACADEMY } from '../config.js';
+import { STADIUM_TIERS, STRIKERS, KEEPERS, ACADEMY, freshHair } from '../config.js';
 
 const round = (v) => {
   if (v < 100) return Math.round(v / 5) * 5;
@@ -64,7 +64,8 @@ export function rollGraduate() {
     name: pick(A.firstNames) + ' ' + pick(A.lastNames),
     num: 2 + ((Math.random() * 28) | 0),
     rar: rar.id, bonus,
-    hair: pick(A.hairs), hairCol: pick(A.hairCols), skin: pick(A.skins),
+    // зачіска, якої в команді ще немає
+    hair: freshHair(A.hairs, new Set([...(S.squad || []), ...(S.bench || [])].map((e) => e.hair)), Math.random), hairCol: pick(A.hairCols), skin: pick(A.skins),
   };
 }
 

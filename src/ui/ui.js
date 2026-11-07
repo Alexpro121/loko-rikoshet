@@ -842,7 +842,7 @@ export class UI {
     const img = portrait(g.renderer, { kit: gk ? KIT_GK_LOKO : myKit(), num: e.num, skin: L.skin, hair: L.hair, hairCol: L.hairCol, beard: L.beard, gk, scale: 1.0 }, 'cu-' + e.id + e.num + lookSig(e));
     const sw = (arr, cur, act) => arr.map((c) => `<button class="sw ${c === cur ? 'on' : ''}" style="background:${c}" data-act="${act}:${c}" aria-label="${c}"></button>`).join('');
     const opt = (arr, cur, act, names) => arr.map((c, i) => `<button class="chip-b ${c === cur ? 'on' : ''}" data-act="${act}:${c}">${names ? names[i] : c}</button>`).join('');
-    const HN = { crop: 'Класика', buzz: 'Їжачок', slick: 'Зачесане', curly: 'Кучері', pony: 'Хвіст', long: 'Довге', mohawk: 'Ірокез', band: 'Пов’язка', bald: 'Лисий' };
+    const HN = ACADEMY.hairNames;
     const kits = Object.entries(KITS).map(([id, v]) => `<button class="kit-b ${S.kitId === id ? 'on' : ''}" data-act="cu-kit:${id}"><i style="background:linear-gradient(90deg,${v.kit.main} 0 60%,${v.kit.second} 60% 100%)"></i><span>${v.name}</span></button>`).join('');
     redraw(this.el.custom, `<div class="card-box wide cu-box ${open ? '' : 'still'}">
       <header class="sheet-h"><h2>Вигляд · №${e.num}</h2><button class="sq btn-red" data-act="cu-done" aria-label="Готово">${I.check}</button></header>
